@@ -1,0 +1,7 @@
+FROM python:3.12-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends nftables iproute2 libnetfilter-log1 openssl ca-certificates && rm -r /var/lib/apt/lists/*
+WORKDIR /opt/course
+COPY course/scope-runtime/requirements.txt /opt/course/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY course/scope-runtime /opt/course
+ENTRYPOINT ["python3", "/opt/course/gateway.py"]

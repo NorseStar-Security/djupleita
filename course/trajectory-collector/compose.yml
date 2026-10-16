@@ -1,0 +1,40 @@
+# Instructor-side export of an existing course archive, not a student upload API.
+services:
+  collector:
+    build:
+      context: ../..
+      dockerfile: course/trajectory-collector/Dockerfile
+      args:
+        DSH_CLIENT_COMMIT_HASH: ${COURSE_BUILD_COMMIT:?Set the checkout commit for build metadata}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      DSH_TELEMETRY_MODE: DISABLED
+      COURSE_SESSION_COMPRESSION: ${COURSE_SESSION_COMPRESSION:-zstd}
+      COURSE_OTLP_LOGS_ENDPOINT: ${COURSE_OTLP_LOGS_ENDPOINT:?Set the region-specific HTTPS OTLP /v1/logs URL}
+      COURSE_TRAJECTORY_SOURCE_ID: ${COURSE_TRAJECTORY_SOURCE_ID:?Set a unique instructor-assigned archive identity}
+    volumes:
+      - type: bind
+        source: ${COURSE_SESSION_ROOT:?Set the absolute path to an existing course session archive}
+        target: /var/lib/course-sessions
+        read_only: true
+        bind:
+          create_host_path: false
+      - collector-state:/var/lib/trajectory
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+      - /home/node/.dsh:uid=1000,gid=1000,mode=0700
+    secrets: [logfire_write_token]
+    healthcheck:
+      test: [CMD, node, --eval, "const h=JSON.parse(require('fs').readFileSync('/var/lib/trajectory/health.json'));process.exit(['idle','exporting'].includes(h.state)&&Date.now()-h.updatedAt<60000?0:1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+secrets:
+  logfire_write_token:
+    file: ${LOGFIRE_TOKEN_FILE:?Set an instructor-only token file, outside this checkout}
+volumes:
+  collector-state:

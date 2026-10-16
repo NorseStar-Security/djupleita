@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src/*.ts"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../host/webserver" },
+    { "path": "../../client/connection/tsconfig.host.json" },
+    { "path": "../trajectory-collector" },
+    { "path": "../trajectory-projection" }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../attachment/attachment" },
+    { "path": "../../util/brand" },
+    { "path": "../../boot/cmdline" },
+    { "path": "../trajectory-collector" },
+    { "path": "../../core/session" },
+    { "path": "../../session/session-persistence" }
+  ]
+}

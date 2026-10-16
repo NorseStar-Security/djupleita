@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/network-scope-guard/README.md
+/:
+  en: 953e9b4a5c3f499b
+  zh: b70257e3d41c5133
+/deepseek-ai-dsh-experimental-network-scope-guard:
+  en: 53cf6efa0cca8f26
+  zh: 30c6cf74e48a252b
+/deepseek-ai-dsh-experimental-network-scope-guard/summary:
+  en: da7f8e123479c921
+  zh: 5e35b435e606bd0d
+/deepseek-ai-dsh-experimental-network-scope-guard/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: 8a2b921dfab92ece
+/deepseek-ai-dsh-experimental-network-scope-guard/use-this-package:
+  en: 4dacc578d2e18f60
+  zh: 64f3b4a58e3011e5
+/deepseek-ai-dsh-experimental-network-scope-guard/understand-the-implementation:
+  en: d4527a5484a39e1c
+  zh: ee4854c92cf3a34d
+/deepseek-ai-dsh-experimental-network-scope-guard/further-exploration:
+  en: 772769ba2f2f4ac0
+  zh: 980afbd1770ac646
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/tool-schema:
+  en: e4c7376d4f29dbd5
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/tool-schema/what-the-model-sees:
+  en: 636d0df5974572b2
+  zh: a153c75dcfe1644f
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/tool-schema/token-effect:
+  en: 89a9673bad34a815
+  zh: 46a5faa7911883b4
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/tool-schema/kv-cache-effect:
+  en: 5e8e91e6fbd3e583
+  zh: e224c04c3da3dd4c
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/status-and-denial-results:
+  en: c6d0bdad8ee81979
+  zh: 462e9f7aaada3351
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/status-and-denial-results/what-the-model-sees:
+  en: 2ecc865b058e1254
+  zh: ffe249b1252fe0a7
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/status-and-denial-results/token-effect:
+  en: 366091b98b1fe8cd
+  zh: 1d123f08912c5c89
+/deepseek-ai-dsh-experimental-network-scope-guard/model-experience/status-and-denial-results/kv-cache-effect:
+  en: 67eb9f55b6f4e585
+  zh: ffacd54b96b6f7f8
+/deepseek-ai-dsh-experimental-network-scope-guard/known-limitations-and-deferred-work:
+  en: 2eb52aef5d91c38f
+  zh: 09d7db97d3429c69
+/deepseek-ai-dsh-experimental-network-scope-guard/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

@@ -1,0 +1,12 @@
+- insert:
+    - id: assessment-memory
+      name: './memory-fixture.mjs'
+      config:
+        businessId: snapshot
+        businessName: Snapshot business
+        assessmentId: snapshot
+        objectives: ['Inspect assessment memory binding requirements']
+        scopePolicyHash: snapshot-fixture
+        validFrom: '2020-01-01T00:00:00.000Z'
+        validUntil: '2099-01-01T00:00:00.000Z'
+        domainName: snapshot_assessment_memory

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.3/scope-policy-ascii-names/guide.md
+/:
+  en: 4cbcb6c1551f9642
+  zh: 6dbe4ae45b6558b2
+/scope-policies-require-explicit-ascii-punycode-names:
+  en: f29c79ae1b6c760a
+  zh: 329e5b0831dd0a61
+/scope-policies-require-explicit-ascii-punycode-names/change:
+  en: 285cdef5d44034e3
+  zh: 4f3eba6640c1ad34
+/scope-policies-require-explicit-ascii-punycode-names/migration:
+  en: b4458b121468a6c4
+  zh: fcac6467180f306c

@@ -1,0 +1,6 @@
+- insert:
+    - id: course-runtime
+      name: '@deepseek-ai/dsh-experimental-course-runtime'
+      config:
+        sourceRoot: !!js process.env.DSH_COURSE_SOURCE ?? process.cwd()
+        stateRoot: !!js dshHomePath('course-runtime')

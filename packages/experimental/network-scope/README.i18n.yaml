@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/network-scope/README.md
+/:
+  en: 935b24f63b037d3e
+  zh: 0c6c75152a9ca9c0
+/deepseek-ai-dsh-experimental-network-scope:
+  en: 84b2aaf0d7c75c9e
+  zh: 62fae204bee689de
+/deepseek-ai-dsh-experimental-network-scope/summary:
+  en: 546143c8d8fa1623
+  zh: aadfced790425eb8
+/deepseek-ai-dsh-experimental-network-scope/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: 8a2b921dfab92ece
+/deepseek-ai-dsh-experimental-network-scope/use-this-package:
+  en: dae41605b6720e54
+  zh: a23e68c804c2993d
+/deepseek-ai-dsh-experimental-network-scope/understand-the-implementation:
+  en: d5a15404b0b58330
+  zh: 5431ad1418622945
+/deepseek-ai-dsh-experimental-network-scope/further-exploration:
+  en: ff9fe90974b32883
+  zh: ce3660eb97e16ffa
+/deepseek-ai-dsh-experimental-network-scope/model-experience:
+  en: 569a135f426bb188
+  zh: 5cf84f3a861a282d
+/deepseek-ai-dsh-experimental-network-scope/model-experience/kv-cache-effect:
+  en: b915cd43490f7c9e
+  zh: 2179c3f3f0cf32b0
+/deepseek-ai-dsh-experimental-network-scope/known-limitations-and-deferred-work:
+  en: db27f11ef435433b
+  zh: 2177ceb535a53941
+/deepseek-ai-dsh-experimental-network-scope/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

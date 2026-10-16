@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for 2026-10-15-course-action-review-and-secure-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-10-15-course-action-review-and-secure-defaults.md
+/agent-note-course-action-review-and-secure-default-execution:
+  en: b7f448a9dca14df3
+  zh: 611b7241fe317ba4
+/agent-note-course-action-review-and-secure-default-execution/problem:
+  en: 046c20794a1e18ca
+  zh: 43eff6a8614f6976
+/agent-note-course-action-review-and-secure-default-execution/proposal:
+  en: b5f714c73ac7c94b
+  zh: a763a656051d1e74
+/agent-note-course-action-review-and-secure-default-execution/proposal/plugin-composition-and-coverage:
+  en: bbf6f55425c2cc6b
+  zh: 8dcd941668ed7c66
+/agent-note-course-action-review-and-secure-default-execution/proposal/classification-and-enforcement:
+  en: 51de90b7f5aff00d
+  zh: 064d1b5ce710a8d0
+/agent-note-course-action-review-and-secure-default-execution/proposal/jev-adapter:
+  en: 876384a5e38099de
+  zh: 9414258465fa9d66
+/agent-note-course-action-review-and-secure-default-execution/proposal/operations-below-the-tool-boundary:
+  en: 106ae068fb45d06a
+  zh: ef074ef3e49bc99a
+/agent-note-course-action-review-and-secure-default-execution/proposal/secure-course-startup-and-ui:
+  en: d8b7d4fa3233c1fb
+  zh: 715bc149af40ed6f
+/agent-note-course-action-review-and-secure-default-execution/proposal/mandatory-trajectories:
+  en: 176c34b4a13ce847
+  zh: 9c3990be129a68f0
+/agent-note-course-action-review-and-secure-default-execution/proposal/delivery-order:
+  en: c10b2892a7791798
+  zh: 4883c13528d3a8e9
+/agent-note-course-action-review-and-secure-default-execution/alternatives-considered:
+  en: d8a4446e20e10015
+  zh: 02fdc4e1a8e2642a
+/agent-note-course-action-review-and-secure-default-execution/acceptance-criteria:
+  en: c30de154dc3250a5
+  zh: 6cf8290703894c0e
+/agent-note-course-action-review-and-secure-default-execution/risks:
+  en: e70cd2ff92ca439d
+  zh: 49bb0b29d8f120b3

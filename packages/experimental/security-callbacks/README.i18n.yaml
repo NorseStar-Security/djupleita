@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/security-callbacks/README.md
+/:
+  en: 516e0fc79fbb1f0e
+  zh: a50044ecb4494593
+/deepseek-ai-dsh-experimental-security-callbacks:
+  en: ce03a438d28471a8
+  zh: fc36fb13fc86b8ca
+/deepseek-ai-dsh-experimental-security-callbacks/summary:
+  en: 1cf587eb5f1ea2b8
+  zh: a4c12ba513a2e6ec
+/deepseek-ai-dsh-experimental-security-callbacks/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 31ea3e4cefefe225
+/deepseek-ai-dsh-experimental-security-callbacks/use-this-package:
+  en: edabf4703ca33c4d
+  zh: df89beabab48fc44
+/deepseek-ai-dsh-experimental-security-callbacks/use-this-package/custom-providers-in-the-plugin-dsl:
+  en: 2a469326a1359f0e
+  zh: 8c42b4b16a31c7ec
+/deepseek-ai-dsh-experimental-security-callbacks/understand-the-implementation:
+  en: 66dc6b8ac31df841
+  zh: ea991a2490b67eb3
+/deepseek-ai-dsh-experimental-security-callbacks/further-exploration:
+  en: 85c1c13f00f4021f
+  zh: 0b89b68fed7ad4c0
+/deepseek-ai-dsh-experimental-security-callbacks/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-security-callbacks/model-experience/callback-workflow:
+  en: eb677944608fa995
+  zh: 8d1e6079976227cb
+/deepseek-ai-dsh-experimental-security-callbacks/model-experience/callback-workflow/what-the-model-sees:
+  en: f2b7fbe7c515f80f
+  zh: 35940ac24209c51e
+/deepseek-ai-dsh-experimental-security-callbacks/model-experience/callback-workflow/token-effect:
+  en: 363389fdd9c70e96
+  zh: 685f02a34aca407e
+/deepseek-ai-dsh-experimental-security-callbacks/model-experience/callback-workflow/kv-cache-effect:
+  en: a45b9d841567081a
+  zh: 52b74d7efefccc58
+/deepseek-ai-dsh-experimental-security-callbacks/known-limitations-and-deferred-work:
+  en: 19ad6f37ea3a21ce
+  zh: e4f1af0a02103563
+/deepseek-ai-dsh-experimental-security-callbacks/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

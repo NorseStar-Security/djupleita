@@ -1,0 +1,26 @@
+FROM node:24-bookworm-slim AS tools
+RUN apt-get update && apt-get install -y --no-install-recommends python3 chromium libnss3-tools ca-certificates curl nmap dnsutils iproute2 openssl procps && rm -r /var/lib/apt/lists/*
+RUN npm install --prefix /opt/browser playwright-core@1.61.1
+RUN useradd --uid 1000 --gid 1000 --home-dir /home/course --create-home course || usermod --login course --home /home/course --move-home node
+RUN mkdir -p /workspace /home/course/.dsh && chown -R 1000:1000 /workspace /home/course
+COPY course/scope-runtime /opt/course
+WORKDIR /workspace
+ENTRYPOINT ["python3", "/opt/course/enter.py"]
+CMD ["bash"]
+
+FROM tools AS recon-tools
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends libpcap0.8 && rm -r /var/lib/apt/lists/*
+RUN python3 /opt/course/install_recon.py "$TARGETARCH" /opt/projectdiscovery/bin /opt/course/recon-versions.json
+ENV PATH="/opt/projectdiscovery/bin:${PATH}"
+
+FROM recon-tools AS harness
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3-setuptools git && rm -r /var/lib/apt/lists/*
+RUN npm install --global pnpm@11.28.5
+WORKDIR /opt/dsh
+COPY . /opt/dsh
+RUN pnpm install --frozen-lockfile
+ARG DSH_CLIENT_COMMIT_HASH
+RUN pnpm run build:native-system && pnpm run build:lib:host && pnpm run build:lib:client && pnpm run build:web
+WORKDIR /workspace
+CMD ["node", "/opt/dsh/apps/cli/lib/bin.js", "--profile", "headless", "--patch", "/opt/course/profile.patch.yml"]

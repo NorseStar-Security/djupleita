@@ -1,0 +1,8 @@
+version: 1
+scenario: scope-judge
+profile: headless
+composition: scope-judge
+recording: authored
+header:
+  class: scope-judge
+  pin: true

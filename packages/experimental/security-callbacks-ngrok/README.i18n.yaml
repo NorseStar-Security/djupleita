@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/security-callbacks-ngrok/README.md
+/:
+  en: 535e966c02e0d138
+  zh: b8e2c454d0fa8957
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok:
+  en: 2469d485d1d52081
+  zh: de438083e4ea89b0
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/summary:
+  en: 58c0b58f5ade960f
+  zh: 7a2a1f238b317f84
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 31ea3e4cefefe225
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/use-this-package:
+  en: efb363afabd775c4
+  zh: 0d3789fa83c771be
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/understand-the-implementation:
+  en: 7aa79e44c22b9477
+  zh: 2334c6bd41c11b1b
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/further-exploration:
+  en: 85c1c13f00f4021f
+  zh: 0b89b68fed7ad4c0
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/model-experience/callback-workflow:
+  en: eb677944608fa995
+  zh: 8d1e6079976227cb
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/model-experience/callback-workflow/what-the-model-sees:
+  en: b6cacb6aaf16418f
+  zh: 683329e22968da43
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/model-experience/callback-workflow/token-effect:
+  en: 363389fdd9c70e96
+  zh: 685f02a34aca407e
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/model-experience/callback-workflow/kv-cache-effect:
+  en: dff27bfc7a5b31c2
+  zh: 9761007196aa0fb9
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/known-limitations-and-deferred-work:
+  en: ccbd4fd2a7576dc2
+  zh: bef604c49bf5473e
+/deepseek-ai-dsh-experimental-security-callbacks-ngrok/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

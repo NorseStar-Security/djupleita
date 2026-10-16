@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/trajectory-viewer/README.md
+/:
+  en: 8ce3a43ca3dfef46
+  zh: fd4de84e21743287
+/deepseek-ai-dsh-experimental-trajectory-viewer:
+  en: 2778bd2302737f50
+  zh: dd0aec9318899fff
+/deepseek-ai-dsh-experimental-trajectory-viewer/summary:
+  en: 28dd0f4ae03470a5
+  zh: aca8dfb2887fd372
+/deepseek-ai-dsh-experimental-trajectory-viewer/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 744490fe9a414704
+/deepseek-ai-dsh-experimental-trajectory-viewer/use-this-package:
+  en: 2843b127b5ffba2a
+  zh: 5de1448ca8670034
+/deepseek-ai-dsh-experimental-trajectory-viewer/use-this-package/when-to-choose-it:
+  en: a0f8c8e451275f49
+  zh: a8243ebb67510079
+/deepseek-ai-dsh-experimental-trajectory-viewer/use-this-package/minimal-configuration:
+  en: c33c1aa9e0f83c30
+  zh: 3e4de30c9373be75
+/deepseek-ai-dsh-experimental-trajectory-viewer/understand-the-implementation:
+  en: 3f1c746262cdf2d4
+  zh: 9bdbde8d46eea12c
+/deepseek-ai-dsh-experimental-trajectory-viewer/further-exploration:
+  en: db7287dc380a6dbf
+  zh: 625d350fdc08f29d
+/deepseek-ai-dsh-experimental-trajectory-viewer/model-experience:
+  en: af29e2d18f6af02a
+  zh: e50f065f2671ac06
+/deepseek-ai-dsh-experimental-trajectory-viewer/model-experience/kv-cache-effect:
+  en: dbcb4771fe1559db
+  zh: c1c617fa19ce9fb8
+/deepseek-ai-dsh-experimental-trajectory-viewer/known-limitations-and-deferred-work:
+  en: 2fea6600704685e1
+  zh: e224b51d17eaa799
+/deepseek-ai-dsh-experimental-trajectory-viewer/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

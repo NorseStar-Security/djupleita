@@ -1,0 +1,12 @@
+version: 1
+scenario: course-host-admission
+profile: headless
+composition: course-host-admission
+recording: authored
+header:
+  class: course-host-admission
+  pin: true
+  systemPromptSource: scope-judge
+  toolSchemasSource: scope-judge
+workspace:
+  final: true

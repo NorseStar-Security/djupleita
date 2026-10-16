@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/security-callbacks-tools/README.md
+/:
+  en: fc14859943e5ba15
+  zh: 07520f86a2399048
+/deepseek-ai-dsh-experimental-security-callbacks-tools:
+  en: d6473c0e360b36c5
+  zh: 873128368c8e1097
+/deepseek-ai-dsh-experimental-security-callbacks-tools/summary:
+  en: 5f81e0bc9dbe95d2
+  zh: 5f05481f6f242b81
+/deepseek-ai-dsh-experimental-security-callbacks-tools/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 31ea3e4cefefe225
+/deepseek-ai-dsh-experimental-security-callbacks-tools/use-this-package:
+  en: a63296ba036570a2
+  zh: bdff0da1850366c0
+/deepseek-ai-dsh-experimental-security-callbacks-tools/understand-the-implementation:
+  en: efaa573a778b7411
+  zh: 1c3a7e8d21145920
+/deepseek-ai-dsh-experimental-security-callbacks-tools/further-exploration:
+  en: 85c1c13f00f4021f
+  zh: 0b89b68fed7ad4c0
+/deepseek-ai-dsh-experimental-security-callbacks-tools/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-security-callbacks-tools/model-experience/callback-workflow:
+  en: eb677944608fa995
+  zh: 8d1e6079976227cb
+/deepseek-ai-dsh-experimental-security-callbacks-tools/model-experience/callback-workflow/what-the-model-sees:
+  en: 1d47a34f3d1013c0
+  zh: 63b3ef7534a27802
+/deepseek-ai-dsh-experimental-security-callbacks-tools/model-experience/callback-workflow/token-effect:
+  en: 41a8075526c87ab8
+  zh: 3c3bb1bceb7c6be2
+/deepseek-ai-dsh-experimental-security-callbacks-tools/model-experience/callback-workflow/kv-cache-effect:
+  en: 47ee3497e054b492
+  zh: fd316ed636886803
+/deepseek-ai-dsh-experimental-security-callbacks-tools/known-limitations-and-deferred-work:
+  en: f8217ba8005b0313
+  zh: ae0011d6ddb0ae5f
+/deepseek-ai-dsh-experimental-security-callbacks-tools/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

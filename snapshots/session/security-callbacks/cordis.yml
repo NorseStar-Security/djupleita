@@ -1,0 +1,7 @@
+- insert:
+    - id: callback-tunnel
+      name: './tunnel-fixture.mjs'
+    - id: security-callbacks
+      name: './receiver-fixture.mjs'
+    - id: security-callback-tools
+      name: './tools-fixture.mjs'

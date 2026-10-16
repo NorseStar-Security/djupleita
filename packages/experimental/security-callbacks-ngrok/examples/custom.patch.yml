@@ -1,0 +1,12 @@
+- insert:
+    - id: security-callback-tunnel
+      name: ./custom-tunnel.mjs
+      config:
+        publicUrl: !!js process.env.DSH_CALLBACK_PUBLIC_URL
+        localUrl: http://127.0.0.1:8787
+    - id: security-callbacks
+      name: ../../security-callbacks/lib/index.js
+      config:
+        listenPort: 8787
+    - id: security-callback-tools
+      name: ../../security-callbacks-tools/lib/index.js

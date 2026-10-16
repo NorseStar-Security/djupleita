@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for course-macos.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/course-macos.md
+/:
+  en: 190264acbdd64acd
+  zh: c43fa2e30f966689
+/set-up-the-course-fork-on-macos:
+  en: 851a2a98576fc8e3
+  zh: 4aaea94f987c3077
+/set-up-the-course-fork-on-macos/summary:
+  en: e3c85985b4ee1452
+  zh: 107ef7bc1e928b51
+/set-up-the-course-fork-on-macos/table-of-contents:
+  en: afc5170c0f2a0e7c
+  zh: 6cb099289101cc7e
+/set-up-the-course-fork-on-macos/build-the-fork:
+  en: ff85ef8ab20a5b23
+  zh: 4d8c64bf8af92084
+/set-up-the-course-fork-on-macos/configure-the-private-web-profile:
+  en: ac5147c075432241
+  zh: 270c6ba53b40dccb
+/set-up-the-course-fork-on-macos/prepare-docker-and-colima:
+  en: 9c3d4293faceccc7
+  zh: 40305e93613c002f
+/set-up-the-course-fork-on-macos/launch-with-local-trajectories:
+  en: e53585a70d880b49
+  zh: 550f0eeea6a0b21c
+/set-up-the-course-fork-on-macos/start-isolated-research-and-configure-openrouter:
+  en: 18a3b3e9adb0dace
+  zh: 3668f023cff13526
+/set-up-the-course-fork-on-macos/verify-and-recover:
+  en: 9a83ef9894e9cc98
+  zh: 3d5bb2a17a97bae3
+/set-up-the-course-fork-on-macos/dev-note:
+  en: b75c8458928b72b9
+  zh: 45e76642489dcc3c

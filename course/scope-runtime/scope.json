@@ -1,0 +1,25 @@
+{
+  "domains": ["example.test", "*.lab.test"],
+  "ips": [],
+  "exclude_domains": [],
+  "exclude_ips": [],
+  "operations": {
+    "requireMediatedHttp": true,
+    "deny": [{ "id": "shared-service-shutdown", "methods": ["*"], "paths": [], "prefixes": ["/quitquitquit"] }],
+    "budget": { "maxRequests": 120, "windowSeconds": 60, "maxConcurrent": 8 }
+  },
+  "infrastructure": {
+    "api.deepseek.com": {
+      "methods": ["GET", "POST"],
+      "paths": ["/models", "/chat/completions", "/v1/models", "/v1/chat/completions"]
+    },
+    "crt.sh": {
+      "methods": ["GET"],
+      "paths": ["/"]
+    },
+    "web.archive.org": {
+      "methods": ["GET"],
+      "paths": ["/cdx/search/cdx"]
+    }
+  }
+}

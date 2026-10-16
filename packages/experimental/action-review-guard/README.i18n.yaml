@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/action-review-guard/README.md
+/:
+  en: 02b4b7ccc7f7241f
+  zh: 1097399bff9bc773
+/deepseek-ai-dsh-experimental-action-review-guard:
+  en: 9a87d680ecd9d93b
+  zh: a2cda5483d70a617
+/deepseek-ai-dsh-experimental-action-review-guard/summary:
+  en: 9c6dcbc1750302a9
+  zh: bd76c2fdb50b5724
+/deepseek-ai-dsh-experimental-action-review-guard/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: a81c948ef7358d47
+/deepseek-ai-dsh-experimental-action-review-guard/use-this-package:
+  en: 12cff48dce3b60e1
+  zh: 7b20f2d925946497
+/deepseek-ai-dsh-experimental-action-review-guard/understand-the-implementation:
+  en: 0f3998a4ba8c1ed9
+  zh: 76daa49554e938b1
+/deepseek-ai-dsh-experimental-action-review-guard/further-exploration:
+  en: 4d58a66a382f730a
+  zh: 1d1a8301e6f86146
+/deepseek-ai-dsh-experimental-action-review-guard/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-action-review-guard/model-experience/dispatch-denials:
+  en: 0b4d10aa4473ad8b
+  zh: aec463585e925175
+/deepseek-ai-dsh-experimental-action-review-guard/model-experience/dispatch-denials/what-the-model-sees:
+  en: e8cd395c856ca394
+  zh: 10f9ba6e59e67100
+/deepseek-ai-dsh-experimental-action-review-guard/model-experience/dispatch-denials/token-effect:
+  en: e8b0ddfe7f1427f2
+  zh: 1fc20b1deec93bac
+/deepseek-ai-dsh-experimental-action-review-guard/model-experience/dispatch-denials/kv-cache-effect:
+  en: c71760f1a942be71
+  zh: 97b35eceefe103a4
+/deepseek-ai-dsh-experimental-action-review-guard/known-limitations-and-deferred-work:
+  en: f372e239cf86741c
+  zh: 15294f01934460fb
+/deepseek-ai-dsh-experimental-action-review-guard/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

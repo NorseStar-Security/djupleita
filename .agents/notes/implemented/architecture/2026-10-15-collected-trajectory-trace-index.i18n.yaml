@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-15-collected-trajectory-trace-index.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-15-collected-trajectory-trace-index.md
+/agent-note-collected-trajectory-trace-index:
+  en: c933d19df692acb7
+  zh: 8ee53483c70c8d2a
+/agent-note-collected-trajectory-trace-index/problem:
+  en: 1d668ab0d4b1d944
+  zh: 6c60365bc9b9b00b
+/agent-note-collected-trajectory-trace-index/decision:
+  en: fccb9952fb1fe19e
+  zh: 1eb8210acffc1e1f
+/agent-note-collected-trajectory-trace-index/alternatives-considered:
+  en: 0f7d096fa88f4df1
+  zh: 1cd2740d8f77bf94
+/agent-note-collected-trajectory-trace-index/consequences:
+  en: f69307770e39d77a
+  zh: 0be0da7676642a8d

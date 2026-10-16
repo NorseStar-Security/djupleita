@@ -1,0 +1,23 @@
+# Opt-in instructor-local collection in an existing Web app; its persistence and authentication stay unchanged.
+# COURSE_COLLECTOR_DB must be an absolute path outside the research-writable home, in a private instructor directory.
+- insert:
+    - id: course-trajectory-collector
+      name: ../../packages/experimental/trajectory-collector-sqlite/lib/index.js
+      config:
+        path: !!js process.env.COURSE_COLLECTOR_DB
+    - id: course-trajectory-archive
+      name: ../../packages/experimental/trajectory-collector-archive/lib/index.js
+      config:
+        installationId: !!js process.env.COURSE_INSTALLATION_ID
+        studentId: !!js process.env.COURSE_STUDENT_ID
+        cohortId: !!js process.env.COURSE_COHORT_ID
+    - id: course-trajectory-projection
+      name: ../../packages/experimental/trajectory-projection/lib/index.js
+      config:
+        path: !!js process.env.COURSE_PROJECTION_DB
+    - id: course-trajectory-viewer
+      name: ../../packages/experimental/trajectory-viewer/lib/index.js
+    - id: course-trajectory-http
+      name: ../../packages/experimental/trajectory-collector-http/lib/index.js
+      config:
+        serveRoot: false

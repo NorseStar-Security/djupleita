@@ -1,0 +1,16 @@
+# Instructor-owned scope. Replace these reserved example domains before a lab.
+- id: tools
+  name: '@deepseek-ai/dsh-tools'
+  config:
+    mode: native
+
+- insert:
+    - id: scope-judge
+      name: '@deepseek-ai/dsh-scope-judge'
+      config:
+        domains: [example.test, '*.lab.test']
+        targetTools:
+          - name: web_fetch
+            paths: [/url]
+        shellTools: [bash]
+        localTools: []

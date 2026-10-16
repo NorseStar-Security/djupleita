@@ -1,0 +1,72 @@
+- list:
+  - listitem:
+    - group:
+      - text: Turn 1turnCompleted647 ms
+      - button "Inspect source records"
+      - text: "{ \"inherited\": false, \"endReason\": \"completed\" }"
+      - list:
+        - listitem:
+          - group:
+            - text: turn/starteventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"turn/start\" }"
+        - listitem:
+          - group:
+            - text: step/starteventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"step/start\" }"
+        - listitem:
+          - group:
+            - text: system/messageeventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"system/message\" }"
+        - listitem:
+          - group:
+            - text: user/messageeventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"user/message\" }"
+        - listitem:
+          - group:
+            - text: session/titleeventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"session/title\" }"
+        - listitem:
+          - group:
+            - text: request/headereventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"request/header\" }"
+        - listitem:
+          - group:
+            - text: Model step 1modelCompleted280 ms
+            - button "Inspect source records"
+            - text: "{ \"step\": 1, \"eventType\": \"assistant/message\", \"timingSource\": \"persisted-stream-first-record\" }"
+        - listitem:
+          - group:
+            - text: readtoolCompleted2 ms
+            - button "Inspect source records"
+            - text: "{ \"callId\": \"call_00_OsndvlcKnCcUmae7QXal8633\", \"tool\": \"read\" }"
+        - listitem:
+          - group:
+            - text: readtoolCompleted2 ms
+            - button "Inspect source records"
+            - text: "{ \"callId\": \"call_01_Hw6AQjhf9gjxnOtppcGx0725\", \"tool\": \"read\" }"
+        - listitem:
+          - group:
+            - text: step/endeventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"step/end\" }"
+        - listitem:
+          - group:
+            - text: step/starteventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"step/start\" }"
+        - listitem:
+          - group:
+            - text: Model step 2modelCompleted352 ms
+            - button "Inspect source records"
+            - text: "{ \"step\": 2, \"eventType\": \"assistant/message\", \"timingSource\": \"persisted-stream-first-record\" }"
+        - listitem:
+          - group:
+            - text: step/endeventCompleted0 ms
+            - button "Inspect source records"
+            - text: "{ \"eventType\": \"step/end\" }"

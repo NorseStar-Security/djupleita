@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write course/scope-runtime/README.md
+/:
+  en: cc0eeeb0947146d5
+  zh: 1f449ac3e978a298
+/scope-enforced-linux-course-runtime:
+  en: 3592cc62676e98d8
+  zh: 97b35018cc93498e
+/scope-enforced-linux-course-runtime/summary:
+  en: 6b4bc032b23057d0
+  zh: dd5984ee7223db5b
+/scope-enforced-linux-course-runtime/table-of-contents:
+  en: e5a11f7a66a8fc77
+  zh: 7718e43bacb97d8e
+/scope-enforced-linux-course-runtime/run-an-exercise:
+  en: 018bf5d692b33683
+  zh: 5c04b0a73593a908
+/scope-enforced-linux-course-runtime/policy-reference:
+  en: 07f1f00cf9607b3c
+  zh: ce33879ed1c50038
+/scope-enforced-linux-course-runtime/action-review:
+  en: ef98d50074580ead
+  zh: f3f86dd6bbe8c630
+/scope-enforced-linux-course-runtime/enforcement-and-trust:
+  en: e3365a061c9aeec6
+  zh: 6cb9dc82e6372787
+/scope-enforced-linux-course-runtime/verify-the-boundary:
+  en: 00680c995bf8e742
+  zh: 967fcfad4aeb8f49
+/scope-enforced-linux-course-runtime/limitations:
+  en: ab85bab7025a8105
+  zh: bf54ca0f6509f35f
+/scope-enforced-linux-course-runtime/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

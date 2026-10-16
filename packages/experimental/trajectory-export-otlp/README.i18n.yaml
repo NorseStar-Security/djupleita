@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/trajectory-export-otlp/README.md
+/:
+  en: 670f8bfbff2855a8
+  zh: af9ca347c96b87fd
+/deepseek-ai-dsh-experimental-trajectory-export-otlp:
+  en: a3afcd873d2b9a5c
+  zh: eb08eb0ee1c358dc
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/summary:
+  en: feec2fd07e568596
+  zh: debb259589b8678b
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/table-of-contents:
+  en: 2b45c2dd65f502bd
+  zh: c0fbdad63a5b63d8
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/use-this-package:
+  en: 8e7c98685119c73e
+  zh: 89716404248d5d78
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/add-completed-traces:
+  en: 573b09662e2bc732
+  zh: 5ebd724a6e8bed63
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/delivery-and-recovery:
+  en: 487feede0a0a68be
+  zh: 75bfddaf381ce16f
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/understand-the-implementation:
+  en: daafeefb6f29b0f9
+  zh: 925c89f4392a1054
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/further-exploration:
+  en: fce5134ec32e401c
+  zh: 8a8e028e345cc500
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/model-experience:
+  en: f4991f674ed94e11
+  zh: 1e205cac533ef6b9
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/model-experience/kv-cache-effect:
+  en: c49b0ccaaef32fc5
+  zh: 7a6c6e6279d360d0
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/known-limitations-and-deferred-work:
+  en: dd87813dc364c981
+  zh: 7e20fa260db94bad
+/deepseek-ai-dsh-experimental-trajectory-export-otlp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 6c5f9788c6536776

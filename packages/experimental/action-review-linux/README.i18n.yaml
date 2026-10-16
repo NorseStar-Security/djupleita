@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/action-review-linux/README.md
+/:
+  en: 686990fccfe9e77d
+  zh: 3b0e7e169ecae26e
+/deepseek-ai-dsh-experimental-action-review-linux:
+  en: 447021d7f0862f66
+  zh: ca2b32af0417b0fe
+/deepseek-ai-dsh-experimental-action-review-linux/summary:
+  en: 845dfa8cf40e522f
+  zh: ca49643bb049279b
+/deepseek-ai-dsh-experimental-action-review-linux/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: a81c948ef7358d47
+/deepseek-ai-dsh-experimental-action-review-linux/use-this-package:
+  en: 9d051bc4eaf0a670
+  zh: a4e725daa8bc9477
+/deepseek-ai-dsh-experimental-action-review-linux/understand-the-implementation:
+  en: 9710c7bd91001fdc
+  zh: d6dcfea50ece4401
+/deepseek-ai-dsh-experimental-action-review-linux/further-exploration:
+  en: 4d58a66a382f730a
+  zh: 1d1a8301e6f86146
+/deepseek-ai-dsh-experimental-action-review-linux/model-experience:
+  en: 6b73800a4395e108
+  zh: 3fc8dbfad83a4bba
+/deepseek-ai-dsh-experimental-action-review-linux/model-experience/kv-cache-effect:
+  en: d83699c046bab462
+  zh: 5314eea37ac29afe
+/deepseek-ai-dsh-experimental-action-review-linux/known-limitations-and-deferred-work:
+  en: 55876ff8660af941
+  zh: a2bd1371eaca4e96
+/deepseek-ai-dsh-experimental-action-review-linux/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

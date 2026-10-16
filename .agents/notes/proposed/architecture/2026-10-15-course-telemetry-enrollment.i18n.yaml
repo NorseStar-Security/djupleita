@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-15-course-telemetry-enrollment.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-10-15-course-telemetry-enrollment.md
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody:
+  en: f6a4760863426cc1
+  zh: 90e1dd2e4f39a312
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/problem:
+  en: 902addfd88cf044b
+  zh: 221ee6af5f091763
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/proposal:
+  en: 2c642ce58d4b5510
+  zh: 4d757a42733643f9
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/proposal/delivery-plan:
+  en: 20f74335a8cecb37
+  zh: 86bb375183d75cc9
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/alternatives-considered:
+  en: 9ef0300602561c9f
+  zh: 47bf1e3ad68ed462
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/acceptance-criteria:
+  en: 7dd5419e983657c1
+  zh: bce87db946e30d5e
+/agent-note-course-telemetry-enrollment-and-remote-trajectory-custody/risks:
+  en: 075e620c8a7c2877
+  zh: f3b11bd6bd9c126a

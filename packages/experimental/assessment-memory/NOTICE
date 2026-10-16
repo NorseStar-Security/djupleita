@@ -1,0 +1,35 @@
+Assessment Memory for DeepSeek Harness
+
+This plugin is an original integration built on the DeepSeek Harness plugin,
+Tools, Session, and Storage Domain APIs. DeepSeek Harness is provided by the
+DeepSeek Harness contributors under the repository's MIT license:
+https://github.com/deepseek-ai/deepseek-harness
+
+RAGE — Relational Attack Graph Exchange
+https://rage.fail/
+Normative format reference: https://rage.fail/format
+
+The exchange adapter implements the documented RAGE v0.1 NDJSON format and
+credits the TrustedSec RAGE project and its contributors.
+Upstream repository: https://github.com/trustedsec/RAGE The RAGE website identifies
+its specification as Apache-2.0. No RAGE implementation, schemas, taxonomy,
+derivation rules, datasets, logos, or source files are redistributed here.
+Assessment-specific types and operational records are this plugin's extensions.
+The plugin is not an official RAGE product and implies no endorsement.
+
+ProjectDiscovery
+https://projectdiscovery.io/
+https://github.com/projectdiscovery
+
+Automatic recon ingestion consumes normalized output from the existing Harness
+ProjectDiscovery adapters (Subfinder, URLfinder, DNSx, HTTPx, Naabu, and Katana).
+This package does not bundle these executables. Their upstream licenses and
+attribution remain with their separately installed distributions.
+
+MITRE ATT&CK
+https://attack.mitre.org/resources/adversary-emulation-plans/
+
+Adversary emulation plans informed the design discussion around objectives,
+prerequisites and assessment outcomes. No ATT&CK dataset or emulation plan is
+bundled. MITRE ATT&CK is a trademark of The MITRE Corporation. No affiliation
+or endorsement is implied.

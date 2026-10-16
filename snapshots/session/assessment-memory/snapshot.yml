@@ -1,0 +1,9 @@
+version: 1
+scenario: assessment-memory
+profile: headless
+composition: assessment-memory
+recording: authored
+platform: posix
+header:
+  class: assessment-memory
+  pin: true

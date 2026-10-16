@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/assessment-memory/README.md
+/:
+  en: 9c088ddada942103
+  zh: 1605c87d1e3a6c68
+/deepseek-ai-dsh-experimental-assessment-memory:
+  en: 6b0096e2fc75d3a5
+  zh: e1c1d269af1537e5
+/deepseek-ai-dsh-experimental-assessment-memory/summary:
+  en: 30918bce59dc2772
+  zh: 556a0d6d146717f5
+/deepseek-ai-dsh-experimental-assessment-memory/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-experimental-assessment-memory/use-this-package:
+  en: cd077999b6f5d4c7
+  zh: 6f4576bf7b228e18
+/deepseek-ai-dsh-experimental-assessment-memory/understand-the-implementation:
+  en: 9eb73c85ff8e67f6
+  zh: 545da3f712a54cb1
+/deepseek-ai-dsh-experimental-assessment-memory/further-exploration:
+  en: cee895133db2e5db
+  zh: 6899718196d51c37
+/deepseek-ai-dsh-experimental-assessment-memory/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-assessment-memory/model-experience/assessment-context-tools-and-results:
+  en: 01480504466e1ade
+  zh: bdbd5c3f057a6688
+/deepseek-ai-dsh-experimental-assessment-memory/model-experience/assessment-context-tools-and-results/what-the-model-sees:
+  en: e280b34ca9ba933b
+  zh: 48c940b94f939a09
+/deepseek-ai-dsh-experimental-assessment-memory/model-experience/assessment-context-tools-and-results/token-effect:
+  en: 7248994f1dc52deb
+  zh: c278334fd61989f5
+/deepseek-ai-dsh-experimental-assessment-memory/model-experience/assessment-context-tools-and-results/kv-cache-effect:
+  en: c1e799bbf4ff745e
+  zh: 06c6147a57332d41
+/deepseek-ai-dsh-experimental-assessment-memory/known-limitations-and-deferred-work:
+  en: 0a4123aef485aa5a
+  zh: 8e71fe8b6550b8b0
+/deepseek-ai-dsh-experimental-assessment-memory/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

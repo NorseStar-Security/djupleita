@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/trajectory-projection/README.md
+/:
+  en: d11c7844883ee86d
+  zh: ffd9c11dba5cb86a
+/deepseek-ai-dsh-experimental-trajectory-projection:
+  en: d2f0f8bb61259539
+  zh: 33ea1fd1919d43c1
+/deepseek-ai-dsh-experimental-trajectory-projection/summary:
+  en: d057136cad1e094c
+  zh: 1dd666e0e01e62f0
+/deepseek-ai-dsh-experimental-trajectory-projection/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: bbfde3e94b2fe768
+/deepseek-ai-dsh-experimental-trajectory-projection/use-this-package:
+  en: eb5b7f604ee2e600
+  zh: bd7ab9886308b297
+/deepseek-ai-dsh-experimental-trajectory-projection/understand-the-implementation:
+  en: 9fee7a2fa9eb8648
+  zh: a6891170517252cf
+/deepseek-ai-dsh-experimental-trajectory-projection/further-exploration:
+  en: c0c8343f68de6570
+  zh: 43821ec734e35c7c
+/deepseek-ai-dsh-experimental-trajectory-projection/model-experience:
+  en: 057b556b44609e1a
+  zh: 2a398289a7f83bf5
+/deepseek-ai-dsh-experimental-trajectory-projection/model-experience/kv-cache-effect:
+  en: c49b0ccaaef32fc5
+  zh: 7c8ef9ce3cae61ba
+/deepseek-ai-dsh-experimental-trajectory-projection/known-limitations-and-deferred-work:
+  en: 80099ba2a3ecf8dc
+  zh: 1880a00be9f93e74
+/deepseek-ai-dsh-experimental-trajectory-projection/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

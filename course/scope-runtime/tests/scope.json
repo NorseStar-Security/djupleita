@@ -1,0 +1,11 @@
+{
+  "domains": ["acme.test", "*.lab.test"],
+  "ips": ["198.18.0.0/30", "fd31::2/128"],
+  "exclude_domains": ["excluded.lab.test"],
+  "exclude_ips": ["198.18.0.3/32", "fd31::3/128"],
+  "domain_addresses": {
+    "acme.test": ["198.18.0.4"],
+    "widgets.test": ["198.18.0.5"]
+  },
+  "ports": {"http": [18080], "https": [18443]}
+}

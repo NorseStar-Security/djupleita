@@ -1,0 +1,46 @@
+# Instructor-only local intake; no research execution or production student authorizer.
+- insert:
+    - name: /opt/dsh/vendor/logger-console/lib/index.js
+    - name: /opt/dsh/packages/credentials/credentials-local/lib/index.js
+      config:
+        watch: false
+    - name: /opt/dsh/packages/host/webserver/lib/index.js
+      config:
+        host: 127.0.0.1
+        port: 4319
+    - name: /opt/dsh/packages/client/connection/lib/index.js
+    - name: /opt/dsh/packages/experimental/trajectory-collector-sqlite/lib/index.js
+      config:
+        path: /var/lib/trajectory/intake/collector.db
+    - name: /opt/dsh/packages/session/session-persistence-jsonl/lib/index.js
+      config:
+        root: /var/lib/course-sessions
+        compression: !!js process.env.COURSE_SESSION_COMPRESSION
+    - name: /opt/dsh/packages/experimental/trajectory-collector-archive/lib/index.js
+      config:
+        installationId: !!js process.env.COURSE_INSTALLATION_ID
+        studentId: !!js process.env.COURSE_STUDENT_ID
+        cohortId: !!js process.env.COURSE_COHORT_ID
+    - name: /opt/dsh/packages/experimental/trajectory-collector-http/lib/index.js
+      config:
+        serveRoot: true
+    - name: /opt/dsh/packages/experimental/trajectory-projection/lib/index.js
+      disabled: !!js "!process.env.COURSE_OTLP_TRACES_ENDPOINT"
+      config:
+        path: /var/lib/trajectory/projection/trace-view.db
+    - name: /opt/dsh/packages/experimental/trajectory-export-otlp/lib/collector.js
+      disabled: !!js "!process.env.COURSE_OTLP_LOGS_ENDPOINT"
+      config:
+        endpoint: !!js process.env.COURSE_OTLP_LOGS_ENDPOINT
+        tokenFile: /run/secrets/logfire_write_token
+        stateDir: /var/lib/trajectory/export
+        sourceId: !!js process.env.COURSE_TRAJECTORY_SOURCE_ID
+        allowFullContent: true
+    - name: /opt/dsh/packages/experimental/trajectory-export-otlp/lib/traces.js
+      disabled: !!js "!process.env.COURSE_OTLP_TRACES_ENDPOINT"
+      config:
+        endpoint: !!js process.env.COURSE_OTLP_TRACES_ENDPOINT
+        tokenFile: /run/secrets/logfire_write_token
+        stateDir: /var/lib/trajectory/export-traces
+        sourceId: !!js process.env.COURSE_TRAJECTORY_SOURCE_ID
+        allowFullContent: true

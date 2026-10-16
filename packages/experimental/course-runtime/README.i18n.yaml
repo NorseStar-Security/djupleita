@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/course-runtime/README.md
+/:
+  en: 35bc1ed0793ed536
+  zh: 24b13508eeddce90
+/deepseek-ai-dsh-experimental-course-runtime:
+  en: d99baad5791b2d97
+  zh: 30cec4bc52ce239e
+/deepseek-ai-dsh-experimental-course-runtime/summary:
+  en: 59ebc2dbc98f6160
+  zh: 9d20638b64e9b478
+/deepseek-ai-dsh-experimental-course-runtime/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: 4e1b8e35194e4dd2
+/deepseek-ai-dsh-experimental-course-runtime/use-this-package:
+  en: 4f260943e7970f51
+  zh: bb7da6e27ad47fdb
+/deepseek-ai-dsh-experimental-course-runtime/understand-the-implementation:
+  en: ff560c76c5e843c4
+  zh: d424fa7201b9364a
+/deepseek-ai-dsh-experimental-course-runtime/further-exploration:
+  en: b1c1d2fbd2644f9f
+  zh: 8987bd4e2caff063
+/deepseek-ai-dsh-experimental-course-runtime/model-experience:
+  en: ffe5ce72c4745afd
+  zh: 74b7dbf333e37029
+/deepseek-ai-dsh-experimental-course-runtime/model-experience/kv-cache-effect:
+  en: aa45b64a2d5c4e97
+  zh: 1db3b42958ff25d6
+/deepseek-ai-dsh-experimental-course-runtime/known-limitations-and-deferred-work:
+  en: 2cfe77a39f36c40c
+  zh: 06272f435332701f
+/deepseek-ai-dsh-experimental-course-runtime/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

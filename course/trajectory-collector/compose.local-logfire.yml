@@ -1,0 +1,13 @@
+# Apply only with compose.local.yml. The instructor holds this secret outside the image/research process.
+services:
+  collector:
+    environment:
+      COURSE_OTLP_LOGS_ENDPOINT: ${COURSE_OTLP_LOGS_ENDPOINT:?Set the region-specific HTTPS OTLP /v1/logs URL}
+      COURSE_OTLP_TRACES_ENDPOINT: ${COURSE_OTLP_TRACES_ENDPOINT:?Set the same project's HTTPS OTLP /v1/traces URL}
+      COURSE_TRAJECTORY_SOURCE_ID: ${COURSE_TRAJECTORY_SOURCE_ID:?Set the collector source namespace}
+    secrets: [logfire_write_token]
+    healthcheck:
+      test: [CMD, node, --eval, "const fs=require('fs');const healthy=['export','export-traces'].every(p=>{const h=JSON.parse(fs.readFileSync('/var/lib/trajectory/'+p+'/health.json'));return ['idle','exporting'].includes(h.state)&&Date.now()-h.updatedAt<60000});fetch('http://127.0.0.1:4319/api/trajectory/status').then(r=>process.exit(r.status===401&&healthy?0:1)).catch(()=>process.exit(1))"]
+secrets:
+  logfire_write_token:
+    file: ${LOGFIRE_TOKEN_FILE:?Set an instructor-only token file outside this checkout}

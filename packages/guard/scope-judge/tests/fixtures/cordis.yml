@@ -1,0 +1,7 @@
+- name: cordis:system-prompt
+- name: cordis:tools
+- name: cordis:scope-judge
+  config:
+    domains: [example.test]
+    shellTools: [bash]
+    localTools: [read_file]

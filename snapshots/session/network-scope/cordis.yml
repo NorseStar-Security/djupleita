@@ -1,0 +1,5 @@
+- insert:
+    - id: network-scope-provider
+      name: './provider-fixture.ts'
+    - id: network-scope-guard
+      name: '@deepseek-ai/dsh-experimental-network-scope-guard'

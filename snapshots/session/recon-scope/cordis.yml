@@ -1,0 +1,7 @@
+- insert:
+    - id: recon-network-scope
+      name: './provider-fixture.mjs'
+    - id: recon-provider
+      name: '@deepseek-ai/dsh-experimental-recon-projectdiscovery'
+    - id: recon-tools
+      name: '@deepseek-ai/dsh-experimental-recon-tools'

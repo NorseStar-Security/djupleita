@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-15-assessment-journal-and-rage-exchange.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-15-assessment-journal-and-rage-exchange.md
+/agent-note-assessment-journal-and-rage-exchange:
+  en: 3774046bfa7cf6b5
+  zh: a8415ad59bd6b6bc
+/agent-note-assessment-journal-and-rage-exchange/problem:
+  en: f779ae8927149a59
+  zh: f580dd3e7adec920
+/agent-note-assessment-journal-and-rage-exchange/decision:
+  en: aa7b1d1f12b764fd
+  zh: b6a5e193b4efd989
+/agent-note-assessment-journal-and-rage-exchange/alternatives-considered:
+  en: 754b14ffa9d576a8
+  zh: d2ec748573743e0e
+/agent-note-assessment-journal-and-rage-exchange/consequences:
+  en: 69c60feda7e19f92
+  zh: 3efd59ac2b5c82d4

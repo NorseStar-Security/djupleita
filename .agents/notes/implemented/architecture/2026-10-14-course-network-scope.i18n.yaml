@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-14-course-network-scope.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-14-course-network-scope.md
+/agent-note-course-destination-scope-below-tool-dispatch:
+  en: daf764d307e53756
+  zh: 87a96a011071aaf1
+/agent-note-course-destination-scope-below-tool-dispatch/problem:
+  en: 3cbfd2c40ee69cb9
+  zh: d7b7c558520424e1
+/agent-note-course-destination-scope-below-tool-dispatch/decision:
+  en: fb2b8223db85e43f
+  zh: 8d8a25159fb5ba10
+/agent-note-course-destination-scope-below-tool-dispatch/alternatives-considered:
+  en: cb85623e634358e4
+  zh: 5d2b75cfcf4ae630
+/agent-note-course-destination-scope-below-tool-dispatch/consequences:
+  en: 2258e2322e197f21
+  zh: e145020f13bfddbe

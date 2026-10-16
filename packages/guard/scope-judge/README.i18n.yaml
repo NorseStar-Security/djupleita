@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/guard/scope-judge/README.md
+/:
+  en: f01fcc30d7bd2efd
+  zh: 750284a9da73e2d0
+/deepseek-ai-dsh-scope-judge:
+  en: 0f403603541ec5b3
+  zh: 63782bcc77d58490
+/deepseek-ai-dsh-scope-judge/summary:
+  en: 0888693f23b9678b
+  zh: 41007ce080ac605d
+/deepseek-ai-dsh-scope-judge/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b2031e1751260fcb
+/deepseek-ai-dsh-scope-judge/use-this-package:
+  en: 0013d9c874656530
+  zh: 19b14a832fde3beb
+/deepseek-ai-dsh-scope-judge/use-this-package/minimal-configuration:
+  en: c0da895e01e756d5
+  zh: 5d251829e3ab92e0
+/deepseek-ai-dsh-scope-judge/use-this-package/domain-matching:
+  en: cac16db8ff73b540
+  zh: 8b35bf19e79312a5
+/deepseek-ai-dsh-scope-judge/use-this-package/structured-tools:
+  en: 841a2c3f31c54a39
+  zh: 9400b4c33a2c105b
+/deepseek-ai-dsh-scope-judge/use-this-package/bash-commands:
+  en: 75bc8539bb58c5cf
+  zh: 2762c8630a683f00
+/deepseek-ai-dsh-scope-judge/understand-the-implementation:
+  en: 7deb48a4c0ef7cf7
+  zh: 42f971bd5a85a768
+/deepseek-ai-dsh-scope-judge/further-exploration:
+  en: f14425eb87adb103
+  zh: db4951b8c518c9a2
+/deepseek-ai-dsh-scope-judge/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-scope-judge/model-experience/denied-tool-result:
+  en: 4d782abe45220e51
+  zh: df710c443b0e970d
+/deepseek-ai-dsh-scope-judge/model-experience/denied-tool-result/what-the-model-sees:
+  en: 2cb9ff72df19a6f4
+  zh: 0e0d12a66654dc18
+/deepseek-ai-dsh-scope-judge/model-experience/denied-tool-result/token-effect:
+  en: 94092161716c4024
+  zh: 67ce00618e627b06
+/deepseek-ai-dsh-scope-judge/model-experience/denied-tool-result/kv-cache-effect:
+  en: 234cd6c39df43519
+  zh: ffeb35023cac2e46
+/deepseek-ai-dsh-scope-judge/known-limitations-and-deferred-work:
+  en: fd4fee0654c9ba44
+  zh: 6e0573a64efd481b
+/deepseek-ai-dsh-scope-judge/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

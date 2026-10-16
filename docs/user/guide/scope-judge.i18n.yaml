@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for scope-judge.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/scope-judge.md
+/domain-scope-for-research-courses:
+  en: 47c951955e669519
+  zh: 2f4dcfcfc462c8ae
+/domain-scope-for-research-courses/1-prepare-the-checkout:
+  en: 71baecf08fb43bdf
+  zh: 62fb87602d5a9d93
+/domain-scope-for-research-courses/2-set-the-exercise-scope:
+  en: e1d812047063e075
+  zh: 6f96ca4ab9e0dda3
+/domain-scope-for-research-courses/3-inspect-and-launch:
+  en: 0f9199c00350d85b
+  zh: 305c2b575977f1a6
+/domain-scope-for-research-courses/4-verify-denials:
+  en: 0e2b9d9f02685928
+  zh: c301957fdeb445e2

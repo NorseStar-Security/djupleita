@@ -1,0 +1,9 @@
+version: 1
+scenario: security-callbacks
+profile: headless
+composition: security-callbacks
+recording: authored
+platform: posix
+header:
+  class: security-callbacks
+  pin: true

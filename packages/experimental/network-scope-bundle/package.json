@@ -1,0 +1,57 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-network-scope-bundle",
+  "description": "Configure enforced network scope and the protected course runtime.",
+  "version": "0.2.1-alpha.3",
+  "icon": "./icon.svg",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/network-scope-bundle"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "icon.svg",
+    "locale/*.json",
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-experimental-course-runtime": "workspace:*",
+    "@deepseek-ai/dsh-experimental-network-scope-linux": "workspace:*",
+    "@deepseek-ai/dsh-experimental-network-scope-guard": "workspace:*",
+    "@deepseek-ai/dsh-experimental-action-review-linux": "workspace:*",
+    "@deepseek-ai/dsh-experimental-action-review-guard": "workspace:*",
+    "@deepseek-ai/dsh-experimental-recon-projectdiscovery": "workspace:*",
+    "@deepseek-ai/dsh-experimental-recon-tools": "workspace:*",
+    "@deepseek-ai/dsh-experimental-browser-use-playwright-mcp": "workspace:*",
+    "@deepseek-ai/dsh-browser-use": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

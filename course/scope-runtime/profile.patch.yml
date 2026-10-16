@@ -1,0 +1,39 @@
+# This profile runs behind the kernel/gateway policy, not the argument-only judge.
+- id: sandbox-policy
+  config:
+    mode: danger-full-access
+    workspaceRoot: /workspace
+
+- id: permission
+  config:
+    defaultPreset: protected
+    presets:
+      protected:
+        sandbox: danger-full-access
+        approval: ask
+
+- insert:
+    - id: course-network-scope
+      name: /opt/dsh/packages/experimental/network-scope-linux/lib/index.js
+    - id: course-network-scope-guard
+      name: /opt/dsh/packages/experimental/network-scope-guard/lib/index.js
+    - id: course-action-review
+      name: /opt/dsh/packages/experimental/action-review-linux/lib/index.js
+      config:
+        timeoutMs: 35000
+        maxActionBytes: 262144
+        maxResponseBytes: 65536
+    - id: course-action-review-guard
+      name: /opt/dsh/packages/experimental/action-review-guard/lib/index.js
+    - id: course-recon
+      name: /opt/dsh/packages/experimental/recon-projectdiscovery/lib/index.js
+    - id: course-recon-tools
+      name: /opt/dsh/packages/experimental/recon-tools/lib/index.js
+    - id: course-browser
+      name: /opt/dsh/packages/browser-use/browser-use/lib/index.js
+    - id: course-browser-playwright
+      name: /opt/dsh/packages/experimental/browser-use-playwright-mcp/lib/index.js
+      config:
+        mode: launch
+        headless: true
+        executablePath: /opt/course/chromium.sh

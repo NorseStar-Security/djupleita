@@ -1,0 +1,73 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-trajectory-export-otlp",
+  "description": "Acknowledged, resumable export of complete persisted trajectories to OTLP logs",
+  "version": "0.2.1-alpha.3",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./collector": {
+      "types": "./lib/types/collector.d.ts",
+      "default": "./lib/collector.js"
+    },
+    "./traces": {
+      "types": "./lib/types/traces.d.ts",
+      "default": "./lib/traces.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/collector.js",
+    "lib/traces.js",
+    "lib/transport-*.js",
+    "lib/worker-*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/trajectory-export-otlp"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@opentelemetry/api-logs": "0.222.0",
+    "@opentelemetry/otlp-transformer": "0.222.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-logs": "0.222.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-experimental-trajectory-collector": "workspace:*",
+    "@deepseek-ai/dsh-experimental-trajectory-projection": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-experimental-trajectory-collector": "workspace:*",
+    "@deepseek-ai/dsh-experimental-trajectory-collector-sqlite": "workspace:*",
+    "@deepseek-ai/dsh-experimental-trajectory-projection": "workspace:*",
+    "@deepseek-ai/dsh-loader-smoke": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
+    "protobufjs": "7.6.5"
+  }
+}

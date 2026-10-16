@@ -1,0 +1,6 @@
+- insert:
+    - id: scope-judge
+      name: '@deepseek-ai/dsh-scope-judge'
+      config:
+        domains: [example.test]
+        shellTools: [bash]

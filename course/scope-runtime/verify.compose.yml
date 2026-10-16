@@ -1,0 +1,9 @@
+services:
+  gateway:
+    command: [--fixtures]
+    volumes:
+      - ./tests/scope.json:/etc/course/scope.json:ro
+  research:
+    build:
+      target: tools
+    command: [sleep, infinity]

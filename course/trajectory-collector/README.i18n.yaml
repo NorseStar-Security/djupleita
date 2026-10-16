@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write course/trajectory-collector/README.md
+/:
+  en: c1ae65c13a3068f1
+  zh: 2ee4541ca98e9f2a
+/course-trajectory-collector:
+  en: 183e903bf0ea5571
+  zh: eb8468c1c389f44c
+/course-trajectory-collector/summary:
+  en: 6f21b2535c5beaf1
+  zh: 90c907cf39dac560
+/course-trajectory-collector/table-of-contents:
+  en: e64d4b1e9bec02aa
+  zh: 237c4f1e550d61df
+/course-trajectory-collector/instructor-deployment:
+  en: 02c200b60e0a786c
+  zh: a4afdcc6dabff716
+/course-trajectory-collector/local-collection-and-inspection:
+  en: 5d6c704e30d7c331
+  zh: 4641dddc6962bd2e
+/course-trajectory-collector/integrated-local-web-app:
+  en: bf8d5d62a87e9f8d
+  zh: da92b294396311c7
+/course-trajectory-collector/observe-and-recover:
+  en: 52d24e7079aaa5f2
+  zh: 0e2212e9bb939fb8
+/course-trajectory-collector/student-image-release-requirement:
+  en: 99518ea5cf88f870
+  zh: 1cf70474b0acbc28
+/course-trajectory-collector/verification:
+  en: dc22024040a29170
+  zh: b977cafc4f2d1fff

@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/trajectory-collector-http/README.md
+/:
+  en: 85f24e5f64d8938b
+  zh: 99ba421af31f3ae1
+/deepseek-ai-dsh-experimental-trajectory-collector-http:
+  en: 387d23c0d5939df7
+  zh: 8b1434ebca143d47
+/deepseek-ai-dsh-experimental-trajectory-collector-http/summary:
+  en: a7f12d6923738463
+  zh: 00d471e8197ecd6a
+/deepseek-ai-dsh-experimental-trajectory-collector-http/table-of-contents:
+  en: b563e4ec4727d0de
+  zh: defc125e6f519e77
+/deepseek-ai-dsh-experimental-trajectory-collector-http/use-this-package:
+  en: 8393399f1bfa6aa1
+  zh: aa72901e824ff5e7
+/deepseek-ai-dsh-experimental-trajectory-collector-http/use-this-package/minimal-configuration:
+  en: 1ffe3a96987c9de3
+  zh: 7a195ffe85285023
+/deepseek-ai-dsh-experimental-trajectory-collector-http/use-this-package/upload-and-inspect:
+  en: 97662946e820635f
+  zh: 5845cd584033c8a2
+/deepseek-ai-dsh-experimental-trajectory-collector-http/understand-the-implementation:
+  en: 1ca2362135e56c4c
+  zh: 4f1cd32994e877a9
+/deepseek-ai-dsh-experimental-trajectory-collector-http/further-exploration:
+  en: 6039f6f930af0b5b
+  zh: ce92750b66134da0
+/deepseek-ai-dsh-experimental-trajectory-collector-http/model-experience:
+  en: de9ffe43d70543e3
+  zh: 93710b87128d4d9e
+/deepseek-ai-dsh-experimental-trajectory-collector-http/model-experience/kv-cache-effect:
+  en: c49b0ccaaef32fc5
+  zh: 7a6c6e6279d360d0
+/deepseek-ai-dsh-experimental-trajectory-collector-http/known-limitations-and-deferred-work:
+  en: b8fde9f770cfa57a
+  zh: a22b436337fd0a8f
+/deepseek-ai-dsh-experimental-trajectory-collector-http/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

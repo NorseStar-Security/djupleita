@@ -1,0 +1,39 @@
+# Dedicated Linux instructor host; the dashboard stays on its loopback interface.
+services:
+  collector:
+    build:
+      context: ../..
+      dockerfile: course/trajectory-collector/Dockerfile
+      args:
+        DSH_CLIENT_COMMIT_HASH: ${COURSE_BUILD_COMMIT:?Set the checkout commit for build metadata}
+    network_mode: host
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      COURSE_COLLECTOR_PROFILE: course-trajectories-local
+      DSH_TELEMETRY_MODE: DISABLED
+      COURSE_SESSION_COMPRESSION: ${COURSE_SESSION_COMPRESSION:-zstd}
+      COURSE_INSTALLATION_ID: ${COURSE_INSTALLATION_ID:?Assign a trusted local installation identity}
+      COURSE_STUDENT_ID: ${COURSE_STUDENT_ID:?Assign a trusted local student identity}
+      COURSE_COHORT_ID: ${COURSE_COHORT_ID:?Assign a trusted local cohort identity}
+    volumes:
+      - type: bind
+        source: ${COURSE_SESSION_ROOT:?Set an existing approved session archive}
+        target: /var/lib/course-sessions
+        read_only: true
+        bind:
+          create_host_path: false
+      - collector-intake:/var/lib/trajectory
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+      - /home/node/.dsh:uid=1000,gid=1000,mode=0700
+    healthcheck:
+      test: [CMD, node, --eval, "fetch('http://127.0.0.1:4319/api/trajectory/status').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+volumes:
+  collector-intake:

@@ -1,0 +1,64 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src/*.ts"
+  ],
+  "references": [
+    { "path": "../../core/tools" },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../network-scope-linux"
+    },
+    {
+      "path": "../network-scope-guard"
+    },
+    {
+      "path": "../recon-projectdiscovery"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../boot/config-editor"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-persistence"
+    },
+    {
+      "path": "../trajectory-collector"
+    },
+    {
+      "path": "../trajectory-projection"
+    }
+  ]
+}

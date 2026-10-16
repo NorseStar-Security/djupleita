@@ -1,0 +1,14 @@
+# Instructor-only profile: no model, tools, research browser, or feedback exporter.
+- insert:
+    - name: /opt/dsh/vendor/logger-console/lib/index.js
+    - name: /opt/dsh/packages/session/session-persistence-jsonl/lib/index.js
+      config:
+        root: /var/lib/course-sessions
+        compression: !!js process.env.COURSE_SESSION_COMPRESSION
+    - name: /opt/dsh/packages/experimental/trajectory-export-otlp/lib/index.js
+      config:
+        endpoint: !!js process.env.COURSE_OTLP_LOGS_ENDPOINT
+        tokenFile: /run/secrets/logfire_write_token
+        stateDir: /var/lib/trajectory
+        sourceId: !!js process.env.COURSE_TRAJECTORY_SOURCE_ID
+        allowFullContent: true

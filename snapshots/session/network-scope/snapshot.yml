@@ -1,0 +1,9 @@
+version: 1
+scenario: network-scope
+profile: headless
+composition: network-scope
+recording: authored
+platform: posix
+header:
+  class: network-scope
+  pin: true

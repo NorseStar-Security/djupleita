@@ -1,0 +1,44 @@
+.page { box-sizing: border-box; height: 100%; min-width: 0; overflow: auto; padding: 28px clamp(16px, 3vw, 40px); color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
+:global([data-platform='darwin']) .page { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
+.header, .detailHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.header h1 { margin: 0; font-size: 22px; line-height: 30px; font-weight: 500; }
+.page h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; overflow-wrap: anywhere; }
+.muted, .kind { color: var(--dsw-alias-label-tertiary); }
+.health { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 12px 0; color: var(--dsw-alias-label-secondary); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.filters > * { min-width: 0; }
+.workspace { display: grid; grid-template-columns: minmax(220px, 29%) minmax(0, 1fr); gap: 24px; margin-top: 20px; }
+.traceList, .detail { min-width: 0; }
+.detail { display: flex; flex-direction: column; gap: 12px; }
+.trace { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 12px; margin-bottom: 8px; color: inherit; background: transparent; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 12px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.trace:hover, .trace[aria-pressed='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+.traceTitle { font-weight: 500; }
+.mono { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 11px; line-height: 18px; overflow-wrap: anywhere; }
+.notice { padding: 12px; border: 1px solid var(--dsw-alias-state-error-primary); border-radius: 8px; color: var(--dsw-alias-state-error-primary); }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.tree, .tree ol { list-style: none; margin: 0; padding-left: 12px; }
+.tree { padding: 0; }
+.tree summary { cursor: pointer; padding: 8px 0; overflow-wrap: anywhere; }
+.tree summary > span { margin-right: 10px; }
+.stepName { font-weight: 500; }
+.kind { font-size: 11px; line-height: 18px; }
+.stepBody { padding-left: 12px; }
+.raw { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2); --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2); overflow: auto; max-height: 480px; white-space: pre; padding: 12px; font-size: 12px; line-height: 18px; font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); background: var(--dsw-alias-bg-layer-2); border-radius: 8px; }
+.source { min-width: 0; border-top: 0.5px solid var(--dsw-alias-border-l3); padding-top: 16px; }
+.source summary { cursor: pointer; padding: 8px 0; }
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.timelineRow { display: grid; grid-template-columns: minmax(100px, 32%) minmax(80px, 1fr) auto; align-items: center; gap: 8px; min-width: 0; width: 100%; border: 0; border-radius: 8px; padding: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.timelineRow > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timelineRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.track { position: relative; height: 14px; background: var(--dsw-alias-bg-layer-2); border-radius: 4px; overflow: hidden; }
+.bar { display: block; position: absolute; left: var(--trace-start); width: var(--trace-width); height: 100%; background: var(--dsw-alias-label-secondary); border-radius: 4px; }
+.page [data-status='blocked'], .page [data-status='error'] { color: var(--dsw-alias-state-error-primary); }
+.bar[data-status='blocked'], .bar[data-status='error'] { background: var(--dsw-alias-state-error-primary); }
+@media (max-width: 760px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .traceList { max-height: 360px; overflow: auto; }
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .timelineRow { grid-template-columns: minmax(72px, 35%) minmax(40px, 1fr); }
+  .timelineRow > span:last-child { grid-column: 1 / -1; }
+}

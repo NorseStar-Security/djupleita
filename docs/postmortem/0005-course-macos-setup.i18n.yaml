@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 0005-course-macos-setup.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/postmortem/0005-course-macos-setup.md
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete:
+  en: 106a6656385c38ae
+  zh: 065fce00094c5203
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/executive-summary:
+  en: dc98cc04a05c9145
+  zh: 7f91a2d6b42a2004
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/summary:
+  en: 85114657096d27f2
+  zh: 9fda5bb9c5fdb7d9
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/environment-observed:
+  en: c3816fc6070d3661
+  zh: a462a446197b0695
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/timeline-and-failures:
+  en: cf8c3b9617306a97
+  zh: 3bb23d557f63f53d
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/root-cause-and-product-fix:
+  en: 75e42486a690c938
+  zh: ca516d9fd9becf30
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/complete-change-ledger:
+  en: 2cd5a8f0ff40d96f
+  zh: a3b6e416529d63bf
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/verification-evidence:
+  en: a65b5befcba13445
+  zh: 0b545734e116953b
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/guardrails-and-remaining-limits:
+  en: a18d85e19c39a2ea
+  zh: 5ddd00f0d6fbebec
+/post-mortem-0005-ordinary-chat-passed-while-the-course-setup-was-incomplete/pull-request-scope:
+  en: 5cb10aa05746f735
+  zh: c870b1c977f060a9

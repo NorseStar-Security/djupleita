@@ -1,0 +1,11 @@
+# Opt in with --patch; configure the ngrok account's allocated HTTPS origin in the launch environment.
+- insert:
+    - id: security-callback-tunnel
+      name: ../lib/index.js
+      config:
+        agentApi: http://127.0.0.1:4040/api
+        publicUrl: !!js process.env.DSH_CALLBACK_PUBLIC_URL
+    - id: security-callbacks
+      name: ../../security-callbacks/lib/index.js
+    - id: security-callback-tools
+      name: ../../security-callbacks-tools/lib/index.js
