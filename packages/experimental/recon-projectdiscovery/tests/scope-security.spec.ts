@@ -32,7 +32,7 @@ describe('target authorization against gateway policy syntax', () => {
 })
 
 describe('policy names cannot change identity between IDNA implementations', () => {
-  it.each(['faß.test', 'ς.test', 'βόλος.test', 'foo\u200cbar.test', 'foo\u200dbar.test', 'acme\u3002com'])('requires explicit ASCII/Punycode for policy name %s', (name) => {
+  it.each(['faß.test', 'ς.test', 'βόλος.test', 'foo\u200cbar.test', 'foo\u200dbar.test', 'acme\u3002test'])('requires explicit ASCII/Punycode for policy name %s', (name) => {
     for (const rule of [name, `*.${name}`]) {
       expect(() => new TargetScope({ domains: [rule] })).toThrow(/RECON_SCOPE.*ASCII\/Punycode/)
       expect(() => new TargetScope({ domains: ['acme.test'], exclude_domains: [rule] })).toThrow(/RECON_SCOPE.*ASCII\/Punycode/)
@@ -54,11 +54,11 @@ describe('policy names cannot change identity between IDNA implementations', () 
   })
 })
 
-describe('canonical destinations cannot turn Acme grants into Box grants', () => {
+describe('canonical destinations cannot turn Acme grants into Widgets grants', () => {
   const scope = new TargetScope({ domains: ['acme.test', '*.acme.test'], ips: [], exclude_domains: ['*.private.acme.test', 'private.acme.test'], infrastructure: { 'widgets.test': { methods: ['GET'], paths: ['/'] } } })
 
   it.each([
-    'widgets.test', 'acme.test.widgets.test', 'acme.test-widgets.test', 'acme.test\u3002widgets.test', 'dr\u03bfpwidgets.test',
+    'widgets.test', 'acme.test.widgets.test', 'acme.test-widgets.test', 'acme.test\u3002widgets.test', '\u0430cme.test',
     'private.acme.test', 'api.private.acme.test',
   ])('rejects a canonical ungranted or excluded name: %s', (target) => {
     expect(scope.allows(normalizeTarget(target, 'domain'))).toBe(false)
@@ -66,7 +66,7 @@ describe('canonical destinations cannot turn Acme grants into Box grants', () =>
 
   it.each([
     'https://widgets.test/?next=https://acme.test/', 'https://acme.test.widgets.test/',
-    'https://%62ox.com/', 'https://acme.test%2ewidgets.test/', 'https://2130706433/',
+    'https://%77idgets.test/', 'https://acme.test%2ewidgets.test/', 'https://2130706433/',
     'https://api.private.acme.test/',
   ])('checks the canonical URL host, not trusted-looking URL text: %s', (target) => {
     expect(scope.allows(normalizeTarget(target, 'url'))).toBe(false)
@@ -80,9 +80,9 @@ describe('canonical destinations cannot turn Acme grants into Box grants', () =>
   })
 
   it('passes only the canonical authorized hostname onward to the CLI', () => {
-    expect(normalizeTarget('ACME.COM.', 'domain')).toBe('acme.test')
-    expect(normalizeTarget('acme\u3002com', 'domain')).toBe('acme.test')
-    const target = normalizeTarget('https://ACME.COM./@widgets.test/', 'url')
+    expect(normalizeTarget('ACME.TEST.', 'domain')).toBe('acme.test')
+    expect(normalizeTarget('acme\u3002test', 'domain')).toBe('acme.test')
+    const target = normalizeTarget('https://ACME.TEST./@widgets.test/', 'url')
     expect(target).toBe('https://acme.test/@widgets.test/')
     expect(scope.allows(target)).toBe(true)
   })

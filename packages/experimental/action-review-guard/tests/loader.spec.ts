@@ -96,7 +96,7 @@ async function composition(config: {
     if (state.hang) return
     if (state.disconnect) { response.destroy(); return }
     const denied = state.deny || (input.action.sessionId === null && !state.forceAgentlessAllow)
-      || JSON.stringify(input.action.arguments).includes('widgets.test/quitquitquit')
+      || JSON.stringify(input.action.arguments).includes('acme.test/quitquitquit')
     // This increment models trusted durable commit, before the acknowledgement.
     state.receipt++
     response.statusCode = state.reviewStatus

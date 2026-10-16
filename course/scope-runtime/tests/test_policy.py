@@ -30,7 +30,7 @@ class PolicyTests(unittest.TestCase):
         self.policy = Policy({"domains": ["acme.test", "*.lab.test"], "ips": ["192.0.2.0/24", "2001:db8::/32"], "exclude_domains": ["blocked.lab.test"], "exclude_ips": ["192.0.2.8", "2001:db8::8"]})
 
     def test_hostname_identity(self):
-        for name, expected in [("ACME.com.", "acme.test"), ("bücher.test", "xn--bcher-kva.test"), ("::ffff:192.0.2.1", "192.0.2.1")]:
+        for name, expected in [("ACME.test.", "acme.test"), ("bücher.test", "xn--bcher-kva.test"), ("::ffff:192.0.2.1", "192.0.2.1")]:
             with self.subTest(name=name):
                 self.assertEqual(hostname(name), expected)
         for name in ["127.1", "0177.0.0.1", "0x7f000001", "127.000.0.1", "acme.test@widgets.test", "acme.test\\widgets.test", "fe80::1%eth0", "", " a.test", "a..test"]:
@@ -38,7 +38,7 @@ class PolicyTests(unittest.TestCase):
                 hostname(name)
 
     def test_policy_dns_rules_require_explicit_ascii_names(self):
-        for name in ["faß.test", "ς.test", "βόλος.test", "foo\u200cbar.test", "foo\u200dbar.test", "acme\u3002com"]:
+        for name in ["faß.test", "ς.test", "βόλος.test", "foo\u200cbar.test", "foo\u200dbar.test", "acme\u3002test"]:
             configs = [
                 {"domains": [name]},
                 {"domains": ["*." + name]},
