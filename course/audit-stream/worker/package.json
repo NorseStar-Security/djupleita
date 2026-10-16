@@ -1,0 +1,22 @@
+{
+  "name": "ns-audit-worker",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare receiver for course trajectory exports: seat-authenticated OTLP logs intake, verified R2 custody, and a live board.",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "token": "node scripts/token.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261016.1",
+    "@types/node": "22.20.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.151.1"
+  }
+}

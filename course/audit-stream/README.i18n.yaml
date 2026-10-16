@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write course/audit-stream/README.md
+/:
+  en: 84c19ecdfb880d35
+  zh: 5f6d15cc0eb7fd63
+/course-audit-stream:
+  en: e17754a3e545a558
+  zh: 68132e4113cc3a27
+/course-audit-stream/summary:
+  en: 1984e96165bf7cfa
+  zh: ff5a4dd8e377aadf
+/course-audit-stream/table-of-contents:
+  en: da401b0d3882a449
+  zh: fdf013ddf23ac443
+/course-audit-stream/components:
+  en: d0a788ae9b455e91
+  zh: bbba1e3cc84bcda1
+/course-audit-stream/turn-on-reasoning:
+  en: ef91a8566e9abfd7
+  zh: 2ad64963b4da1b0b
+/course-audit-stream/deploy-the-receiver:
+  en: 5c57a8abb56d1562
+  zh: f4550a9f987b0fbd
+/course-audit-stream/issue-tokens:
+  en: b31b3be3e2bdb20a
+  zh: 68a47ea8cb9544a4
+/course-audit-stream/stream-a-seat:
+  en: 04af1e590f9797b1
+  zh: 0b78e439e4bc7e7b
+/course-audit-stream/watch-and-inspect:
+  en: 520685a7f1251312
+  zh: 34f04789b886aaca
+/course-audit-stream/receiver-behavior:
+  en: f87665bedff7fc1e
+  zh: 708c0aebcfce72aa
+/course-audit-stream/verification:
+  en: 9743fe52c9035fe5
+  zh: a9f4c10e53a311a0
+/course-audit-stream/known-limitations:
+  en: 0d734db76664f083
+  zh: 9d61a5fc3c21bd2f

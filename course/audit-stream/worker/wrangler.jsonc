@@ -1,0 +1,20 @@
+// Account-neutral: wrangler resolves the account from the logged-in user, and every binding is
+// named rather than identified. Create the bucket and set the secret before the first deploy
+// (see ../README.md#deploy-the-receiver).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ns-audit",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "vars": { "MAX_REQUEST_BYTES": "1048576" },
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "ns-audit-raw" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SEAT", "class_name": "SeatLedger" },
+      { "name": "ROOM", "class_name": "CohortRoom" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SeatLedger", "CohortRoom"] }]
+}

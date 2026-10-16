@@ -1,0 +1,28 @@
+# Lab-client model route for the web profile. Seed it as $DSH_HOME/profiles/web/cordis.patch.yml
+# or pass it with --patch; set SEC590_LLM_BASE_URL and the SEC590_LLM_API_KEY credential reference.
+# reasoningEfforts marks the hand-declared model as reasoning-capable, so every request sends
+# reasoning_effort and the Session log keeps the returned reasoning blocks.
+- id: llm-pi-ai
+  config:
+    providers:
+      sec590-gateway:
+        displayName: SEC590 gateway
+        apiKeyEnv: SEC590_LLM_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.SEC590_LLM_BASE_URL
+        reasoning: high
+        models:
+          - id: deepseek.v3.2
+            name: DeepSeek V3.2
+            contextWindow: 131072
+            maxTokens: 32768
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+
+- id: agent-default-model
+  config:
+    provider: sec590-gateway
+    model: deepseek.v3.2
+    reasoningEffort: high
