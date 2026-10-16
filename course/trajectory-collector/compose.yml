@@ -24,7 +24,8 @@ services:
           create_host_path: false
       - collector-state:/var/lib/trajectory
     tmpfs:
-      - /tmp:uid=1000,gid=1000,mode=0700
+      # exec: the native addon loader copies prebuilt bindings here before loading them.
+      - /tmp:uid=1000,gid=1000,mode=0700,exec
       - /home/node/.dsh:uid=1000,gid=1000,mode=0700
     secrets: [logfire_write_token]
     healthcheck:

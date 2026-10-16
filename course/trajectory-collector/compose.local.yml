@@ -27,7 +27,8 @@ services:
           create_host_path: false
       - collector-intake:/var/lib/trajectory
     tmpfs:
-      - /tmp:uid=1000,gid=1000,mode=0700
+      # exec: the native addon loader copies prebuilt bindings here before loading them.
+      - /tmp:uid=1000,gid=1000,mode=0700,exec
       - /home/node/.dsh:uid=1000,gid=1000,mode=0700
     healthcheck:
       test: [CMD, node, --eval, "fetch('http://127.0.0.1:4319/api/trajectory/status').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
