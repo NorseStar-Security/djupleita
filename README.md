@@ -36,7 +36,7 @@ These are project goals, not a list of released capabilities.
 
 ## Authors and Course
 
-Djupleita was named by **Pedram Amini and Adrian Wood**, the authors and instructors of SEC590. It lives under [Norse Star Security](https://github.com/Norse-Star-Security), the fictional company used as the course's cyber range.
+Djupleita was named by **Pedram Amini and Adrian Wood**, the authors and instructors of SEC590. It lives under [NorseStar Security](https://github.com/NorseStar-Security), the fictional company used as the course's cyber range.
 
 Learn more about the course: https://sec590.norsestarsecurity.com/
 
