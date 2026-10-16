@@ -132,7 +132,9 @@ export class HostConnectionService extends Service implements HostConnectionHand
     const secure = this.owner.get('webServer')?.protocol === 'https:'
     if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
     const id = this.browserAuth.authenticateApi(request, secure)
-    const record = id === undefined ? undefined : this.peers.get(id)
+    // In `none` mode the fence alone admits a credential-less caller, as the browser Peer.
+    if (id === undefined) return this.browserAuth.mode === 'none' ? { peer: this.browserPeer } : { rejection: 401 }
+    const record = this.peers.get(id)
     return record === undefined ? { rejection: 401 } : { peer: record.peer }
   }
 

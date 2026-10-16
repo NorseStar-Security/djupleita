@@ -958,4 +958,67 @@ describe('connection node half over a real HTTP server', () => {
       await dispose()
     }
   })
+
+  it('lets the fence alone admit requests over a real HTTP request in auth none', async () => {
+    const { routes, dispose } = await mounted({ auth: 'none', trustedHosts: ['harness.example'] })
+    const { port, close } = await serve(routes)
+    try {
+      expect(await call(port, 'settings/openSettingsDocument', 'localhost')).toBe(404)
+      expect(await call(port, 'settings/openSettingsDocument', 'harness.example')).toBe(404)
+      expect(await call(port, 'settings/openSettingsDocument', `127.0.0.1:${String(port)}`)).toBe(404)
+      expect(await call(port, 'settings/openSettingsDocument', 'other.example')).toBe(403)
+    } finally {
+      await close()
+      await dispose()
+    }
+  })
+})
+
+describe('connection auth none', () => {
+  it('admits every fenced request as the browser Peer and still refuses untrusted Host and Origin', async () => {
+    const { connection, routes, dispose } = await mounted({ auth: 'none', trustedHosts: ['harness.example'] })
+    try {
+      expect(connection.admit(fakeRequest({ host: 'localhost' }))).toEqual({ peer: connection.browserPeer })
+      expect(connection.admit(fakeRequest({ host: 'harness.example' }))).toEqual({ peer: connection.browserPeer })
+      expect(connection.requestRejection(fakeRequest({ host: '127.0.0.1:3080' }))).toBeUndefined()
+      expect(connection.admit(fakeRequest({ host: 'other.example' }))).toEqual({ rejection: 403 })
+      expect(connection.admit(fakeRequest({ host: 'localhost', origin: 'http://attacker.example' })))
+        .toEqual({ rejection: 403 })
+      const response = fakeResponse()
+      await routes.find(route => route.path === API_PATH)!.handler(fakeRequest({ host: 'localhost' }), response.response)
+      expect(response.state.status).toBe(404)
+    } finally { await dispose() }
+  })
+
+  it('prints the clean URL, serves the index without a token, and cleans a stale token URL', async () => {
+    const { connection, dispose } = await mounted({ auth: 'none' })
+    try {
+      expect(connection.authenticatedUrl('http://localhost:31337/')).toBe('http://localhost:31337/')
+      const served = fakeResponse()
+      expect(connection.authorizeIndex(fakeRequest({ host: 'localhost:31337' }, '/'), served.response)).toBe(true)
+      expect(served.state.status).toBeUndefined()
+      const stale = fakeResponse()
+      expect(connection.authorizeIndex(fakeRequest({ host: 'localhost:31337' }, '/?token=old'), stale.response)).toBe(false)
+      expect(stale.state).toMatchObject({ status: 303, headers: { 'location': './', 'cache-control': 'no-store' } })
+      expect(stale.state.headers?.['set-cookie']).toBeUndefined()
+    } finally { await dispose() }
+  })
+
+  it('mints API operators on /connect without a token and keeps a released operator refused', async () => {
+    const { connection, routes, dispose } = await mounted({ auth: 'none' })
+    try {
+      const connected = fakeResponse()
+      await routes.find(route => route.path === '/connect')!.handler(
+        fakeRequest({ host: 'localhost' }, '/connect?interactions=answer'), connected.response,
+      )
+      expect(connected.state).toMatchObject({ status: 302, headers: { location: './api/remote.mux' } })
+      const cookie = connected.state.headers?.['set-cookie']?.split(';', 1)[0] ?? ''
+      const admission = connection.admitConnection(fakeRequest({ host: 'localhost', cookie }))
+      if ('rejection' in admission) throw new Error(`operator refused: ${admission.rejection}`)
+      expect(admission.peer).not.toBe(connection.browserPeer)
+      expect(admission.peer.interactions).toBe('answer')
+      await admission.release()
+      expect(connection.admit(fakeRequest({ host: 'localhost', cookie }))).toEqual({ rejection: 401 })
+    } finally { await dispose() }
+  })
 })

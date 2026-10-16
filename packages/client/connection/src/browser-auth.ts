@@ -40,6 +40,12 @@ interface ApiCookiePayload extends Omit<BrowserCookiePayload, 'version'> {
 
 type CookiePayload = BrowserCookiePayload | ApiCookiePayload
 
+/**
+ * `token` requires the launch-token exchange and a signed cookie. `none`
+ * leaves admission to the Host/Origin fence and the network in front of it.
+ */
+export type BrowserAuthMode = 'token' | 'none'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -201,7 +207,8 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
 /**
  * Process launch-token exchange and persistent signed-cookie verification.
  * Connection loads the credential provider's signing secret during activation
- * and retains it for synchronous request authentication.
+ * and retains it for synchronous request authentication. In `none` mode the
+ * index and `/connect` ask for no token; signed cookies still verify.
  */
 export class BrowserAuth {
   private readonly launchToken: string
@@ -211,6 +218,8 @@ export class BrowserAuth {
     processOwner: object,
     private readonly secret: Buffer,
     maxAgeDays: number,
+    /** Whether callers must authenticate; `none` admits every fenced request. */
+    readonly mode: BrowserAuthMode,
   ) {
     this.launchToken = processLaunchToken(processOwner)
     this.maxAgeMilliseconds = maxAgeDays * DAY_MILLISECONDS
@@ -226,24 +235,27 @@ export class BrowserAuth {
    * @param processOwner - root application context retaining one token across Connection reloads.
    * @param credentials - persistent credential provider for the Web profile.
    * @param maxAgeDays - positive absolute browser-cookie lifetime in days.
+   * @param mode - `token` (default), or `none` for a network-restricted deployment.
    * @returns initialized authentication owner with the process owner's launch token.
    */
   static async create(
     processOwner: object,
     credentials: CredentialProvider,
     maxAgeDays: number,
+    mode: BrowserAuthMode = 'token',
   ): Promise<BrowserAuth> {
-    return new BrowserAuth(processOwner, await initializeSecret(credentials), maxAgeDays)
+    return new BrowserAuth(processOwner, await initializeSecret(credentials), maxAgeDays, mode)
   }
 
   /**
    * Add this process's launch token to the caller's application URL.
    * @param baseUrl - clean browser URL whose authority and mount are preserved.
-   * @returns the same URL carrying the process token as its sole authentication input.
+   * @returns the same URL carrying the process token as its sole authentication
+   * input, or the clean URL in `none` mode.
    */
   authenticatedUrl(baseUrl: string): string {
     const url = new URL(baseUrl)
-    url.searchParams.set(TOKEN_QUERY, this.launchToken)
+    if (this.mode === 'token') url.searchParams.set(TOKEN_QUERY, this.launchToken)
     return url.href
   }
 
@@ -258,12 +270,23 @@ export class BrowserAuth {
    * minted cookie carries `Secure` when it does. Only that listener's own
    * protocol decides, never a `publicUrl` announcement or a forwarded header:
    * those describe a hop this process does not terminate.
-   * @returns true only when the caller may serve index.html.
+   * @returns true only when the caller may serve index.html. In `none` mode
+   * every index is served; a root token URL redirects to clean `./`.
    */
   authorizeIndex(req: ConnectionIndexRequest, res: ConnectionIndexResponse, secure = false): boolean {
     /* v8 ignore next -- node:http always supplies url on server requests. */
     const url = new URL(req.url ?? '/', 'http://dsh.invalid')
     const tokens = url.searchParams.getAll(TOKEN_QUERY)
+    if (this.mode === 'none') {
+      if (tokens.length === 0 || req.method !== 'GET' || url.pathname !== '/') return true
+      res.writeHead(303, {
+        'cache-control': 'no-store',
+        'location': './',
+        'referrer-policy': 'no-referrer',
+      })
+      res.end()
+      return false
+    }
     if (tokens.length > 0) {
       const authority = requestAudience(req.headers, secure)
       if (req.method === 'GET' && url.pathname === '/' && tokens.length === 1
@@ -306,6 +329,7 @@ export class BrowserAuth {
 
   /**
    * Exchange the launch token for an independent API operator; omitted interactions default to none.
+   * In `none` mode the token is not required.
    * @param req - trusted GET request on /connect with at most one interactions declaration.
    * @param res - response owned to completion, redirecting to the API mux on success.
    * @param secure - whether the receiving listener serves TLS.
@@ -327,8 +351,10 @@ export class BrowserAuth {
     }
     const tokens = url.searchParams.getAll(TOKEN_QUERY)
     const authority = requestAudience(req.headers, secure)
-    if (req.method !== 'GET' || url.pathname !== CONNECT_PATH || tokens.length !== 1
-      || authority === undefined || !tokenMatches(tokens.join(''), this.launchToken)) {
+    const tokenAccepted = this.mode === 'none'
+      || (tokens.length === 1 && tokenMatches(tokens.join(''), this.launchToken))
+    if (req.method !== 'GET' || url.pathname !== CONNECT_PATH
+      || authority === undefined || !tokenAccepted) {
       this.writeUnauthorized(req, res)
       return
     }

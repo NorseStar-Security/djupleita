@@ -451,6 +451,13 @@ export interface ConnectionConfig {
    * an entry here. A non-canonical or non-bare authority fails plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * `token` (default) requires the printed launch-token URL once per browser,
+   * then a signed cookie. `none` admits every request that passes the
+   * Host/Origin fence, for deployments where the network alone decides who can
+   * reach the listener: any caller that reaches it gets the full tool-capable API.
+   */
+  auth?: 'token' | 'none'
   /** Absolute browser and API cookie lifetime in days. Default: 30. */
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
