@@ -35,7 +35,7 @@ export interface RoomSnapshot {
 /** Activities retained for a newly connected board. */
 export const RECENT_ACTIVITIES = 300
 /** Most recent Sessions kept per seat card; seat indexes keep every Session. */
-export const SESSIONS_PER_SEAT = 20
+export const SESSIONS_PER_SEAT = 50
 
 /** Header the receiver sets on an authenticated board connection: `instructor` or `seat`. */
 export const ROLE_HEADER = 'x-ns-audit-role'
