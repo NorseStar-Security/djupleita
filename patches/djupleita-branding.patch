@@ -1,0 +1,1254 @@
+diff --git a/apps/desktop/scripts/development-app.ts b/apps/desktop/scripts/development-app.ts
+index ff09b8b7..0ecc633e 100644
+--- a/apps/desktop/scripts/development-app.ts
++++ b/apps/desktop/scripts/development-app.ts
+@@ -26,8 +26,8 @@ function quote(value: string): string { return `'${value.replaceAll("'", "'\\''"
+  */
+ export function prepareDevelopmentApp(options: DevelopmentAppOptions): string {
+   const source = dirname(dirname(dirname(options.electron)))
+-  const bundle = join(options.directory, 'Harness Dev.app')
+-  const executable = join(bundle, 'Contents', 'MacOS', 'HarnessDev')
++  const bundle = join(options.directory, 'Djupleita.app')
++  const executable = join(bundle, 'Contents', 'MacOS', 'DjupleitaDev')
+   const stamp = join(bundle, 'Contents', 'Resources', 'dsh-development.json')
+   const launcher = developmentLauncher(options, bundle)
+   const identity = JSON.stringify({ ...options, launcher, plist: readFileSync(join(source, 'Contents', 'Info.plist'), 'utf8') })
+@@ -36,11 +36,11 @@ export function prepareDevelopmentApp(options: DevelopmentAppOptions): string {
+     execFileSync('/usr/bin/ditto', [source, bundle])
+     const plist = join(bundle, 'Contents', 'Info.plist')
+     const values = {
+-      CFBundleIdentifier: `com.deepseek.harness.dev.${createHash('sha256').update(options.appRoot).digest('hex').slice(0, 12)}`,
+-      CFBundleName: 'Harness Dev',
+-      CFBundleDisplayName: 'Harness Dev',
+-      CFBundleExecutable: 'HarnessDev',
+-      CFBundleURLTypes: [{ CFBundleURLName: 'DeepSeek Harness', CFBundleURLSchemes: ['dsh'], CFBundleTypeRole: 'Viewer' }],
++      CFBundleIdentifier: `ai.djupleita.dev.${createHash('sha256').update(options.appRoot).digest('hex').slice(0, 12)}`,
++      CFBundleName: 'Djupleita',
++      CFBundleDisplayName: 'Djupleita',
++      CFBundleExecutable: 'DjupleitaDev',
++      CFBundleURLTypes: [{ CFBundleURLName: 'Djupleita', CFBundleURLSchemes: ['dsh'], CFBundleTypeRole: 'Viewer' }],
+     }
+     for (const [key, value] of Object.entries(values)) {
+       execFileSync('/usr/bin/plutil', ['-replace', key, '-json', JSON.stringify(value), plist])
+diff --git a/apps/desktop/scripts/electron-builder-config.mjs b/apps/desktop/scripts/electron-builder-config.mjs
+index 1acb8132..0eb5a6a1 100644
+--- a/apps/desktop/scripts/electron-builder-config.mjs
++++ b/apps/desktop/scripts/electron-builder-config.mjs
+@@ -114,7 +114,7 @@ export function createElectronBuilderConfig(
+       ...buildVersion === productVersion ? {} : { version: buildVersion },
+       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
+     },
+-    productName: 'DeepSeek Harness',
++    productName: 'Djupleita',
+     // The default copyright uses author.name; this line names the product instead.
+     copyright: `Copyright © ${new Date().getFullYear()} \${productName}`,
+     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
+diff --git a/apps/desktop/src/locale.ts b/apps/desktop/src/locale.ts
+index e5dcec40..72943497 100644
+--- a/apps/desktop/src/locale.ts
++++ b/apps/desktop/src/locale.ts
+@@ -31,17 +31,17 @@ export const en = {
+   application: 'Application',
+   fileMenu: 'File',
+   closePage: 'Close Page or Window',
+-  aboutMenu: 'About DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'About Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'Version V{version}',
+-  hideApplication: 'Hide DeepSeek Harness',
++  hideApplication: 'Hide Djupleita',
+   hideOtherApplications: 'Hide Others',
+   showAllApplications: 'Show All',
+-  quitApplication: 'Quit DeepSeek Harness',
+-  openApplication: 'Open DeepSeek Harness',
++  quitApplication: 'Quit Djupleita',
++  openApplication: 'Open Djupleita',
+   quit: 'Quit',
+   cancel: 'Cancel',
+-  quitTitle: 'Quit DeepSeek Harness?',
++  quitTitle: 'Quit Djupleita?',
+   quitActiveTasks: 'Running tasks will be interrupted.',
+   quitScheduledTasks: 'Scheduled tasks will not run while the app is closed.',
+   quitActiveAndScheduledTasks: 'Running tasks will be interrupted, and scheduled tasks will not run while the app is closed.',
+@@ -56,7 +56,7 @@ export const en = {
+   copy: 'Copy',
+   paste: 'Paste',
+   selectAll: 'Select All',
+-  startupFailed: 'DeepSeek Harness is unavailable',
++  startupFailed: 'Djupleita is unavailable',
+   fatalSummary: 'The application could not start or stopped unexpectedly.',
+   startupAddressInUse: 'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
+   diagnosticTruncated: '… Error details shortened.',
+@@ -66,10 +66,10 @@ export const en = {
+   restartApplication: 'Restart',
+   recoveryOperationFailed: 'The recovery operation failed',
+   disableThirdPartyPlugins: 'Disable third-party plugins, back up profile patch, and restart',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Welcome to ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Build potential. Explore intelligence.',
+   welcomeAuthStarting: 'Opening sign in…',
+@@ -131,7 +131,7 @@ export const en = {
+   updateFullscreenTimeout: 'Could not exit fullscreen. Exit fullscreen, then retry the update.',
+   updateStopFailed: 'Could not safely stop the tasks. The update has not been installed. Please try again later.',
+   updateTechnicalDetails: 'View technical details',
+-  updateTitle: 'DeepSeek Harness Update',
++  updateTitle: 'Djupleita Update',
+   updateAvailable: 'New version available: {version}',
+   updateDetail: 'Once the download is complete, you can install the update and restart the app.',
+   installAndRestart: 'Install and Restart',
+@@ -205,17 +205,17 @@ export const zh = {
+   application: '应用',
+   fileMenu: '文件',
+   closePage: '关闭页面或窗口',
+-  aboutMenu: '关于 DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: '关于 Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: '版本 V{version}',
+-  hideApplication: '隐藏 DeepSeek Harness',
++  hideApplication: '隐藏 Djupleita',
+   hideOtherApplications: '隐藏其他',
+   showAllApplications: '显示全部',
+-  quitApplication: '退出 DeepSeek Harness',
+-  openApplication: '打开 DeepSeek Harness',
++  quitApplication: '退出 Djupleita',
++  openApplication: '打开 Djupleita',
+   quit: '退出',
+   cancel: '取消',
+-  quitTitle: '退出 DeepSeek Harness？',
++  quitTitle: '退出 Djupleita？',
+   quitActiveTasks: '当前正在运行的任务将会中断',
+   quitScheduledTasks: '应用关闭期间，定时任务不会运行',
+   quitActiveAndScheduledTasks: '当前正在运行的任务将会中断，且应用关闭期间，定时任务不会运行',
+@@ -230,7 +230,7 @@ export const zh = {
+   copy: '复制',
+   paste: '粘贴',
+   selectAll: '全选',
+-  startupFailed: 'DeepSeek Harness 无法使用',
++  startupFailed: 'Djupleita 无法使用',
+   fatalSummary: '应用无法启动或已意外停止。',
+   startupAddressInUse: '有其他正在运行的 DSH（如其他 dsh web、桌面端），无法同时启动，请退出其他正在运行的 DSH 后重启。',
+   diagnosticTruncated: '… 错误详情已截短。',
+@@ -240,10 +240,10 @@ export const zh = {
+   restartApplication: '重启',
+   recoveryOperationFailed: '恢复操作失败',
+   disableThirdPartyPlugins: '禁用第三方插件、备份 profile patch 并重启',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: '欢迎使用 ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: '组装无限可能，共探智能上限',
+   welcomeAuthStarting: '正在打开登录…',
+@@ -305,7 +305,7 @@ export const zh = {
+   updateFullscreenTimeout: '无法退出全屏，请退出全屏后重试更新',
+   updateStopFailed: '未能安全停止任务，更新尚未安装，请稍后重试。',
+   updateTechnicalDetails: '查看技术详情',
+-  updateTitle: 'DeepSeek Harness 更新',
++  updateTitle: 'Djupleita 更新',
+   updateAvailable: '发现新版本 {version}',
+   updateDetail: '下载完成后，可安装并重启应用。',
+   installAndRestart: '安装并重启',
+@@ -377,17 +377,17 @@ export const ja = {
+   application: 'アプリケーション',
+   fileMenu: 'ファイル',
+   closePage: 'ページまたはウィンドウを閉じる',
+-  aboutMenu: 'DeepSeek Harness について',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'Djupleita について',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'バージョン V{version}',
+-  hideApplication: 'DeepSeek Harness を隠す',
++  hideApplication: 'Djupleita を隠す',
+   hideOtherApplications: 'ほかを隠す',
+   showAllApplications: 'すべて表示',
+-  quitApplication: 'DeepSeek Harness を終了',
+-  openApplication: 'DeepSeek Harness を開く',
++  quitApplication: 'Djupleita を終了',
++  openApplication: 'Djupleita を開く',
+   quit: '終了',
+   cancel: 'キャンセル',
+-  quitTitle: 'DeepSeek Harness を終了しますか？',
++  quitTitle: 'Djupleita を終了しますか？',
+   quitActiveTasks: '実行中のタスクは中断されます。',
+   quitScheduledTasks: 'アプリの終了中はスケジュールされたタスクが実行されません。',
+   quitActiveAndScheduledTasks: '実行中のタスクは中断され、アプリの終了中はスケジュールされたタスクが実行されません。',
+@@ -402,7 +402,7 @@ export const ja = {
+   copy: 'コピー',
+   paste: '貼り付け',
+   selectAll: 'すべて選択',
+-  startupFailed: 'DeepSeek Harness を利用できません',
++  startupFailed: 'Djupleita を利用できません',
+   fatalSummary: 'アプリケーションを起動できなかったか、予期せず停止しました。',
+   startupAddressInUse: '別の DSH インスタンス (dsh web やデスクトップアプリなど) が実行中です。同時に起動することはできません。実行中の他の DSH インスタンスを終了してから再起動してください。',
+   diagnosticTruncated: '… エラー詳細は省略されています。',
+@@ -412,10 +412,10 @@ export const ja = {
+   restartApplication: '再起動',
+   recoveryOperationFailed: '復旧操作に失敗しました',
+   disableThirdPartyPlugins: 'サードパーティのプラグインを無効化し、プロファイルパッチをバックアップして再起動',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'ようこそ ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: '可能性を築く。知能を探求する。',
+   welcomeAuthStarting: 'ログインを開いています…',
+@@ -477,7 +477,7 @@ export const ja = {
+   updateFullscreenTimeout: 'フルスクリーンを終了できませんでした。フルスクリーンを終了してからアップデートを再試行してください。',
+   updateStopFailed: 'タスクを安全に停止できませんでした。アップデートはインストールされていません。後でもう一度お試しください。',
+   updateTechnicalDetails: '技術的な詳細を表示',
+-  updateTitle: 'DeepSeek Harness アップデート',
++  updateTitle: 'Djupleita アップデート',
+   updateAvailable: '新しいバージョンがあります: {version}',
+   updateDetail: 'ダウンロードが完了したら、アップデートをインストールしてアプリを再起動できます。',
+   installAndRestart: 'インストールして再起動',
+@@ -549,17 +549,17 @@ export const es = {
+   application: 'Solicitud',
+   fileMenu: 'Archivo',
+   closePage: 'Cerrar página o ventana',
+-  aboutMenu: 'Acerca de DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'Acerca de Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'Versión V{version}',
+-  hideApplication: 'Ocultar DeepSeek Harness',
++  hideApplication: 'Ocultar Djupleita',
+   hideOtherApplications: 'Ocultar otros',
+   showAllApplications: 'Mostrar todo',
+-  quitApplication: 'Salir de DeepSeek Harness',
+-  openApplication: 'Abrir DeepSeek Harness',
++  quitApplication: 'Salir de Djupleita',
++  openApplication: 'Abrir Djupleita',
+   quit: 'Salir',
+   cancel: 'Cancelar',
+-  quitTitle: '¿Salir de DeepSeek Harness?',
++  quitTitle: '¿Salir de Djupleita?',
+   quitActiveTasks: 'Las tareas en ejecución se interrumpirán.',
+   quitScheduledTasks: 'Las tareas programadas no se ejecutarán mientras la aplicación esté cerrada.',
+   quitActiveAndScheduledTasks: 'Las tareas en ejecución se interrumpirán y las tareas programadas no se ejecutarán mientras la aplicación esté cerrada.',
+@@ -574,7 +574,7 @@ export const es = {
+   copy: 'Copiar',
+   paste: 'Pegar',
+   selectAll: 'Seleccionar todo',
+-  startupFailed: 'DeepSeek Harness no está disponible',
++  startupFailed: 'Djupleita no está disponible',
+   fatalSummary: 'La aplicación no pudo iniciarse o se detuvo inesperadamente.',
+   startupAddressInUse: 'Se está ejecutando otra instancia de DSH (como la web de dsh o la aplicación de escritorio). No pueden empezar al mismo tiempo. Salga de la otra instancia DSH en ejecución y luego reinicie.',
+   diagnosticTruncated: '… Detalles del error acortados.',
+@@ -584,10 +584,10 @@ export const es = {
+   restartApplication: 'Reiniciar',
+   recoveryOperationFailed: 'La operación de recuperación falló',
+   disableThirdPartyPlugins: 'Deshabilite los complementos de terceros, haga una copia de seguridad del parche del perfil y reinicie',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Bienvenido a ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Desarrollar potencial. Explora la inteligencia.',
+   welcomeAuthStarting: 'Abriendo inicio de sesión…',
+@@ -649,7 +649,7 @@ export const es = {
+   updateFullscreenTimeout: 'No se pudo salir de la pantalla completa. Salga de la pantalla completa y luego vuelva a intentar la actualización.',
+   updateStopFailed: 'No se pudieron detener las tareas de forma segura. La actualización no se ha instalado. Inténtelo de nuevo más tarde.',
+   updateTechnicalDetails: 'Ver detalles técnicos',
+-  updateTitle: 'Actualización DeepSeek Harness',
++  updateTitle: 'Actualización Djupleita',
+   updateAvailable: 'Nueva versión disponible: {version}',
+   updateDetail: 'Una vez que se completa la descarga, puede instalar la actualización y reiniciar la aplicación.',
+   installAndRestart: 'Instalar y reiniciar',
+@@ -721,17 +721,17 @@ export const fr = {
+   application: 'Application',
+   fileMenu: 'Fichier',
+   closePage: 'Fermer la page ou la fenêtre',
+-  aboutMenu: 'À propos de DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'À propos de Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'VersionV{version}',
+-  hideApplication: 'Masquer DeepSeek Harness',
++  hideApplication: 'Masquer Djupleita',
+   hideOtherApplications: 'Masquer les autres',
+   showAllApplications: 'Afficher tout',
+-  quitApplication: 'Quitter DeepSeek Harness',
+-  openApplication: 'Ouvrir DeepSeek Harness',
++  quitApplication: 'Quitter Djupleita',
++  openApplication: 'Ouvrir Djupleita',
+   quit: 'Quitter',
+   cancel: 'Annuler',
+-  quitTitle: 'Quitter DeepSeek Harness ?',
++  quitTitle: 'Quitter Djupleita ?',
+   quitActiveTasks: 'Les tâches en cours seront interrompues.',
+   quitScheduledTasks: "Les tâches planifiées ne s'exécuteront pas lorsque l'application est fermée.",
+   quitActiveAndScheduledTasks: "Les tâches en cours d'exécution seront interrompues et les tâches planifiées ne s'exécuteront pas tant que l'application sera fermée.",
+@@ -746,7 +746,7 @@ export const fr = {
+   copy: 'Copier',
+   paste: 'Coller',
+   selectAll: 'Sélectionner tout',
+-  startupFailed: "DeepSeek Harness n'est pas disponible",
++  startupFailed: "Djupleita n'est pas disponible",
+   fatalSummary: "L'application n'a pas pu démarrer ou s'est arrêtée de manière inattendue.",
+   startupAddressInUse: "Une autre instance DSH (telle que le Web dsh ou l'application de bureau) est en cours d'exécution. Ils ne peuvent pas démarrer en même temps. Quittez l'autre instance DSH en cours d'exécution, puis redémarrez.",
+   diagnosticTruncated: '… Détails de l’erreur raccourcis.',
+@@ -756,10 +756,10 @@ export const fr = {
+   restartApplication: 'Redémarrer',
+   recoveryOperationFailed: "L'opération de récupération a échoué",
+   disableThirdPartyPlugins: 'Désactivez les plugins tiers, sauvegardez le correctif de profil et redémarrez',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Bienvenue à ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: "Développer le potentiel. Explorez l'intelligence.",
+   welcomeAuthStarting: 'Ouverture de la connexion…',
+@@ -821,7 +821,7 @@ export const fr = {
+   updateFullscreenTimeout: 'Impossible de quitter le mode plein écran. Quittez le mode plein écran, puis réessayez la mise à jour.',
+   updateStopFailed: "Impossible d'arrêter les tâches en toute sécurité. La mise à jour n'a pas été installée. Veuillez réessayer plus tard.",
+   updateTechnicalDetails: 'Voir les détails techniques',
+-  updateTitle: 'Mise à jour DeepSeek Harness',
++  updateTitle: 'Mise à jour Djupleita',
+   updateAvailable: 'Nouvelle version disponible : {version}',
+   updateDetail: "Une fois le téléchargement terminé, vous pouvez installer la mise à jour et redémarrer l'application.",
+   installAndRestart: 'Installer et redémarrer',
+@@ -893,17 +893,17 @@ export const de = {
+   application: 'Anwendung',
+   fileMenu: 'Datei',
+   closePage: 'Seite oder Fenster schließen',
+-  aboutMenu: 'Über DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'Über Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'Version V{version}',
+-  hideApplication: 'DeepSeek Harness ausblenden',
++  hideApplication: 'Djupleita ausblenden',
+   hideOtherApplications: 'Andere ausblenden',
+   showAllApplications: 'Alle einblenden',
+-  quitApplication: 'DeepSeek Harness beenden',
+-  openApplication: 'DeepSeek Harness öffnen',
++  quitApplication: 'Djupleita beenden',
++  openApplication: 'Djupleita öffnen',
+   quit: 'Beenden',
+   cancel: 'Abbrechen',
+-  quitTitle: 'DeepSeek Harness beenden?',
++  quitTitle: 'Djupleita beenden?',
+   quitActiveTasks: 'Laufende Aufgaben werden unterbrochen.',
+   quitScheduledTasks: 'Geplante Aufgaben werden nicht ausgeführt, während die App geschlossen ist.',
+   quitActiveAndScheduledTasks: 'Laufende Aufgaben werden unterbrochen und geplante Aufgaben werden nicht ausgeführt, während die App geschlossen ist.',
+@@ -918,7 +918,7 @@ export const de = {
+   copy: 'Kopieren',
+   paste: 'Einfügen',
+   selectAll: 'Alles auswählen',
+-  startupFailed: 'DeepSeek Harness ist nicht verfügbar',
++  startupFailed: 'Djupleita ist nicht verfügbar',
+   fatalSummary: 'Die Anwendung konnte nicht gestartet werden oder wurde unerwartet gestoppt.',
+   startupAddressInUse: 'Eine andere DSH-Instanz (z. B. dsh Web oder die Desktop-App) wird ausgeführt. Sie können nicht gleichzeitig starten. Beenden Sie die andere laufende DSH-Instanz und starten Sie sie neu.',
+   diagnosticTruncated: '… Fehlerdetails gekürzt.',
+@@ -928,10 +928,10 @@ export const de = {
+   restartApplication: 'Neustart',
+   recoveryOperationFailed: 'Der Wiederherstellungsvorgang ist fehlgeschlagen',
+   disableThirdPartyPlugins: 'Deaktivieren Sie Plugins von Drittanbietern, sichern Sie den Profil-Patch und starten Sie neu',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Willkommen bei ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Potenzial aufbauen. Entdecken Sie Intelligenz.',
+   welcomeAuthStarting: 'Anmeldung wird geöffnet…',
+@@ -993,7 +993,7 @@ export const de = {
+   updateFullscreenTimeout: 'Der Vollbildmodus konnte nicht beendet werden. Beenden Sie den Vollbildmodus und versuchen Sie dann erneut, das Update durchzuführen.',
+   updateStopFailed: 'Die Aufgaben konnten nicht sicher gestoppt werden. Das Update wurde nicht installiert. Bitte versuchen Sie es später noch einmal.',
+   updateTechnicalDetails: 'Technische Details anzeigen',
+-  updateTitle: 'DeepSeek Harness-Update',
++  updateTitle: 'Djupleita-Update',
+   updateAvailable: 'Neue Version verfügbar: {version}',
+   updateDetail: 'Sobald der Download abgeschlossen ist, können Sie das Update installieren und die App neu starten.',
+   installAndRestart: 'Installieren und neu starten',
+@@ -1065,17 +1065,17 @@ export const ru = {
+   application: 'Приложение',
+   fileMenu: 'Файл',
+   closePage: 'Закрыть страницу или окно',
+-  aboutMenu: 'О DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'О Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'Версия V{version}',
+-  hideApplication: 'Скрыть DeepSeek Harness',
++  hideApplication: 'Скрыть Djupleita',
+   hideOtherApplications: 'Скрыть других',
+   showAllApplications: 'Показать все',
+-  quitApplication: 'Выйти из DeepSeek Harness',
+-  openApplication: 'Открыть DeepSeek Harness',
++  quitApplication: 'Выйти из Djupleita',
++  openApplication: 'Открыть Djupleita',
+   quit: 'Выйти',
+   cancel: 'Отмена',
+-  quitTitle: 'Выйти из DeepSeek Harness?',
++  quitTitle: 'Выйти из Djupleita?',
+   quitActiveTasks: 'Выполнение задач будет прервано.',
+   quitScheduledTasks: 'Запланированные задачи не будут выполняться, пока приложение закрыто.',
+   quitActiveAndScheduledTasks: 'Выполнение задач будет прервано, а запланированные задачи не будут выполняться, пока приложение закрыто.',
+@@ -1090,7 +1090,7 @@ export const ru = {
+   copy: 'Копировать',
+   paste: 'Вставить',
+   selectAll: 'Выбрать все',
+-  startupFailed: 'DeepSeek Harness недоступен.',
++  startupFailed: 'Djupleita недоступен.',
+   fatalSummary: 'Приложение не могло запуститься или неожиданно остановилось.',
+   startupAddressInUse: 'Другой экземпляр DSH (например, веб-приложение dsh или настольное приложение) запущен. Они не могут начаться одновременно. Закройте другой работающий экземпляр DSH, а затем перезапустите.',
+   diagnosticTruncated: '… Подробности об ошибках сокращены.',
+@@ -1100,10 +1100,10 @@ export const ru = {
+   restartApplication: 'Перезапустить',
+   recoveryOperationFailed: 'Операция восстановления не удалась',
+   disableThirdPartyPlugins: 'Отключите сторонние плагины, создайте резервную копию патча профиля и перезапустите.',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Добро пожаловать в ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Развивайте потенциал. Исследуйте интеллект.',
+   welcomeAuthStarting: 'Открытие входа в систему…',
+@@ -1165,7 +1165,7 @@ export const ru = {
+   updateFullscreenTimeout: 'Не удалось выйти из полноэкранного режима. Выйдите из полноэкранного режима и повторите попытку обновления.',
+   updateStopFailed: 'Не удалось безопасно остановить задачи. Обновление не установлено. Пожалуйста, повторите попытку позже.',
+   updateTechnicalDetails: 'Посмотреть технические подробности',
+-  updateTitle: 'DeepSeek Harness Обновление',
++  updateTitle: 'Djupleita Обновление',
+   updateAvailable: 'Доступна новая версия: {version}.',
+   updateDetail: 'После завершения загрузки вы можете установить обновление и перезапустить приложение.',
+   installAndRestart: 'Установить и перезапустить',
+@@ -1237,17 +1237,17 @@ export const pt = {
+   application: 'Aplicativo',
+   fileMenu: 'Arquivo',
+   closePage: 'Fechar página ou janela',
+-  aboutMenu: 'Sobre DeepSeek Harness',
+-  aboutProduct: 'DeepSeek Harness',
++  aboutMenu: 'Sobre Djupleita',
++  aboutProduct: 'Djupleita',
+   aboutVersion: 'Versão V{version}',
+-  hideApplication: 'Ocultar DeepSeek Harness',
++  hideApplication: 'Ocultar Djupleita',
+   hideOtherApplications: 'Ocultar outros',
+   showAllApplications: 'Mostrar tudo',
+-  quitApplication: 'Sair de DeepSeek Harness',
+-  openApplication: 'Abra DeepSeek Harness',
++  quitApplication: 'Sair de Djupleita',
++  openApplication: 'Abra Djupleita',
+   quit: 'Sair',
+   cancel: 'Cancelar',
+-  quitTitle: 'Sair de DeepSeek Harness?',
++  quitTitle: 'Sair de Djupleita?',
+   quitActiveTasks: 'As tarefas em execução serão interrompidas.',
+   quitScheduledTasks: 'As tarefas agendadas não serão executadas enquanto o aplicativo estiver fechado.',
+   quitActiveAndScheduledTasks: 'As tarefas em execução serão interrompidas e as tarefas agendadas não serão executadas enquanto o aplicativo estiver fechado.',
+@@ -1262,7 +1262,7 @@ export const pt = {
+   copy: 'Copiar',
+   paste: 'Colar',
+   selectAll: 'Selecionar tudo',
+-  startupFailed: 'DeepSeek Harness não está disponível',
++  startupFailed: 'Djupleita não está disponível',
+   fatalSummary: 'O aplicativo não pôde ser iniciado ou parou inesperadamente.',
+   startupAddressInUse: 'Outra instância DSH (como dsh web ou aplicativo de desktop) está em execução. Eles não podem começar ao mesmo tempo. Saia da outra instância DSH em execução e reinicie.',
+   diagnosticTruncated: '… Detalhes do erro reduzidos.',
+@@ -1272,10 +1272,10 @@ export const pt = {
+   restartApplication: 'Reiniciar',
+   recoveryOperationFailed: 'A operação de recuperação falhou',
+   disableThirdPartyPlugins: 'Desative plug-ins de terceiros, faça backup do patch do perfil e reinicie',
+-  welcomeTitle: 'DeepSeek Harness',
+-  welcomeBrand: 'DeepSeek Harness',
++  welcomeTitle: 'Djupleita',
++  welcomeBrand: 'Djupleita',
+   welcomeTaglineBefore: 'Bem-vindo ao ',
+-  welcomeTaglineBrand: 'DeepSeek Harness',
++  welcomeTaglineBrand: 'Djupleita',
+   welcomeTaglineAfter: '',
+   welcomeDescription: 'Construir potencial. Explore a inteligência.',
+   welcomeAuthStarting: 'Abrindo login…',
+@@ -1337,7 +1337,7 @@ export const pt = {
+   updateFullscreenTimeout: 'Não foi possível sair da tela cheia. Saia da tela inteira e tente atualizar novamente.',
+   updateStopFailed: 'Não foi possível interromper as tarefas com segurança. A atualização não foi instalada. Por favor, tente novamente mais tarde.',
+   updateTechnicalDetails: 'Ver detalhes técnicos',
+-  updateTitle: 'DeepSeek Harness Atualização',
++  updateTitle: 'Djupleita Atualização',
+   updateAvailable: 'Nova versão disponível: {version}',
+   updateDetail: 'Assim que o download for concluído, você pode instalar a atualização e reiniciar o aplicativo.',
+   installAndRestart: 'Instalar e reiniciar',
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index fb938dec..a0f98915 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -962,7 +962,7 @@ async function main(): Promise<void> {
+   const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
+     : join(process.resourcesPath, 'icon.png')
+   app.setAboutPanelOptions({
+-    applicationName: 'DeepSeek Harness',
++    applicationName: 'Djupleita',
+     applicationVersion: app.getVersion(),
+     // The release has no separate build number; omit Electron's bundle version.
+     version: '',
+diff --git a/apps/web/index.html b/apps/web/index.html
+index ff3ca620..73b12e7f 100644
+--- a/apps/web/index.html
++++ b/apps/web/index.html
+@@ -9,7 +9,7 @@
+     <meta name="apple-mobile-web-app-title" content="DSH" />
+     <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
+     <link rel="icon" type="image/svg+xml" href="/favicon.svg" media="(prefers-color-scheme: light)" />
+-    <title>DSH Local Build</title>
++    <title>Djupleita</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/apps/web/tests/built-boot.expected.e2e.ts b/apps/web/tests/built-boot.expected.e2e.ts
+index c7b7f41b..f1f40f65 100644
+--- a/apps/web/tests/built-boot.expected.e2e.ts
++++ b/apps/web/tests/built-boot.expected.e2e.ts
+@@ -63,7 +63,7 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn
+   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
+   if (clientBuildValue('DSH_CLIENT_BUILD_PROFILE') === 'official') {
+     expect(document.querySelector('svg[viewBox="26 0 156 24"]')).not.toBeNull()
+-    expect(screen.queryByText('DSH Local Build')).toBeNull()
++    expect(screen.queryByText('Djupleita')).toBeNull()
+   } else {
+     expect(document.querySelector('svg[viewBox="0 0 23.16 17.04"]')).not.toBeNull()
+     const version = clientBuildValue('DSH_CLIENT_VERSION')
+@@ -72,7 +72,7 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn
+     const buildVersion = version
+       + (commit === undefined ? '' : `-${commit}`)
+       + (clientBuildValue('DSH_CLIENT_GIT_DIRTY') === 'true' ? '-dirty' : '')
+-    screen.getByText('DSH Local Build')
++    screen.getByText('Djupleita')
+     screen.getByText(buildVersion)
+   }
+   // The compact layout dropped group session counts; the fixture workspace
+diff --git a/apps/web/tests/expected/plugin-manager/manager.expected.md b/apps/web/tests/expected/plugin-manager/manager.expected.md
+index cd2e2ac1..6763472c 100644
+--- a/apps/web/tests/expected/plugin-manager/manager.expected.md
++++ b/apps/web/tests/expected/plugin-manager/manager.expected.md
+@@ -5,6 +5,17 @@
+ - group "添加插件":
+   - button "添加插件"
+   - button "选择添加插件方式"
++- heading "已安装插件" [level=3]
++- list:
++  - listitem:
++    - button "查看 @fixture/bundle": "@fixture/bundle"
++    - text: Registry description for the fixture bundle.
++    - status
++    - switch "启用 @fixture/bundle"
++  - listitem:
++    - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
++    - status
++    - switch "启用 dsh-web-scaffold-defaults" [checked]
+ - heading "内置插件配置" [level=3]
+ - list:
+   - listitem:
+@@ -42,14 +53,3 @@
+     - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
+     - status
+     - switch "启用 自动授权审查"
+-- heading "已安装插件" [level=3]
+-- list:
+-  - listitem:
+-    - button "查看 @fixture/bundle": "@fixture/bundle"
+-    - text: Registry description for the fixture bundle.
+-    - status
+-    - switch "启用 @fixture/bundle"
+-  - listitem:
+-    - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
+-    - status
+-    - switch "启用 dsh-web-scaffold-defaults" [checked]
+diff --git a/apps/web/tests/scaffold.ts b/apps/web/tests/scaffold.ts
+index 6a0c089a..6f1ed3c3 100644
+--- a/apps/web/tests/scaffold.ts
++++ b/apps/web/tests/scaffold.ts
+@@ -118,7 +118,7 @@ export const WELCOME_NOTICE_VERSION = '2026-09-28.1'
+ export const WELCOME_NOTICE_COPY = {
+   zh: {
+     title: '预览版说明',
+-    body: 'DeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 DeepSeek Harness 将想法变成现实，与社区一起丰富插件生态。',
++    body: 'Djupleita 目前的 0.1 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 Djupleita 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 Djupleita 将想法变成现实，与社区一起丰富插件生态。',
+     continueLabel: '继续',
+   },
+ } as const
+diff --git a/apps/web/tests/session-replay-reload.e2e.ts b/apps/web/tests/session-replay-reload.e2e.ts
+index 14df87af..36a5e245 100644
+--- a/apps/web/tests/session-replay-reload.e2e.ts
++++ b/apps/web/tests/session-replay-reload.e2e.ts
+@@ -67,7 +67,7 @@ describe.skipIf(webSnapshotMode() === 'record')('web session replay', () => {
+         await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), 'replay')
+ 
+       await page.getByRole('button', { name: 'New session', exact: true }).last().click()
+-      await page.getByText('Into the Unknown', { exact: true }).waitFor()
++      await page.getByText('Djupleita', { exact: true }).waitFor()
+       await page.getByRole('treeitem').filter({ has: page.getByText('Use the bash tool to', { exact: true }) }).click()
+       await page.getByText('DONE', { exact: true }).waitFor({ timeout: 15_000 })
+       await compareOrRefreshGolden(UI_EXPECTED,
+diff --git a/apps/web/vite.config.ts b/apps/web/vite.config.ts
+index 984f53cb..5858f0c7 100644
+--- a/apps/web/vite.config.ts
++++ b/apps/web/vite.config.ts
+@@ -12,7 +12,7 @@ const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url)
+ const STANDALONE_ERROR = 'apps/web is not a standalone application: bare Vite cannot inject window.__DSH_BOOT__. '
+   + 'From a repository checkout, run `pnpm dsh web`; an installed package uses `dsh web`. '
+   + 'For client-plugin HMR, run `pnpm run dev:web`, which starts `dsh web` and the rebuild watchers together.'
+-const DEFAULT_CLIENT_TITLE = 'DSH Local Build'
++const DEFAULT_CLIENT_TITLE = 'Djupleita'
+ 
+ /** Escape build-time text before placing it in the HTML title element. */
+ function escapeHtmlText(value: string): string {
+@@ -25,7 +25,7 @@ function clientDocumentTitle(): Plugin {
+   return {
+     name: 'dsh-client-document-title',
+     transformIndexHtml(html) {
+-      return html.replace('<title>DSH Local Build</title>', `<title>${title}</title>`)
++      return html.replace('<title>Djupleita</title>', `<title>${title}</title>`)
+     },
+   }
+ }
+diff --git a/packages/client/locale/src/locales/de.ts b/packages/client/locale/src/locales/de.ts
+index dd88cf6f..4905c662 100644
+--- a/packages/client/locale/src/locales/de.ts
++++ b/packages/client/locale/src/locales/de.ts
+@@ -34,7 +34,7 @@ export const de = {
+   'collapse': 'Einklappen',
+   'expand': 'Ausklappen',
+   'back': 'Zurück',
+-  'brand.localBuild': 'Lokaler DSH-Build',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Standardarbeitsbereich',
+   'unknown': 'Unbekannt',
+   'none': 'Keine',
+diff --git a/packages/client/locale/src/locales/en.ts b/packages/client/locale/src/locales/en.ts
+index b649bbc3..ea376c24 100644
+--- a/packages/client/locale/src/locales/en.ts
++++ b/packages/client/locale/src/locales/en.ts
+@@ -33,7 +33,7 @@ export const en = {
+   'collapse': 'Collapse',
+   'expand': 'Expand',
+   'back': 'Back',
+-  'brand.localBuild': 'DSH Local Build',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Default workspace',
+   'unknown': 'Unknown',
+   'none': 'None',
+diff --git a/packages/client/locale/src/locales/es.ts b/packages/client/locale/src/locales/es.ts
+index 7eb95374..b74cc041 100644
+--- a/packages/client/locale/src/locales/es.ts
++++ b/packages/client/locale/src/locales/es.ts
+@@ -34,7 +34,7 @@ export const es = {
+   'collapse': 'Contraer',
+   'expand': 'Expandir',
+   'back': 'Atrás',
+-  'brand.localBuild': 'Compilación local de DSH',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Espacio de trabajo predeterminado',
+   'unknown': 'Desconocido',
+   'none': 'Ninguno',
+diff --git a/packages/client/locale/src/locales/fr.ts b/packages/client/locale/src/locales/fr.ts
+index c57f1a3b..19afa3cf 100644
+--- a/packages/client/locale/src/locales/fr.ts
++++ b/packages/client/locale/src/locales/fr.ts
+@@ -34,7 +34,7 @@ export const fr = {
+   'collapse': 'Réduire',
+   'expand': 'Développer',
+   'back': 'Retour',
+-  'brand.localBuild': 'Version locale de DSH',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Espace de travail par défaut',
+   'unknown': 'Inconnu',
+   'none': 'Aucun',
+diff --git a/packages/client/locale/src/locales/ja.ts b/packages/client/locale/src/locales/ja.ts
+index 1186838c..911e0396 100644
+--- a/packages/client/locale/src/locales/ja.ts
++++ b/packages/client/locale/src/locales/ja.ts
+@@ -34,7 +34,7 @@ export const ja = {
+   'collapse': '折りたたむ',
+   'expand': '展開',
+   'back': '戻る',
+-  'brand.localBuild': 'DSHローカルビルド',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'デフォルトワークスペース',
+   'unknown': '不明',
+   'none': 'なし',
+diff --git a/packages/client/locale/src/locales/pt.ts b/packages/client/locale/src/locales/pt.ts
+index 75cdb19c..3ec7ac92 100644
+--- a/packages/client/locale/src/locales/pt.ts
++++ b/packages/client/locale/src/locales/pt.ts
+@@ -34,7 +34,7 @@ export const pt = {
+   'collapse': 'Recolher',
+   'expand': 'Expandir',
+   'back': 'Voltar',
+-  'brand.localBuild': 'Versão local do DSH',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Espaço de trabalho padrão',
+   'unknown': 'Desconhecido',
+   'none': 'Nenhum',
+diff --git a/packages/client/locale/src/locales/ru.ts b/packages/client/locale/src/locales/ru.ts
+index a8a6d829..534f5702 100644
+--- a/packages/client/locale/src/locales/ru.ts
++++ b/packages/client/locale/src/locales/ru.ts
+@@ -34,7 +34,7 @@ export const ru = {
+   'collapse': 'Свернуть',
+   'expand': 'Развернуть',
+   'back': 'Назад',
+-  'brand.localBuild': 'Локальная сборка DSH',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': 'Рабочая область по умолчанию',
+   'unknown': 'Неизвестно',
+   'none': 'Нет',
+diff --git a/packages/client/locale/src/locales/zh.ts b/packages/client/locale/src/locales/zh.ts
+index 11ff789b..096e7bc1 100644
+--- a/packages/client/locale/src/locales/zh.ts
++++ b/packages/client/locale/src/locales/zh.ts
+@@ -31,7 +31,7 @@ export const zh = {
+   'collapse': '收起',
+   'expand': '展开',
+   'back': '返回',
+-  'brand.localBuild': 'DSH 本地构建',
++  'brand.localBuild': 'Djupleita',
+   'workspace.defaultName': '默认工作区',
+   'unknown': '未知',
+   'none': '无',
+diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
+index 45f11ed7..152ae167 100644
+--- a/packages/client/ui-conversation/src/client/locales.ts
++++ b/packages/client/ui-conversation/src/client/locales.ts
+@@ -75,7 +75,7 @@ export const zh = {
+   'settings.enter.description': '智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为',
+   'settings.enter.queue': '排队发送',
+   'settings.enter.steer': '插话发送',
+-  'hero.headline': '探索未至之境',
++  'hero.headline': 'Djupleita',
+   'hero.preview': '预览版',
+   'hero.chooseWorkspace': '选择工作区',
+   'session.hierarchy': '会话层级',
+@@ -458,7 +458,7 @@ export const en = {
+   'settings.enter.description': 'What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior',
+   'settings.enter.queue': 'Queue',
+   'settings.enter.steer': 'Steer',
+-  'hero.headline': 'Into the Unknown',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Preview',
+   'hero.chooseWorkspace': 'Choose workspace',
+   'session.hierarchy': 'Session hierarchy',
+@@ -840,7 +840,7 @@ export const ja = {
+   'settings.enter.description': 'エージェントの実行中にEnterキーと送信ボタンが行う動作。Cmd/Ctrl+Enterではもう一方の動作になります',
+   'settings.enter.queue': 'キュー',
+   'settings.enter.steer': '指示を変更',
+-  'hero.headline': '未知への挑戦',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'プレビュー',
+   'hero.chooseWorkspace': 'ワークスペースを選択',
+   'session.hierarchy': 'セッション階層',
+@@ -1220,7 +1220,7 @@ export const es = {
+   'settings.enter.description': 'Qué hacen los botones Intro y Enviar mientras el agente se está ejecutando; Cmd/Ctrl+Enter usa el otro comportamiento',
+   'settings.enter.queue': 'cola',
+   'settings.enter.steer': 'Redirigir',
+-  'hero.headline': 'Hacia lo desconocido',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Vista previa',
+   'hero.chooseWorkspace': 'Elige espacio de trabajo',
+   'session.hierarchy': 'Jerarquía de sesiones',
+@@ -1602,7 +1602,7 @@ export const fr = {
+   'settings.enter.description': "Ce que font Entrée et le bouton Envoyer pendant l'exécution de l'agent ; Cmd/Ctrl+Entrée utilise l'autre comportement",
+   'settings.enter.queue': "File d'attente",
+   'settings.enter.steer': 'Guider',
+-  'hero.headline': "Dans l'inconnu",
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Aperçu',
+   'hero.chooseWorkspace': 'Choisir un espace de travail',
+   'session.hierarchy': 'Hiérarchie des sessions',
+@@ -1984,7 +1984,7 @@ export const de = {
+   'settings.enter.description': 'Was die Eingabetaste und die Schaltfläche „Senden“ bewirken, während der Agent ausgeführt wird; Cmd/Strg+Enter verwendet das andere Verhalten',
+   'settings.enter.queue': 'Warteschlange',
+   'settings.enter.steer': 'Lenken',
+-  'hero.headline': 'Ins Unbekannte',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Vorschau',
+   'hero.chooseWorkspace': 'Wählen Sie einen Arbeitsbereich',
+   'session.hierarchy': 'Sitzungshierarchie',
+@@ -2366,7 +2366,7 @@ export const ru = {
+   'settings.enter.description': 'Что делают кнопки «Ввод» и «Отправить» во время работы агента; Cmd/Ctrl+Enter использует другое поведение.',
+   'settings.enter.queue': 'Очередь',
+   'settings.enter.steer': 'Направить',
+-  'hero.headline': 'В неизвестность',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Предварительный просмотр',
+   'hero.chooseWorkspace': 'Выберите рабочее пространство',
+   'session.hierarchy': 'Иерархия сеансов',
+@@ -2748,7 +2748,7 @@ export const pt = {
+   'settings.enter.description': 'O que o botão Enter e o botão Enviar fazem enquanto o agente está em execução; Cmd/Ctrl+Enter usa o outro comportamento',
+   'settings.enter.queue': 'Fila',
+   'settings.enter.steer': 'Orientar',
+-  'hero.headline': 'Para o desconhecido',
++  'hero.headline': 'Djupleita',
+   'hero.preview': 'Visualização',
+   'hero.chooseWorkspace': 'Escolha o espaço de trabalho',
+   'session.hierarchy': 'Hierarquia de sessão',
+diff --git a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
+index bda16c8a..e177490b 100644
+--- a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
++++ b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
+@@ -411,7 +411,7 @@ describe('Hero chrome', () => {
+   it('renders the English preview badge through the hero locale seat', () => {
+     const renderSlot = vi.fn<HeroShellProps['renderSlot']>(() => null)
+     const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)
+-    expect(view.getByText('Into the Unknown')).toBeTruthy()
++    expect(view.getByText('Djupleita')).toBeTruthy()
+     expect(view.getByText('Preview')).toBeTruthy()
+     expect(renderSlot).toHaveBeenCalledOnce()
+     expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
+@@ -575,7 +575,7 @@ describe('ConversationRoot resident composer', () => {
+     expect(b.view.queryByRole('tablist')).toBeNull()
+     expect(b.slotCalls).not.toContain('conversation.session.header.utilities')
+     expect(b.slotCalls).not.toContain('conversation.session.header.actions')
+-    expect(b.view.getByText('探索未至之境')).toBeTruthy()
++    expect(b.view.getByText('Djupleita')).toBeTruthy()
+     expect(b.view.getByText('预览版')).toBeTruthy()
+     expect(b.view.queryByTestId('view-chat')).toBeNull()
+     // The same machine-backed textarea is live in the hero, and the
+@@ -609,7 +609,7 @@ describe('ConversationRoot resident composer', () => {
+     expect(conversationPhase(failed, EMPTY_CONVERSATION_SNAPSHOT)).toBe('engaging')
+     const b = mount(failed, undefined, undefined, { summaryBlank: true })
+     expect(b.view.container.querySelector('[data-phase]')?.getAttribute('data-phase')).toBe('active')
+-    expect(b.view.queryByText('探索未至之境')).toBeNull()
++    expect(b.view.queryByText('Djupleita')).toBeNull()
+   })
+ 
+   it('settling phase: a summary that does not prove the session blank hides the composer while it opens', () => {
+@@ -641,7 +641,7 @@ describe('ConversationRoot resident composer', () => {
+     // blank the column for the history round-trip.
+     const root = b.view.container.querySelector('[data-phase]')
+     expect(root?.getAttribute('data-phase')).toBe('hero')
+-    expect(b.view.getByText('探索未至之境')).toBeTruthy()
++    expect(b.view.getByText('Djupleita')).toBeTruthy()
+     expect(b.view.getByRole('textbox')).toBeTruthy()
+   })
+ 
+diff --git a/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx b/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
+index b1f8d579..b05a11da 100644
+--- a/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
++++ b/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
+@@ -1786,9 +1786,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
+                   </section>
+                 ) : (
+                   <>
++                    {renderGroup('bundles', t('bundlesTitle'), mine.map(packageCard))}
+                     {renderGroup('basic', t('basicTitle'), basicCards)}
+                     {renderGroup('extensions', t('extensionsTitle'), extensions.map(packageCard))}
+-                    {renderGroup('bundles', t('bundlesTitle'), mine.map(packageCard))}
+                   </>
+                 )}
+                 {/* A failed package read trails the groups it left incomplete: right under the groups on a
+diff --git a/packages/client/ui-plugin-manager/src/client/locales.ts b/packages/client/ui-plugin-manager/src/client/locales.ts
+index a871ab36..8e196112 100644
+--- a/packages/client/ui-plugin-manager/src/client/locales.ts
++++ b/packages/client/ui-plugin-manager/src/client/locales.ts
+@@ -85,7 +85,7 @@ export const zh = {
+   installPathTemplateHint: '请替换为本机插件目录的实际路径',
+   installGuideFill: '填入示例',
+   installGuideFillAria: '填入示例 {example}',
+-  installGuideSafety: '请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 DeepSeek Harness，或读取和泄露你的数据。',
++  installGuideSafety: '请确认插件来源可信。插件在本机以你的权限运行，来源不明的插件可能损坏 Djupleita，或读取和泄露你的数据。',
+   installUpgradeNotice: '按需安装的官方插件会在版本与 DSH 不同时提供“更新”。其他插件请先卸载再安装新版。',
+   registryToggle: '安装源',
+   registryLegend: '从哪个 npm 源下载插件',
+@@ -379,7 +379,7 @@ export const en = {
+   installPathTemplateHint: 'Replace this with the actual path to your local plugin directory.',
+   installGuideFill: 'Use example',
+   installGuideFillAria: 'Use the example {example}',
+-  installGuideSafety: 'Install only plugins you trust: they run with your permissions and can damage DeepSeek Harness or leak your data.',
++  installGuideSafety: 'Install only plugins you trust: they run with your permissions and can damage Djupleita or leak your data.',
+   installUpgradeNotice: 'On-demand official plugins offer Update when their version differs from DSH. To update other plugins, uninstall and reinstall them.',
+   registryToggle: 'Registry',
+   registryLegend: 'The npm registry the plugin is downloaded from',
+@@ -672,7 +672,7 @@ export const ja = {
+   'installPathTemplateHint': 'ローカルプラグインディレクトリの実際のパスに置き換えてください。',
+   'installGuideFill': '例を使用',
+   'installGuideFillAria': '例{example}を使用',
+-  'installGuideSafety': '信頼できるプラグインのみをインストールしてください。プラグインはあなたの権限で動作し、DeepSeek Harnessを破壊したりデータを漏洩させたりする可能性があります。',
++  'installGuideSafety': '信頼できるプラグインのみをインストールしてください。プラグインはあなたの権限で動作し、Djupleitaを破壊したりデータを漏洩させたりする可能性があります。',
+   'installUpgradeNotice': 'オンデマンドの公式プラグインは、バージョンがDSHと異なる場合に更新を提供します。その他のプラグインを更新するには、アンインストールして再インストールしてください。',
+   'registryToggle': 'レジストリ',
+   'registryLegend': 'プラグインのダウンロード元のnpmレジストリ',
+@@ -961,7 +961,7 @@ export const es = {
+   installPathTemplateHint: 'Reemplace esto con la ruta real a su directorio de complementos local.',
+   installGuideFill: 'ejemplo de uso',
+   installGuideFillAria: 'Utilice el ejemplo {example}',
+-  installGuideSafety: 'Instale sólo complementos en los que confíe: se ejecutan con sus permisos y pueden dañar DeepSeek Harness o filtrar sus datos.',
++  installGuideSafety: 'Instale sólo complementos en los que confíe: se ejecutan con sus permisos y pueden dañar Djupleita o filtrar sus datos.',
+   installUpgradeNotice: 'Los complementos oficiales bajo demanda ofrecen actualización cuando su versión difiere de DSH. Para actualizar otros complementos, desinstálelos y vuelva a instalarlos.',
+   registryToggle: 'Registro',
+   registryLegend: 'El registro npm desde el que se descarga el complemento',
+@@ -1252,7 +1252,7 @@ export const fr = {
+   installPathTemplateHint: 'Remplacez-le par le chemin réel vers votre répertoire de plugin local.',
+   installGuideFill: "Utiliser l'exemple",
+   installGuideFillAria: "Utilisez l'exemple {example}",
+-  installGuideSafety: "Installez uniquement les plugins en qui vous avez confiance : ils s'exécutent avec vos autorisations et peuvent endommager DeepSeek Harness ou divulguer vos données.",
++  installGuideSafety: "Installez uniquement les plugins en qui vous avez confiance : ils s'exécutent avec vos autorisations et peuvent endommager Djupleita ou divulguer vos données.",
+   installUpgradeNotice: "Les plugins officiels à la demande proposent la mise à jour lorsque leur version diffère de DSH. Pour mettre à jour d'autres plugins, désinstallez-les et réinstallez-les.",
+   registryToggle: 'Registre',
+   registryLegend: 'Le registre npm à partir duquel le plugin est téléchargé',
+@@ -1543,7 +1543,7 @@ export const de = {
+   installPathTemplateHint: 'Ersetzen Sie dies durch den tatsächlichen Pfad zu Ihrem lokalen Plugin-Verzeichnis.',
+   installGuideFill: 'Beispiel verwenden',
+   installGuideFillAria: 'Verwenden Sie das Beispiel {example}',
+-  installGuideSafety: 'Installieren Sie nur Plugins, denen Sie vertrauen: Sie werden mit Ihren Berechtigungen ausgeführt und können DeepSeek Harness beschädigen oder Ihre Daten preisgeben.',
++  installGuideSafety: 'Installieren Sie nur Plugins, denen Sie vertrauen: Sie werden mit Ihren Berechtigungen ausgeführt und können Djupleita beschädigen oder Ihre Daten preisgeben.',
+   installUpgradeNotice: 'Offizielle On-Demand-Plugins bieten Updates an, wenn ihre Version von DSH abweicht. Um andere Plugins zu aktualisieren, deinstallieren Sie sie und installieren Sie sie erneut.',
+   registryToggle: 'Registrierung',
+   registryLegend: 'Die NPM-Registrierung, aus der das Plugin heruntergeladen wird',
+@@ -1834,7 +1834,7 @@ export const ru = {
+   installPathTemplateHint: 'Замените это фактическим путем к вашему локальному каталогу плагина.',
+   installGuideFill: 'Используйте пример',
+   installGuideFillAria: 'Используйте пример {example}',
+-  installGuideSafety: 'Устанавливайте только те плагины, которым вы доверяете: они запускаются с вашими разрешениями и могут повредить DeepSeek Harness или привести к утечке ваших данных.',
++  installGuideSafety: 'Устанавливайте только те плагины, которым вы доверяете: они запускаются с вашими разрешениями и могут повредить Djupleita или привести к утечке ваших данных.',
+   installUpgradeNotice: 'Официальные плагины по требованию предлагают обновление, если их версия отличается от DSH. Чтобы обновить другие плагины, удалите и переустановите их.',
+   registryToggle: 'Реестр',
+   registryLegend: 'Реестр npm, из которого загружается плагин.',
+@@ -2125,7 +2125,7 @@ export const pt = {
+   installPathTemplateHint: 'Substitua isso pelo caminho real para o diretório local do plugin.',
+   installGuideFill: 'Exemplo de uso',
+   installGuideFillAria: 'Use o exemplo {example}',
+-  installGuideSafety: 'Instale apenas plug-ins em que você confia: eles são executados com suas permissões e podem danificar DeepSeek Harness ou vazar seus dados.',
++  installGuideSafety: 'Instale apenas plug-ins em que você confia: eles são executados com suas permissões e podem danificar Djupleita ou vazar seus dados.',
+   installUpgradeNotice: 'Plug-ins oficiais sob demanda oferecem atualização quando sua versão é diferente de DSH. Para atualizar outros plug-ins, desinstale-os e reinstale-os.',
+   registryToggle: 'Registro',
+   registryLegend: 'O registro npm do qual o plugin é baixado',
+diff --git a/packages/client/ui-plugin-manager/tests/components.client.spec.tsx b/packages/client/ui-plugin-manager/tests/components.client.spec.tsx
+index 336aa2e3..d022c4ca 100644
+--- a/packages/client/ui-plugin-manager/tests/components.client.spec.tsx
++++ b/packages/client/ui-plugin-manager/tests/components.client.spec.tsx
+@@ -738,11 +738,11 @@ describe('PluginManagerPage', () => {
+       busy: ['dsh-protected'],
+     })
+     const cards = screen.getAllByRole('listitem')
+-    // Offered extensions precede installed bundles.
++    // Installed bundles precede offered extensions.
+     expect(cards.map(card => card.getAttribute('data-plugin-package'))).toEqual([
+-      '@deepseek-ai/dsh-experimental-agent-team-profile', 'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected',
++      'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected', '@deepseek-ai/dsh-experimental-agent-team-profile',
+     ])
+-    expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['disabled', 'running', 'problem', 'running', 'disabled', 'problem'])
++    expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['running', 'problem', 'running', 'disabled', 'problem', 'disabled'])
+     // Group titles have no counts; the official bundle retains its experimental marker.
+     expect(screen.getByRole('heading', { name: en.bundlesTitle })).toBeTruthy()
+     expect(screen.getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
+@@ -778,7 +778,7 @@ describe('PluginManagerPage', () => {
+       ],
+     })
+     expect(screen.getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))).toEqual([
+-      '@deepseek-ai/dsh-experimental-agent-team-profile', '@acme/dsh-base', 'dsh-better-sidebar',
++      '@acme/dsh-base', 'dsh-better-sidebar', '@deepseek-ai/dsh-experimental-agent-team-profile',
+     ])
+     expect(document.querySelector('[data-plugin-count]')).toBeNull()
+   })
+@@ -1141,7 +1141,7 @@ describe('PluginManagerPage', () => {
+       const extensions = document.querySelector('[data-plugin-group="extensions"]') as HTMLElement
+       expect(document.querySelector('[data-plugin-group="more"]')).toBeNull()
+       expect([...document.querySelectorAll('[data-plugin-group]')].map(group => group.getAttribute('data-plugin-group')))
+-        .toEqual(['basic', 'extensions', 'bundles'])
++        .toEqual(['bundles', 'basic', 'extensions'])
+       expect(within(basic).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-item'))).toEqual(['bash'])
+       expect(within(extensions).getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
+       expect(within(extensions).getByRole('button', { name: en.moreAction }).textContent).toBe(en.moreAction)
+diff --git a/packages/client/ui-settings-models/src/client/locales.ts b/packages/client/ui-settings-models/src/client/locales.ts
+index 533b7aed..b832a8df 100644
+--- a/packages/client/ui-settings-models/src/client/locales.ts
++++ b/packages/client/ui-settings-models/src/client/locales.ts
+@@ -130,7 +130,7 @@ export const en = {
+   create: 'Create provider',
+   creating: 'Creating\u2026',
+   welcomeTitle: 'Preview Notice',
+-  welcomeBody: 'DeepSeek Harness 0.2 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. DeepSeek Harness’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.\n\nWe look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with DeepSeek Harness and participate in the community to enrich the plugin ecosystem.',
++  welcomeBody: 'Djupleita 0.1 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. Djupleita’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.\n\nWe look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with Djupleita and participate in the community to enrich the plugin ecosystem.',
+   welcomeContinue: 'Continue',
+   welcomeError: 'The acknowledgement could not be saved. Please try again.',
+   onboardingTitle: 'Add an API key to get started',
+@@ -274,7 +274,7 @@ export const zh: { [Key in keyof typeof en]: string } = {
+   create: '创建提供商',
+   creating: '创建中\u2026',
+   welcomeTitle: '预览版说明',
+-  welcomeBody: 'DeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 DeepSeek Harness 将想法变成现实，与社区一起丰富插件生态。',
++  welcomeBody: 'Djupleita 目前的 0.1 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 Djupleita 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 Djupleita 将想法变成现实，与社区一起丰富插件生态。',
+   welcomeContinue: '继续',
+   welcomeError: '暂时无法保存确认状态，请重试。',
+   onboardingTitle: '添加一个 API Key 开始使用',
+@@ -415,7 +415,7 @@ export const ja = {
+   'create': 'プロバイダーを作成',
+   'creating': '作成中…',
+   'welcomeTitle': 'プレビューに関するお知らせ',
+-  'welcomeBody': 'DeepSeek Harness 0.2はまだプレビュー版であり、多くの領域で継続的な改善と洗練が必要です。開発者とユーザーの皆さまからのフィードバックとご提案を歓迎します。新しいデスクトップアプリは幅広いユーザーを対象としていますが、開発者向けの高度な機能は設定で有効にできます。DeepSeek Harnessの製品機能とプラグインAPIは今後も急速な反復と進化を続け、徐々に安定していく見込みです。\n\nオープンソースで再利用可能かつ組み合わせ可能なインフラストラクチャを基盤に、世界中のユーザーと開発者と共に知能の限界を探求していくことを楽しみにしています。皆さまがDeepSeek Harnessでアイデアを形にし、コミュニティに参加してプラグインエコシステムを豊かにしてくださることを歓迎します。',
++  'welcomeBody': 'Djupleita 0.1はまだプレビュー版であり、多くの領域で継続的な改善と洗練が必要です。開発者とユーザーの皆さまからのフィードバックとご提案を歓迎します。新しいデスクトップアプリは幅広いユーザーを対象としていますが、開発者向けの高度な機能は設定で有効にできます。Djupleitaの製品機能とプラグインAPIは今後も急速な反復と進化を続け、徐々に安定していく見込みです。\n\nオープンソースで再利用可能かつ組み合わせ可能なインフラストラクチャを基盤に、世界中のユーザーと開発者と共に知能の限界を探求していくことを楽しみにしています。皆さまがDjupleitaでアイデアを形にし、コミュニティに参加してプラグインエコシステムを豊かにしてくださることを歓迎します。',
+   'welcomeContinue': '続ける',
+   'welcomeError': '確認を保存できませんでした。もう一度お試しください。',
+   'onboardingTitle': 'APIキーを追加して始める',
+@@ -556,7 +556,7 @@ export const es = {
+   create: 'Crear proveedor',
+   creating: 'Creando…',
+   welcomeTitle: 'Aviso previo',
+-  welcomeBody: 'DeepSeek Harness 0.2 aún está en versión preliminar y muchas áreas necesitan mejoras y refinamientos continuos. Agradecemos los comentarios y sugerencias de todos los desarrolladores y usuarios. La nueva aplicación de escritorio ahora está dirigida a una amplia gama de usuarios, mientras que las funciones avanzadas relacionadas con los desarrolladores se pueden habilitar en la configuración. Se espera que las características del producto y las API de complementos de DeepSeek Harness continúen con una rápida iteración y evolución, y se estabilicen gradualmente con el tiempo.\n\nEsperamos explorar los límites de la inteligencia junto con usuarios y desarrolladores de todo el mundo, basándose en una infraestructura de código abierto, reutilizable y componible. Invitamos a todos a dar vida a sus ideas con DeepSeek Harness y participar en la comunidad para enriquecer el ecosistema de complementos.',
++  welcomeBody: 'Djupleita 0.1 aún está en versión preliminar y muchas áreas necesitan mejoras y refinamientos continuos. Agradecemos los comentarios y sugerencias de todos los desarrolladores y usuarios. La nueva aplicación de escritorio ahora está dirigida a una amplia gama de usuarios, mientras que las funciones avanzadas relacionadas con los desarrolladores se pueden habilitar en la configuración. Se espera que las características del producto y las API de complementos de Djupleita continúen con una rápida iteración y evolución, y se estabilicen gradualmente con el tiempo.\n\nEsperamos explorar los límites de la inteligencia junto con usuarios y desarrolladores de todo el mundo, basándose en una infraestructura de código abierto, reutilizable y componible. Invitamos a todos a dar vida a sus ideas con Djupleita y participar en la comunidad para enriquecer el ecosistema de complementos.',
+   welcomeContinue: 'Continuar',
+   welcomeError: 'El reconocimiento no se pudo guardar. Por favor inténtalo de nuevo.',
+   onboardingTitle: 'Agregue una clave API para comenzar',
+@@ -697,7 +697,7 @@ export const fr = {
+   create: 'Créer un fournisseur',
+   creating: 'Création…',
+   welcomeTitle: "Avis d'aperçu",
+-  welcomeBody: "DeepSeek Harness 0.2 est toujours en version préliminaire et de nombreux domaines nécessitent une amélioration et un perfectionnement continus. Nous apprécions les commentaires et suggestions de tous les développeurs et utilisateurs. La nouvelle application de bureau cible désormais un large éventail d'utilisateurs, tandis que les fonctionnalités avancées liées aux développeurs peuvent être activées dans les paramètres. Les fonctionnalités du produit et les API de plug-in de DeepSeek Harness devraient poursuivre leurs itérations et leur évolution rapides, et se stabiliseront progressivement au fil du temps. \n\nNous sommes impatients d'explorer les limites de l'intelligence avec les utilisateurs et les développeurs du monde entier, en nous appuyant sur une infrastructure open source, réutilisable et composable. Nous invitons chacun à donner vie à ses idées avec DeepSeek Harness et à participer à la communauté pour enrichir l'écosystème des plugins.",
++  welcomeBody: "Djupleita 0.1 est toujours en version préliminaire et de nombreux domaines nécessitent une amélioration et un perfectionnement continus. Nous apprécions les commentaires et suggestions de tous les développeurs et utilisateurs. La nouvelle application de bureau cible désormais un large éventail d'utilisateurs, tandis que les fonctionnalités avancées liées aux développeurs peuvent être activées dans les paramètres. Les fonctionnalités du produit et les API de plug-in de Djupleita devraient poursuivre leurs itérations et leur évolution rapides, et se stabiliseront progressivement au fil du temps. \n\nNous sommes impatients d'explorer les limites de l'intelligence avec les utilisateurs et les développeurs du monde entier, en nous appuyant sur une infrastructure open source, réutilisable et composable. Nous invitons chacun à donner vie à ses idées avec Djupleita et à participer à la communauté pour enrichir l'écosystème des plugins.",
+   welcomeContinue: 'Continuer',
+   welcomeError: "L'accusé de réception n'a pas pu être enregistré. Veuillez réessayer.",
+   onboardingTitle: 'Ajoutez une clé API pour commencer',
+@@ -838,7 +838,7 @@ export const de = {
+   create: 'Anbieter erstellen',
+   creating: 'Erstellen…',
+   welcomeTitle: 'Vorschauhinweis',
+-  welcomeBody: 'DeepSeek Harness 0.2 befindet sich noch in der Vorschau und viele Bereiche müssen weiter verbessert und verfeinert werden. Wir freuen uns über Feedback und Vorschläge aller Entwickler und Benutzer. Die neue Desktop-App richtet sich nun an ein breites Nutzerspektrum, während entwicklerbezogene erweiterte Funktionen in den Einstellungen aktiviert werden können. Es wird erwartet, dass die Produktfunktionen und Plugin-APIs von DeepSeek Harness ihre schnelle Iteration und Weiterentwicklung fortsetzen und sich im Laufe der Zeit allmählich stabilisieren. Wir heißen jeden willkommen, seine Ideen mit DeepSeek Harness zum Leben zu erwecken und sich an der Community zu beteiligen, um das Plugin-Ökosystem zu bereichern.',
++  welcomeBody: 'Djupleita 0.1 befindet sich noch in der Vorschau und viele Bereiche müssen weiter verbessert und verfeinert werden. Wir freuen uns über Feedback und Vorschläge aller Entwickler und Benutzer. Die neue Desktop-App richtet sich nun an ein breites Nutzerspektrum, während entwicklerbezogene erweiterte Funktionen in den Einstellungen aktiviert werden können. Es wird erwartet, dass die Produktfunktionen und Plugin-APIs von Djupleita ihre schnelle Iteration und Weiterentwicklung fortsetzen und sich im Laufe der Zeit allmählich stabilisieren. Wir heißen jeden willkommen, seine Ideen mit Djupleita zum Leben zu erwecken und sich an der Community zu beteiligen, um das Plugin-Ökosystem zu bereichern.',
+   welcomeContinue: 'Weiter',
+   welcomeError: 'Die Bestätigung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.',
+   onboardingTitle: 'Fügen Sie einen API-Schlüssel hinzu, um loszulegen',
+@@ -979,7 +979,7 @@ export const ru = {
+   create: 'Создать поставщика',
+   creating: 'Создание…',
+   welcomeTitle: 'Уведомление о предварительном просмотре',
+-  welcomeBody: 'DeepSeek Harness 0.2 все еще находится в предварительной версии, и многие области нуждаются в дальнейшем улучшении и доработке. Мы приветствуем отзывы и предложения от всех разработчиков и пользователей. Новое настольное приложение теперь ориентировано на широкий круг пользователей, а расширенные функции, связанные с разработчиком, можно включить в настройках. Ожидается, что функции продукта DeepSeek Harness и API-интерфейсы плагинов будут продолжать быстро меняться и развиваться и со временем будут постепенно стабилизироваться. \n\nМы надеемся изучить пределы интеллекта вместе с пользователями и разработчиками по всему миру, опираясь на многоразовую и компонуемую инфраструктуру с открытым исходным кодом. Мы приглашаем всех воплотить свои идеи в жизнь с помощью DeepSeek Harness и принять участие в сообществе, чтобы обогатить экосистему плагинов.',
++  welcomeBody: 'Djupleita 0.1 все еще находится в предварительной версии, и многие области нуждаются в дальнейшем улучшении и доработке. Мы приветствуем отзывы и предложения от всех разработчиков и пользователей. Новое настольное приложение теперь ориентировано на широкий круг пользователей, а расширенные функции, связанные с разработчиком, можно включить в настройках. Ожидается, что функции продукта Djupleita и API-интерфейсы плагинов будут продолжать быстро меняться и развиваться и со временем будут постепенно стабилизироваться. \n\nМы надеемся изучить пределы интеллекта вместе с пользователями и разработчиками по всему миру, опираясь на многоразовую и компонуемую инфраструктуру с открытым исходным кодом. Мы приглашаем всех воплотить свои идеи в жизнь с помощью Djupleita и принять участие в сообществе, чтобы обогатить экосистему плагинов.',
+   welcomeContinue: 'Продолжить',
+   welcomeError: 'Не удалось сохранить подтверждение. Пожалуйста, попробуйте еще раз.',
+   onboardingTitle: 'Добавьте ключ API, чтобы начать работу.',
+@@ -1120,7 +1120,7 @@ export const pt = {
+   create: 'Criar provedor',
+   creating: 'Criando…',
+   welcomeTitle: 'Aviso de visualização',
+-  welcomeBody: 'DeepSeek Harness 0.2 ainda está em versão prévia e muitas áreas precisam de melhorias e refinamentos contínuos. Agradecemos comentários e sugestões de todos os desenvolvedores e usuários. O novo aplicativo de desktop agora é direcionado a uma ampla gama de usuários, enquanto recursos avançados relacionados ao desenvolvedor podem ser habilitados nas configurações. Espera-se que os recursos do produto e as APIs de plug-in do DeepSeek Harness continuem com rápida iteração e evolução e se estabilizem gradualmente ao longo do tempo.\n\nEsperamos explorar os limites da inteligência junto com usuários e desenvolvedores em todo o mundo, desenvolvendo uma infraestrutura de código aberto, reutilizável e combinável. Convidamos todos a dar vida às suas ideias com DeepSeek Harness e participar da comunidade para enriquecer o ecossistema de plug-ins.',
++  welcomeBody: 'Djupleita 0.1 ainda está em versão prévia e muitas áreas precisam de melhorias e refinamentos contínuos. Agradecemos comentários e sugestões de todos os desenvolvedores e usuários. O novo aplicativo de desktop agora é direcionado a uma ampla gama de usuários, enquanto recursos avançados relacionados ao desenvolvedor podem ser habilitados nas configurações. Espera-se que os recursos do produto e as APIs de plug-in do Djupleita continuem com rápida iteração e evolução e se estabilizem gradualmente ao longo do tempo.\n\nEsperamos explorar os limites da inteligência junto com usuários e desenvolvedores em todo o mundo, desenvolvendo uma infraestrutura de código aberto, reutilizável e combinável. Convidamos todos a dar vida às suas ideias com Djupleita e participar da comunidade para enriquecer o ecossistema de plug-ins.',
+   welcomeContinue: 'Continuar',
+   welcomeError: 'A confirmação não pôde ser salva. Por favor, tente novamente.',
+   onboardingTitle: 'Adicione uma chave API para começar',
+diff --git a/packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx b/packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx
+index 107266f0..71a9f0fb 100644
+--- a/packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx
++++ b/packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx
+@@ -107,7 +107,7 @@ describe('WelcomeNotice', () => {
+   it('uses the exact owner copy in both GUI locales', () => {
+     expect(WELCOME_NOTICE_COPY.en).toEqual({
+       title: 'Preview Notice',
+-      body: 'DeepSeek Harness 0.2 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. DeepSeek Harness’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.\n\nWe look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with DeepSeek Harness and participate in the community to enrich the plugin ecosystem.',
++      body: 'Djupleita 0.1 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. Djupleita’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.\n\nWe look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with Djupleita and participate in the community to enrich the plugin ecosystem.',
+       continueLabel: 'Continue',
+     })
+     expect(en.welcomeBody).toBe(WELCOME_NOTICE_COPY.en.body)
+diff --git a/packages/client/ui-sidebar-documentpreview/src/client/office/locales.ts b/packages/client/ui-sidebar-documentpreview/src/client/office/locales.ts
+index 5c224c81..b3fce89f 100644
+--- a/packages/client/ui-sidebar-documentpreview/src/client/office/locales.ts
++++ b/packages/client/ui-sidebar-documentpreview/src/client/office/locales.ts
+@@ -8,7 +8,7 @@ export const zh = {
+   missingFontsDescription: '本次预览无法使用以下字体，预览中的文字和排版可能与原文档不同。',
+   missingFontsCount: '{count} 种字体',
+   closeDetails: '关闭字体详情',
+-  unavailable: 'Office 预览不可用。请在运行 DeepSeek Harness 的主机上启用文档预览服务。',
++  unavailable: 'Office 预览不可用。请在运行 Djupleita 的主机上启用文档预览服务。',
+   invalid: '无法预览此 Office 文件。文件可能已损坏、受密码保护，或与扩展名不符。',
+   tooLarge: 'Office 文件或转换后的 PDF 超过预览大小上限，请缩小文件或调整预览配置。',
+   failed: 'Office 转换失败，未生成可用的 PDF。请检查该文件后重试。',
+@@ -30,7 +30,7 @@ export const en = {
+   missingFontsDescription: 'These fonts are unavailable for this preview. Text and layout may differ from the original document.',
+   missingFontsCount: 'Fonts: {count}',
+   closeDetails: 'Close font details',
+-  unavailable: 'Office previews are unavailable. Enable the document preview service on the computer running DeepSeek Harness.',
++  unavailable: 'Office previews are unavailable. Enable the document preview service on the computer running Djupleita.',
+   invalid: 'This Office file cannot be previewed. It may be damaged, password protected, or have the wrong extension.',
+   tooLarge: 'The Office file or converted PDF exceeds the preview size limit. Reduce the file size or adjust the preview configuration.',
+   failed: 'Office conversion did not produce a usable PDF. Check the file and try again.',
+@@ -49,7 +49,7 @@ export const ja = {
+   'missingFontsDescription': 'これらのフォントはこのプレビューでは利用できません。テキストとレイアウトが元のドキュメントと異なる場合があります。',
+   'missingFontsCount': 'フォント: {count}',
+   'closeDetails': 'フォントの詳細を閉じる',
+-  'unavailable': 'Office プレビューを利用できません。DeepSeek Harness を実行しているコンピューターでドキュメントプレビューサービスを有効にしてください。',
++  'unavailable': 'Office プレビューを利用できません。Djupleita を実行しているコンピューターでドキュメントプレビューサービスを有効にしてください。',
+   'invalid': 'この Office ファイルはプレビューできません。破損しているか、パスワード保護されているか、拡張子が誤っている可能性があります。',
+   'tooLarge': 'Office ファイルまたは変換後の PDF がプレビューのサイズ上限を超えています。ファイルサイズを減らすか、プレビュー設定を調整してください。',
+   'failed': 'Office の変換で使用可能な PDF が生成されませんでした。ファイルを確認して再試行してください。',
+@@ -68,7 +68,7 @@ export const es = {
+   missingFontsDescription: 'Estas fuentes no están disponibles para esta vista previa. El texto y el diseño pueden diferir del documento original.',
+   missingFontsCount: 'Fuentes: {count}',
+   closeDetails: 'Cerrar detalles de fuente',
+-  unavailable: 'Las vistas previas de Office no están disponibles. Habilite el servicio de vista previa de documentos en la computadora que ejecuta DeepSeek Harness.',
++  unavailable: 'Las vistas previas de Office no están disponibles. Habilite el servicio de vista previa de documentos en la computadora que ejecuta Djupleita.',
+   invalid: 'No se puede obtener una vista previa de este archivo de Office. Puede que esté dañado, protegido con contraseña o que tenga la extensión incorrecta.',
+   tooLarge: 'El archivo de Office o el PDF convertido supera el límite de tamaño de vista previa. Reduzca el tamaño del archivo o ajuste la configuración de vista previa.',
+   failed: 'La conversión de Office no produjo un PDF utilizable. Verifique el archivo e inténtelo nuevamente.',
+@@ -87,7 +87,7 @@ export const fr = {
+   missingFontsDescription: 'Ces polices ne sont pas disponibles pour cet aperçu. Le texte et la mise en page peuvent différer du document original.',
+   missingFontsCount: 'Polices : {count}',
+   closeDetails: 'Fermer les détails de la police',
+-  unavailable: "Les aperçus Office ne sont pas disponibles. Activez le service de prévisualisation des documents sur l'ordinateur exécutant DeepSeek Harness.",
++  unavailable: "Les aperçus Office ne sont pas disponibles. Activez le service de prévisualisation des documents sur l'ordinateur exécutant Djupleita.",
+   invalid: 'Ce fichier Office ne peut pas être prévisualisé. Il peut être endommagé, protégé par mot de passe ou avoir une extension incorrecte.',
+   tooLarge: "Le fichier Office ou le PDF converti dépasse la limite de taille d'aperçu. Réduisez la taille du fichier ou ajustez la configuration de l’aperçu.",
+   failed: "La conversion Office n'a pas produit de PDF utilisable. Vérifiez le fichier et réessayez.",
+@@ -106,7 +106,7 @@ export const de = {
+   missingFontsDescription: 'Diese Schriftarten sind für diese Vorschau nicht verfügbar. Text und Layout können vom Originaldokument abweichen.',
+   missingFontsCount: 'Schriftarten: {count}',
+   closeDetails: 'Schriftartdetails schließen',
+-  unavailable: 'Office-Vorschauen sind nicht verfügbar. Aktivieren Sie den Dokumentvorschaudienst auf dem Computer, auf dem DeepSeek Harness ausgeführt wird.',
++  unavailable: 'Office-Vorschauen sind nicht verfügbar. Aktivieren Sie den Dokumentvorschaudienst auf dem Computer, auf dem Djupleita ausgeführt wird.',
+   invalid: 'Diese Office-Datei kann nicht in der Vorschau angezeigt werden. Möglicherweise ist es beschädigt, passwortgeschützt oder hat die falsche Erweiterung.',
+   tooLarge: 'Die Office-Datei oder das konvertierte PDF überschreitet die Größenbeschränkung für die Vorschau. Reduzieren Sie die Dateigröße oder passen Sie die Vorschaukonfiguration an.',
+   failed: 'Die Office-Konvertierung ergab kein brauchbares PDF. Überprüfen Sie die Datei und versuchen Sie es erneut.',
+@@ -125,7 +125,7 @@ export const ru = {
+   missingFontsDescription: 'Эти шрифты недоступны для этой предварительной версии. Текст и оформление могут отличаться от исходного документа.',
+   missingFontsCount: 'Шрифты: {count}',
+   closeDetails: 'Закрыть сведения о шрифте',
+-  unavailable: 'Предварительные версии Office недоступны. Включите службу предварительного просмотра документов на компьютере под управлением DeepSeek Harness.',
++  unavailable: 'Предварительные версии Office недоступны. Включите службу предварительного просмотра документов на компьютере под управлением Djupleita.',
+   invalid: 'Этот файл Office нельзя просмотреть. Возможно, он поврежден, защищен паролем или имеет неправильное расширение.',
+   tooLarge: 'Размер файла Office или преобразованного PDF-файла превышает ограничение на размер предварительного просмотра. Уменьшите размер файла или настройте конфигурацию предварительного просмотра.',
+   failed: 'Преобразование Office не привело к созданию пригодного для использования PDF-файла. Проверьте файл и повторите попытку.',
+@@ -144,7 +144,7 @@ export const pt = {
+   missingFontsDescription: 'Essas fontes não estão disponíveis para esta visualização. O texto e o layout podem diferir do documento original.',
+   missingFontsCount: 'Fontes: {count}',
+   closeDetails: 'Fechar detalhes da fonte',
+-  unavailable: 'As visualizações do Office não estão disponíveis. Ative o serviço de visualização de documentos no computador que executa DeepSeek Harness.',
++  unavailable: 'As visualizações do Office não estão disponíveis. Ative o serviço de visualização de documentos no computador que executa Djupleita.',
+   invalid: 'Este arquivo do Office não pode ser visualizado. Ele pode estar danificado, protegido por senha ou ter a extensão errada.',
+   tooLarge: 'O arquivo Office ou PDF convertido excede o limite de tamanho de visualização. Reduza o tamanho do arquivo ou ajuste a configuração de visualização.',
+   failed: 'A conversão do Office não produziu um PDF utilizável. Verifique o arquivo e tente novamente.',
+diff --git a/packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap b/packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap
+index 433bcba0..ec37bf38 100644
+--- a/packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap
++++ b/packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap
+@@ -143,7 +143,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded
+                 <span
+                   class="localBuildTitle"
+                 >
+-                  DSH Local Build
++                  Djupleita
+                 </span>
+                 <span
+                   class="buildVersion"
+@@ -389,7 +389,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
+                 <span
+                   class="localBuildTitle"
+                 >
+-                  DSH Local Build
++                  Djupleita
+                 </span>
+                 <span
+                   class="buildVersion"
+@@ -532,7 +532,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
+                 <span
+                   class="localBuildTitle"
+                 >
+-                  DSH 本地构建
++                  Djupleita
+                 </span>
+                 <span
+                   class="buildVersion"
+diff --git a/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx b/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
+index 4dedd711..41f4eda0 100644
+--- a/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
++++ b/packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
+@@ -205,7 +205,7 @@ describe('SidebarRoot shell', () => {
+         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+     />)
+ 
+-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
++    expect(screen.getByText('Djupleita')).toBeTruthy()
+     expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
+     expect(container.querySelector('svg')).not.toBeNull()
+   })
+@@ -228,7 +228,7 @@ describe('SidebarRoot shell', () => {
+         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+     />)
+ 
+-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
++    expect(screen.getByText('Djupleita')).toBeTruthy()
+     expect(screen.getByText(expected)).toBeTruthy()
+   })
+ 
+@@ -258,11 +258,11 @@ describe('SidebarRoot shell', () => {
+     vi.useFakeTimers()
+ 
+     const copiedToasts = () => screen.queryAllByRole('alert').map(toast => toast.textContent)
+-    await act(async () => { fireEvent.click(screen.getByText('DSH Local Build')) })
++    await act(async () => { fireEvent.click(screen.getByText('Djupleita')) })
+     expect(writeText).toHaveBeenLastCalledWith('1.2.3-abcdef0')
+     expect(copiedToasts()).toEqual(['Version copied'])
+     // The brand itself keeps its title and version.
+-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
++    expect(screen.getByText('Djupleita')).toBeTruthy()
+     expect(screen.getByText('1.2.3-abcdef0')).toBeTruthy()
+     act(() => { vi.advanceTimersByTime(4000) })
+     expect(copiedToasts()).toEqual([])
+@@ -274,7 +274,7 @@ describe('SidebarRoot shell', () => {
+     // The fallback mark copies too, and its click still reaches document.
+     const documentClick = vi.fn()
+     document.addEventListener('click', documentClick)
+-    const mark = screen.getByText('DSH Local Build').closest('[aria-hidden]')!.querySelector('svg')!
++    const mark = screen.getByText('Djupleita').closest('[aria-hidden]')!.querySelector('svg')!
+     await act(async () => { fireEvent.click(mark) })
+     document.removeEventListener('click', documentClick)
+     expect(documentClick).toHaveBeenCalledOnce()
+@@ -306,7 +306,7 @@ describe('SidebarRoot shell', () => {
+         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+     />)
+ 
+-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
++    expect(screen.getByText('Djupleita')).toBeTruthy()
+   })
+ 
+   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
+diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
+index 23b27ad4..b622c93b 100644
+--- a/packages/client/web/src/boot-page.ts
++++ b/packages/client/web/src/boot-page.ts
+@@ -34,7 +34,7 @@ export class BootPage {
+     this.root = div(css.boot)
+     this.root.dataset.dshBoot = ''
+     this.card = div(css.card)
+-    this.wordmark = div(css.wordmark, 'HARNESS')
++    this.wordmark = div(css.wordmark, 'DJUPLEITA')
+     this.spinner = div(css.spinner)
+     this.spinner.dataset.dshBootSpinner = ''
+     this.hint = div(css.hint, 'Loading plugins…')
+diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
+index 33612e8a..d3dfa6aa 100644
+--- a/packages/client/web/tests/boot-page.client.spec.ts
++++ b/packages/client/web/tests/boot-page.client.spec.ts
+@@ -14,7 +14,7 @@ describe('BootPage', () => {
+   it('draws the loading skeleton before any plugin state arrives', () => {
+     const { el } = mount()
+     expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
+-    expect(el.textContent).toContain('HARNESS')
++    expect(el.textContent).toContain('DJUPLEITA')
+     expect(el.textContent).toContain('Loading plugins…')
+   })
+ 

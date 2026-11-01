@@ -1,0 +1,13 @@
+title = "Djupleita secret detection"
+
+[extend]
+useDefault = true
+
+# Keep the upstream provider and generic-secret rules enabled everywhere,
+# including tests, examples and vendored patches. Add only reviewed, exact
+# false-positive fingerprints to .gitleaksignore; never exclude a whole tree.
+
+[[allowlists]]
+description = "The course model credential reference is a variable name, never a token"
+regexTarget = "secret"
+regexes = ['''^SEC590_LLM_API_KEY$''']

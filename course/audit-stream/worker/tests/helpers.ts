@@ -15,7 +15,7 @@ export interface FixtureCase {
   requests: string[]
 }
 
-/** Cases produced by `tests/fixtures/generate.ts`. */
+/** Original exporter-produced cases retained from the pinned course implementation. */
 export const fixtures: FixtureCase[] = (JSON.parse(readFileSync(new URL('./fixtures/otlp-requests.json', import.meta.url), 'utf8')) as { cases: FixtureCase[] }).cases
 
 /**
@@ -40,6 +40,7 @@ export function bytesOf(text: string): Uint8Array {
 
 /** An in-memory {@link LedgerStore} with an inspectable object map. */
 export interface MemoryStore extends LedgerStore {
+  close(): void
   objects: Map<string, { bytes: Uint8Array, metadata: Record<string, string> }>
   /** Make the next `putObject` reject, to simulate a storage outage. */
   failNextPut: boolean
@@ -53,6 +54,7 @@ export function memoryStore(): MemoryStore {
   const db = new DatabaseSync(':memory:')
   const objects = new Map<string, { bytes: Uint8Array, metadata: Record<string, string> }>()
   const store: MemoryStore = {
+    close() { db.close() },
     objects,
     failNextPut: false,
     sql(query: string, ...params: SqlValue[]) {

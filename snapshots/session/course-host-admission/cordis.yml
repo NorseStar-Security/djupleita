@@ -1,3 +1,0 @@
-- insert:
-    - id: course-host-admission
-      name: './host-admission-fixture.mjs'

@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-telemetry
+      name: '@dsh-pentest/dsh-plugin/telemetry'

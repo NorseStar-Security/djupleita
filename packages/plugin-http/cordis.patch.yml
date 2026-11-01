@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-http
+      name: '@dsh-pentest/dsh-plugin/http'

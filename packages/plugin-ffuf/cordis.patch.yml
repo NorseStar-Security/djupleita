@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-ffuf
+      name: '@dsh-pentest/dsh-plugin/ffuf'

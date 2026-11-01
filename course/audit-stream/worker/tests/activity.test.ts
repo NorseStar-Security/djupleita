@@ -4,8 +4,19 @@ import { test } from 'node:test'
 import { summarize } from '../src/activity.ts'
 
 function recorded(name: string): { type: string, line: string }[] {
-  return readFileSync(new URL(`../../../../snapshots/session/${name}/session.v4.jsonl`, import.meta.url), 'utf8')
-    .split('\n').filter((line) => line.trim() !== '').map((line) => ({ type: (JSON.parse(line) as { type: string }).type, line }))
+  if (name === 'deepseek-messages-replay') {
+    const source = JSON.parse(readFileSync(new URL('./fixtures/otlp-requests.json', import.meta.url), 'utf8')) as { cases: { type: string, record: string }[] }
+    return source.cases.map(entry => ({ type: entry.type, line: entry.record }))
+  }
+  // These receiver-owned records exercise the v4 fields without depending on a harness checkout.
+  const events = [
+    { type: 'tool/call', data: { name: 'http_request', arguments: '{}' } },
+    { type: 'plugin:network-scope-guard/judge', data: { allowed: false, tool: 'http_request', code: 'OUT_OF_SCOPE' } },
+    { type: 'plugin:network-scope-guard/judge', data: { allowed: true, tool: 'http_request', code: 'IN_SCOPE' } },
+    { type: 'request/context', data: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } },
+    { type: 'session/title', data: { title: 'Receiver fixture' } },
+  ]
+  return events.map(event => ({ type: event.type, line: JSON.stringify(event) }))
 }
 
 test('assistant messages report reasoning length and a reasoning preview', () => {

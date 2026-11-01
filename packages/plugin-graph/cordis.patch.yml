@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-graph
+      name: '@dsh-pentest/dsh-plugin/graph'

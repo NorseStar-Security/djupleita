@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Djupleita \u00b7 Telemetry export",
+    "description": "Included with Djupleita. Optional durable OTLP log export to a collector or Logfire-compatible destination."
+  }
+}

@@ -59,7 +59,7 @@ document.getElementById('cohort').textContent = cohort ? 'cohort ' + cohort : 'n
 function renderSeats() {
   const body = document.getElementById('seats'); body.replaceChildren()
   for (const seat of [...seats.values()].sort((a, b) => b.lastMs - a.lastMs)) {
-    for (const [id, card] of Object.entries(seat.sessions).sort((a, b) => b[1].lastMs - a[1].lastMs).slice(0, 3)) {
+    for (const [id, card] of Object.entries(seat.sessions).sort((a, b) => b[1].lastMs - a[1].lastMs)) {
       const row = el('tr')
       row.append(el('td', seat.student + ' / ' + seat.installation), el('td', card.title || id.slice(0, 12)), el('td', card.model || ''),
         el('td', card.records, 'n'), el('td', card.reasoningChars, card.reasoningChars ? 'n think' : 'n muted'), el('td', card.toolCalls, 'n'),

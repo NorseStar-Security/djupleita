@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-authz
+      name: '@dsh-pentest/dsh-plugin/authz'

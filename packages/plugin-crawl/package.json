@@ -1,0 +1,21 @@
+{
+  "name": "@djupleita/plugin-crawl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Included with Djupleita. A shared crawl frontier that prioritizes coverage within the engagement scope and budgets.",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/dsh-plugin": "workspace:*"
+  }
+}

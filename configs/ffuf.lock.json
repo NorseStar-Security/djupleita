@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "version": "2.3.0",
+  "checksums": "https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_checksums.txt",
+  "assets": {
+    "darwin-arm64": { "url": "https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_macOS_arm64.tar.gz", "sha256": "891e6358f7c72c951ce6fcef82a3736e91b34034e95edbd305505c9d31cfff13" },
+    "darwin-x64": { "url": "https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_macOS_amd64.tar.gz", "sha256": "c1d1a0320b299d2c7f3a62163b336fe861954ea865bab13b9e80f128eb985997" }
+  }
+}
