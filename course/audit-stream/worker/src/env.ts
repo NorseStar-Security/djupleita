@@ -12,6 +12,11 @@ export interface Env {
   ROOM: DurableObjectNamespace<CohortRoom>
   /** HMAC key for seat, board, and admin tokens; set with `wrangler secret put AUDIT_TOKEN_KEY`. */
   AUDIT_TOKEN_KEY: string
+  /**
+   * Operator-published artifacts (Teacher Console snapshots and evidence images), written only
+   * through `PUT /api/publish` with an admin token. Optional: unbound answers 503.
+   */
+  PUBLISH?: R2Bucket
   /** Largest accepted request body in bytes, as a decimal string. */
   MAX_REQUEST_BYTES: string
 }

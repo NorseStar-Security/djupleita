@@ -3,10 +3,12 @@
  *
  *   node scripts/token.ts key
  *   node scripts/token.ts seat  --key-file F --cohort C --student S --installation I [--days N]
+ *   node scripts/token.ts course --key-file F --cohort C --prefix P [--days N]
  *   node scripts/token.ts board --key-file F --cohort C|'*' [--days N]
  *   node scripts/token.ts admin --key-file F [--days N]
  *
- * The token prints to stdout; keep seat tokens outside every research-writable path.
+ * The token prints to stdout; keep seat tokens outside every research-writable path. A course
+ * token is shared by every seat whose id starts with P; it writes only, it cannot read.
  */
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -20,13 +22,14 @@ const { positionals, values } = parseArgs({
     cohort: { type: 'string', default: '' },
     student: { type: 'string', default: '' },
     installation: { type: 'string', default: '' },
+    prefix: { type: 'string', default: '' },
     days: { type: 'string', default: '30' },
   },
 })
 const command = positionals[0]
 if (command === 'key') {
   process.stdout.write(`${randomBytes(32).toString('base64url')}\n`)
-} else if (command === 'seat' || command === 'board' || command === 'admin') {
+} else if (command === 'seat' || command === 'course' || command === 'board' || command === 'admin') {
   const keyFile = values['key-file']
   if (keyFile === undefined) throw new Error('--key-file is required')
   const days = Number(values.days)
@@ -36,11 +39,11 @@ if (command === 'key') {
     kind,
     cohort: kind === 'admin' ? '' : values.cohort,
     student: kind === 'seat' ? values.student : '',
-    installation: kind === 'seat' ? values.installation : '',
+    installation: kind === 'seat' ? values.installation : kind === 'course' ? values.prefix : '',
     expiresAt: Math.floor(Date.now() / 1000 + days * 86_400),
     nonce: randomBytes(9).toString('base64url'),
   })
   process.stdout.write(`${token}\n`)
 } else {
-  throw new Error('usage: token.ts key | seat | board | admin (see the file header)')
+  throw new Error('usage: token.ts key | seat | course | board | admin (see the file header)')
 }
