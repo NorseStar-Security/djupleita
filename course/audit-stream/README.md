@@ -70,9 +70,10 @@ Mint one seat token per installation. Its installation label must equal the expo
 node scripts/token.ts seat --key-file /instructor/secrets/token-key --cohort pilot --student seat-01 --installation webtop-01 --days 30
 node scripts/token.ts board --key-file /instructor/secrets/token-key --cohort pilot --days 7
 node scripts/token.ts admin --key-file /instructor/secrets/token-key --days 1
+node scripts/token.ts course --key-file /instructor/secrets/token-key --cohort sec590 --prefix sans- --days 60
 ```
 
-Seat tokens upload records and read their own seat. Board tokens read one cohort, or every cohort with `--cohort '*'`. Admin tokens revoke seats. Labels are 1 to 64 characters of `[A-Za-z0-9._-]`. Store each seat token where only its exporter can read it, never in the seat's home or any research-writable path.
+Seat tokens upload records and read their own seat. A course token is one shared, write-only token for many seats: it fixes the cohort, and every seat it writes must have an installation label (the exporter `sourceId`) that starts with its prefix and is longer than it. The seat id comes from the records' `dsh.source.id` and is also the student label, so the board lists one seat per student. A course token cannot read, and cannot write any seat outside its prefix; anyone holding it can write any seat inside the prefix, so treat its rows as unverified. Board tokens read one cohort, or every cohort with `--cohort '*'`. Admin tokens revoke seats. Labels are 1 to 64 characters of `[A-Za-z0-9._-]`. Store each seat token where only its exporter can read it, never in the seat's home or any research-writable path.
 
 <a id="stream-a-seat"></a>
 ## Stream a seat
@@ -102,11 +103,13 @@ Open `https://<receiver host>/board?cohort=<cohort>#token=<board token>`. Browse
 | `GET /api/records?installation=I&session=S&after=N&limit=L` | board for the seat's cohort, or that seat | Indexed records in sequence order |
 | `GET /api/raw?installation=I&session=S&seq=N` | board for the seat's cohort, or that seat | Exact bytes of the record at that sequence |
 | `POST /api/revoke?installation=I&reason=R` | admin | Revokes the seat; later uploads fail with 403 |
+| `GET /api/seats?cohort=C` | board for that cohort, or `*` with `cohort=*` | Every seat with stored records: cohort, student, installation |
+| `PUT /api/publish?key=K` | admin | Stores an operator artifact in the optional `PUBLISH` bucket: `console-index.json`, `console/<label>.json` (JSON), or `evidence/<label>/<file>.png` (PNG) |
 
 <a id="receiver-behavior"></a>
 ## Receiver behavior
 
-- **Authentication first.** `POST /v1/logs` requires a seat token, and identity comes only from the token. A record whose `dsh.source.id` differs from the token installation is refused with 403. A seat stays bound to the cohort and student of its first upload; a different pair is refused with 409.
+- **Authentication first.** `POST /v1/logs` requires a seat or course token. A seat token's identity comes only from the token; a course token's seat comes from the first record's `dsh.source.id`, inside the token's prefix (403 `SOURCE_OUTSIDE_COURSE` otherwise). A record whose `dsh.source.id` differs from the token installation is refused with 403. A seat stays bound to the cohort and student of its first upload; a different pair is refused with 409.
 - **Verification before storage.** A single-part record must hash to `dsh.record.sha256`. Fragments are stored as decoded bytes, and the final fragment is accepted only when the reassembled record matches; otherwise the request is refused with 422.
 - **Commit before acknowledgement.** The seat's Durable Object writes each part to R2 and indexes it in its SQLite store before the response. Storage and Durable Object failures answer 503 with `Retry-After`, which the exporter retries. Replays are acknowledged as duplicates by record id and part.
 - **Receipt chain.** Each complete record extends its Session chain with `sha256(previous, seq, record digest)`, starting from a digest of the installation and Session id. A sequence other than the next expected one is recorded as `SEQUENCE_GAP` or `SEQUENCE_REPEAT`.
