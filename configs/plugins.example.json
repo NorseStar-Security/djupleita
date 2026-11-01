@@ -1,0 +1,40 @@
+{
+  "browser": {
+    "headless": true
+  },
+  "intelligence": {
+    "dohEndpoint": "https://dns.google/resolve"
+  },
+  "recon": {
+    "binaries": {},
+    "sources": [
+      "crtsh"
+    ],
+    "timeoutMs": 120000
+  },
+  "rea": {
+    "node": "/absolute/path/to/supported/node",
+    "packageRoot": "/absolute/path/to/rea/node_modules/rea-agents",
+    "roots": [
+      "/absolute/path/to/engagement/artifacts"
+    ],
+    "ghidra": "/absolute/path/to/ghidra_12.1.4_PUBLIC",
+    "javaHome": "/absolute/path/to/jdk-21/Contents/Home",
+    "timeoutMs": 240000
+  },
+  "learning": {
+    "python": "/absolute/path/to/optuna/bin/python",
+    "script": "/absolute/path/to/dsh-bench/packages/learning/python/optimize.py",
+    "datasets": "/absolute/path/to/labelled/datasets"
+  },
+  "telemetry": {
+    "enabled": false,
+    "endpoint": "https://your-collector.example/v1/logs",
+    "maxQueued": 10000,
+    "maxAttempts": 12
+  },
+  "ffuf": {
+    "wordlists": {},
+    "timeoutMs": 300000
+  }
+}

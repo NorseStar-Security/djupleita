@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Djupleita \u00b7 ffuf fuzzing",
+    "description": "Included with Djupleita. Scoped URL fuzzing with ffuf, response filters, identities and retained evidence."
+  }
+}

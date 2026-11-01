@@ -1,0 +1,25 @@
+{
+  "name": "@dsh-pentest/rea",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@dsh-pentest/contracts": "workspace:*",
+    "@dsh-pentest/scope": "workspace:*",
+    "@dsh-pentest/policy": "workspace:*",
+    "@dsh-pentest/graph": "workspace:*",
+    "@dsh-pentest/trajectory": "workspace:*",
+    "@dsh-pentest/crawl": "workspace:*",
+    "@dsh-pentest/worker": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "zod": "^4.1.12"
+  }
+}

@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-rea
+      name: '@dsh-pentest/dsh-plugin/rea'

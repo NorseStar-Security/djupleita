@@ -1,0 +1,148 @@
+{
+  "name": "Djupleita",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "id": "rea",
+      "name": "@djupleita/plugin-rea",
+      "row": "djupleita-rea",
+      "title": "REA & Ghidra",
+      "description": "Offline reverse engineering with REA, native macOS support and configurable Ghidra/JDK runtimes.",
+      "configKeys": [
+        "rea"
+      ],
+      "tabs": [
+        "plugins"
+      ]
+    },
+    {
+      "id": "recon",
+      "name": "@djupleita/plugin-recon",
+      "row": "djupleita-recon",
+      "title": "ProjectDiscovery recon",
+      "description": "Passive DNS, associated domains, Chaos, exposure statistics and managed ProjectDiscovery tools.",
+      "configKeys": [
+        "recon",
+        "intelligence"
+      ],
+      "tabs": [
+        "plugins",
+        "graph"
+      ]
+    },
+    {
+      "id": "ffuf",
+      "name": "@djupleita/plugin-ffuf",
+      "row": "djupleita-ffuf",
+      "title": "ffuf fuzzing",
+      "description": "Scoped URL fuzzing with ffuf, identity references, response filters and evidence-backed discoveries.",
+      "configKeys": [
+        "ffuf"
+      ],
+      "tabs": [
+        "plugins",
+        "graph",
+        "policy"
+      ]
+    },
+    {
+      "id": "browser",
+      "name": "@djupleita/plugin-browser",
+      "row": "djupleita-browser",
+      "title": "Browser",
+      "description": "Isolated Playwright browser contexts with scoped network requests and identity separation.",
+      "configKeys": [
+        "browser"
+      ],
+      "tabs": [
+        "plugins",
+        "identities"
+      ]
+    },
+    {
+      "id": "crawl",
+      "name": "@djupleita/plugin-crawl",
+      "row": "djupleita-crawl",
+      "title": "Scoped crawling",
+      "description": "A shared crawl frontier that prioritizes coverage within the engagement scope and budgets.",
+      "configKeys": [],
+      "tabs": [
+        "policy",
+        "graph"
+      ]
+    },
+    {
+      "id": "graph",
+      "name": "@djupleita/plugin-graph",
+      "row": "djupleita-graph",
+      "title": "Evidence graph",
+      "description": "Evidence-backed relationships, path queries and RAGE import/export.",
+      "configKeys": [],
+      "tabs": [
+        "graph"
+      ]
+    },
+    {
+      "id": "authz",
+      "name": "@djupleita/plugin-authz",
+      "row": "djupleita-authz",
+      "title": "Authorization testing",
+      "description": "Compare requests across identity A, identity B and anonymous access.",
+      "configKeys": [],
+      "tabs": [
+        "identities"
+      ]
+    },
+    {
+      "id": "http",
+      "name": "@djupleita/plugin-http",
+      "row": "djupleita-http",
+      "title": "HTTP testing",
+      "description": "Scoped HTTP requests with credential delivery, effect review and retained evidence.",
+      "configKeys": [],
+      "tabs": [
+        "policy",
+        "identities"
+      ]
+    },
+    {
+      "id": "learning",
+      "name": "@djupleita/plugin-learning",
+      "row": "djupleita-learning",
+      "title": "Optuna learning",
+      "description": "Offline ranking studies with held-out evaluation and operator-controlled promotion.",
+      "configKeys": [
+        "learning"
+      ],
+      "tabs": [
+        "studies",
+        "plugins"
+      ]
+    },
+    {
+      "id": "trajectory",
+      "name": "@djupleita/plugin-trajectory",
+      "row": "djupleita-trajectory",
+      "title": "Trajectories",
+      "description": "Read verified, redacted chat and tool trajectories beside the conversation.",
+      "configKeys": [],
+      "tabs": [
+        "trajectory"
+      ]
+    },
+    {
+      "id": "telemetry",
+      "name": "@djupleita/plugin-telemetry",
+      "row": "djupleita-telemetry",
+      "title": "Telemetry export",
+      "description": "Optional durable OTLP log export to a collector or Logfire-compatible destination.",
+      "configKeys": [
+        "telemetry"
+      ],
+      "tabs": [
+        "plugins",
+        "trajectory"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,0 @@
-{
-  "name": "course-trajectory-collector-profile",
-  "private": true,
-  "type": "module",
-  "dsh": { "profile": { "bundles": [] } }
-}

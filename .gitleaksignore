@@ -1,0 +1,69 @@
+# Reviewed pre-distribution history only. No real credentials are exempted.
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-06-30-bash-stdin-env-trusted-plugin-api.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-06-30-bash-stdin-env-trusted-plugin-api.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-15-replay-token-meter-service.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-15-replay-token-meter-service.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-29-request-level-llm-config-credentials.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-29-request-level-llm-config-credentials.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-30-adapter-owned-max-token-defaults.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-07-30-adapter-owned-max-token-defaults.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-08-20-preview-cloudflare-pages-deploy.i18n.yaml:cloudflare-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/architecture/2026-08-20-preview-cloudflare-pages-deploy.i18n.yaml:cloudflare-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-08-06-provider-credential-lifecycle.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-08-06-provider-credential-lifecycle.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-08-12-max-tokens-turn-end-notice.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-08-20-composer-reference-decoration-keys.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-09-07-win32-picker-foreground-alt-key.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-09-07-win32-picker-foreground-alt-key.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/bug-fix/2026-09-10-deepseek-image-token-calculator-v41.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-06-30-session-store-fork-api.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-06-30-session-store-fork-api.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-28-sdk-max-output-tokens.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-28-sdk-max-output-tokens.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-30-deepseek-onboarding-credential-setup.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-30-deepseek-onboarding-credential-setup.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-31-gui-full-access-confirmation.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-07-31-gui-full-access-confirmation.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-09-09-present-filesystem-access.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/feature/2026-09-09-present-filesystem-access.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/process/2026-07-20-generated-cordis-core-api.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/process/2026-07-20-generated-cordis-core-api.i18n.yaml:generic-api-key:6
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/simplification/2026-06-20-public-agent-stop-api.i18n.yaml:generic-api-key:5
+# translation Git blob digest
+f855076a39eaa2e1fb2241261c813cd58525c618:.agents/notes/archived/simplification/2026-06-20-public-agent-stop-api.i18n.yaml:generic-api-key:6
+# synthetic credential fixture
+f855076a39eaa2e1fb2241261c813cd58525c618:packages/client/ui-settings-models/tests/components.client.spec.tsx:generic-api-key:2157
+# synthetic credential fixture
+f855076a39eaa2e1fb2241261c813cd58525c618:packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts:generic-api-key:24
+# synthetic credential fixture
+f855076a39eaa2e1fb2241261c813cd58525c618:packages/session/session-telemetry/tests/redact.spec.ts:generic-api-key:17

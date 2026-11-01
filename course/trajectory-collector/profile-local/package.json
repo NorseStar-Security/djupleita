@@ -1,6 +1,0 @@
-{
-  "name": "course-trajectory-local-profile",
-  "private": true,
-  "type": "module",
-  "dsh": { "profile": { "bundles": [] } }
-}

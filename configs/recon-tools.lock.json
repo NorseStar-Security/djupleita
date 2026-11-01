@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "subfinder": {
+      "version": "2.17.0",
+      "checksums": "https://github.com/projectdiscovery/subfinder/releases/download/v2.17.0/subfinder_2.17.0_checksums.txt",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/projectdiscovery/subfinder/releases/download/v2.17.0/subfinder_2.17.0_macOS_arm64.zip",
+          "sha256": "012d6ff91ef932ac6d1a321fb5735cf1412168d163e6adbc6cbe5fc42fe03c3b"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/projectdiscovery/subfinder/releases/download/v2.17.0/subfinder_2.17.0_macOS_amd64.zip",
+          "sha256": "75bf5990b409c6fd1116c81cd64fbdfd2cfd5bfb1f43542035b42344cb9fdffa"
+        }
+      }
+    },
+    "asnmap": {
+      "version": "1.1.1",
+      "checksums": "https://github.com/projectdiscovery/asnmap/releases/download/v1.1.1/asnmap_1.1.1_checksums.txt",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/projectdiscovery/asnmap/releases/download/v1.1.1/asnmap_1.1.1_macOS_arm64.zip",
+          "sha256": "d3fc3e81bd3e76be927c6dca6dec79a7a3fb6a75afc19e9e16bb4da9887efdb1"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/projectdiscovery/asnmap/releases/download/v1.1.1/asnmap_1.1.1_macOS_amd64.zip",
+          "sha256": "6463358b8885918a6d21c8e1e6636a04fa8b3574c0850c51c418cf3c5f4c8da0"
+        }
+      }
+    },
+    "uncover": {
+      "version": "1.2.1",
+      "checksums": "https://github.com/projectdiscovery/uncover/releases/download/v1.2.1/uncover_1.2.1_checksums.txt",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/projectdiscovery/uncover/releases/download/v1.2.1/uncover_1.2.1_macOS_arm64.zip",
+          "sha256": "c569a9162bd40d707defc6153ed724f9f4ec8e18c1d2c097e3e3a413f385fa1e"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/projectdiscovery/uncover/releases/download/v1.2.1/uncover_1.2.1_macOS_amd64.zip",
+          "sha256": "247d6e30bfdf002357fa42c807c3e63cc089b141e0b7a8710f97da7fe35971af"
+        }
+      }
+    },
+    "httpx": {
+      "version": "1.12.0",
+      "checksums": "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_checksums.txt",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_macOS_arm64.zip",
+          "sha256": "21d60328b383dba8a9fe249ac76b12edda4ec2e52a9cb21876c0a79123675569"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_macOS_amd64.zip",
+          "sha256": "16760b5e2122b66f57b9fbdb59f564b1181507c093d6a36066f40e5de38e8fa9"
+        }
+      }
+    },
+    "katana": {
+      "version": "1.8.0",
+      "checksums": "https://github.com/projectdiscovery/katana/releases/download/v1.8.0/katana-1.8.0-checksums.txt",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/projectdiscovery/katana/releases/download/v1.8.0/katana_1.8.0_macOS_arm64.zip",
+          "sha256": "52e9802e9f83012a089fe57fb1ac476b936f181ac033c71bfa55f913c07cede6"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/projectdiscovery/katana/releases/download/v1.8.0/katana_1.8.0_macOS_amd64.zip",
+          "sha256": "806256316dd45e0fe0e3985fd7283ddffc376c95cbaa3dcfd14cde6e1de61aaf"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Synthetic lab ranking example — replace with engagement labels",
+  "requestBudget": 1,
+  "rows": [
+    { "id": "train-auth", "split": "train", "features": { "auth": 1, "object": 0, "query": 0, "novelty": 0 }, "reward": 0, "cost": 1, "evidenceIds": ["synthetic:train:1"] },
+    { "id": "train-object", "split": "train", "features": { "auth": 0, "object": 1, "query": 0, "novelty": 0 }, "reward": 1, "cost": 1, "evidenceIds": ["synthetic:train:2"] },
+    { "id": "validation-auth", "split": "validation", "features": { "auth": 1, "object": 0, "query": 0, "novelty": 0 }, "reward": 0, "cost": 1, "evidenceIds": ["synthetic:validation:1"] },
+    { "id": "validation-object", "split": "validation", "features": { "auth": 0, "object": 1, "query": 0, "novelty": 0 }, "reward": 1, "cost": 1, "evidenceIds": ["synthetic:validation:2"] },
+    { "id": "test-auth", "split": "test", "features": { "auth": 1, "object": 0, "query": 0, "novelty": 0 }, "reward": 0, "cost": 1, "evidenceIds": ["synthetic:test:1"] },
+    { "id": "test-object", "split": "test", "features": { "auth": 0, "object": 1, "query": 0, "novelty": 0 }, "reward": 1, "cost": 1, "evidenceIds": ["synthetic:test:2"] }
+  ]
+}

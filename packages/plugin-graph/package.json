@@ -1,0 +1,21 @@
+{
+  "name": "@djupleita/plugin-graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Included with Djupleita. Evidence-backed relationships, path queries and RAGE import/export.",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/dsh-plugin": "workspace:*"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Djupleita \u00b7 Browser",
+    "description": "Included with Djupleita. Isolated Playwright browser contexts with scoped network requests and identity separation."
+  }
+}

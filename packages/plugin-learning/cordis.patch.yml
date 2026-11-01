@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-learning
+      name: '@dsh-pentest/dsh-plugin/learning'

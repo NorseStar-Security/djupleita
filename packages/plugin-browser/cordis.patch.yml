@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-browser
+      name: '@dsh-pentest/dsh-plugin/browser'

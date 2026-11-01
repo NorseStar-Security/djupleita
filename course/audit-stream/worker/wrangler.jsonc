@@ -9,7 +9,11 @@
   "workers_dev": true,
   "observability": { "enabled": true },
   "vars": { "MAX_REQUEST_BYTES": "1048576" },
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "ns-audit-raw" }],
+  "r2_buckets": [
+    { "binding": "RAW", "bucket_name": "ns-audit-raw" },
+    // Teacher Console snapshots + evidence, written by PUT /api/publish (admin token); ns-admin reads them behind Access.
+    { "binding": "PUBLISH", "bucket_name": "ns-teacher-console" }
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "SEAT", "class_name": "SeatLedger" },

@@ -63,6 +63,10 @@ export function summarize(type: string, json: string): ActivitySummary {
     // The receiver already verified the digest; a non-JSON body still lands in R2 and summarizes by type.
     return base
   }
+  if (type === 'harness/session-event') {
+    const event = object(record['data'])
+    return typeof event['type'] === 'string' ? summarize(event['type'], JSON.stringify(event)) : base
+  }
   const data = object(record['data'])
   switch (type) {
     case 'session':
@@ -102,6 +106,10 @@ export function summarize(type: string, json: string): ActivitySummary {
     case 'plugin:network-scope-guard/judge': {
       const allowed = data['allowed'] === true
       return { ...base, text: `scope ${allowed ? 'allowed' : 'DENIED'} ${String(data['tool'] ?? '')}: ${String(data['code'] ?? '')}`, scopeDenials: allowed ? 0 : 1 }
+    }
+    case 'policy/decision': {
+      const decision = String(data['kind'] ?? data['decision'] ?? 'unknown')
+      return { ...base, text: `policy ${decision}: ${clip(String(data['reason'] ?? ''))}`, scopeDenials: decision === 'deny' || decision === 'ask' ? 1 : 0 }
     }
     default:
       return base

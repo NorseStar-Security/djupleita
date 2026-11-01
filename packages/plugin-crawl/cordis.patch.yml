@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-crawl
+      name: '@dsh-pentest/dsh-plugin/crawl'

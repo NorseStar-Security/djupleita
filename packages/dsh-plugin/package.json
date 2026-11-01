@@ -1,0 +1,102 @@
+{
+  "name": "@dsh-pentest/dsh-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./rea": {
+      "types": "./src/entries/rea.ts",
+      "development": "./src/entries/rea.ts",
+      "default": "./lib/entries/rea.js"
+    },
+    "./recon": {
+      "types": "./src/entries/recon.ts",
+      "development": "./src/entries/recon.ts",
+      "default": "./lib/entries/recon.js"
+    },
+    "./browser": {
+      "types": "./src/entries/browser.ts",
+      "development": "./src/entries/browser.ts",
+      "default": "./lib/entries/browser.js"
+    },
+    "./crawl": {
+      "types": "./src/entries/crawl.ts",
+      "development": "./src/entries/crawl.ts",
+      "default": "./lib/entries/crawl.js"
+    },
+    "./graph": {
+      "types": "./src/entries/graph.ts",
+      "development": "./src/entries/graph.ts",
+      "default": "./lib/entries/graph.js"
+    },
+    "./authz": {
+      "types": "./src/entries/authz.ts",
+      "development": "./src/entries/authz.ts",
+      "default": "./lib/entries/authz.js"
+    },
+    "./http": {
+      "types": "./src/entries/http.ts",
+      "development": "./src/entries/http.ts",
+      "default": "./lib/entries/http.js"
+    },
+    "./learning": {
+      "types": "./src/entries/learning.ts",
+      "development": "./src/entries/learning.ts",
+      "default": "./lib/entries/learning.js"
+    },
+    "./trajectory": {
+      "types": "./src/entries/trajectory.ts",
+      "development": "./src/entries/trajectory.ts",
+      "default": "./lib/entries/trajectory.js"
+    },
+    "./telemetry": {
+      "types": "./src/entries/telemetry.ts",
+      "development": "./src/entries/telemetry.ts",
+      "default": "./lib/entries/telemetry.js"
+    },
+    "./core": {
+      "types": "./src/entries/core.ts",
+      "development": "./src/entries/core.ts",
+      "default": "./lib/entries/core.js"
+    },
+    "./ffuf": {
+      "types": "./src/entries/ffuf.ts",
+      "development": "./src/entries/ffuf.ts",
+      "default": "./lib/entries/ffuf.js"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/contracts": "workspace:*",
+    "@dsh-pentest/engagement": "workspace:*",
+    "@dsh-pentest/scope": "workspace:*",
+    "@dsh-pentest/policy": "workspace:*",
+    "@dsh-pentest/trajectory": "workspace:*",
+    "@dsh-pentest/http": "workspace:*",
+    "@dsh-pentest/identities": "workspace:*",
+    "@dsh-pentest/graph": "workspace:*",
+    "@dsh-pentest/browser": "workspace:*",
+    "@dsh-pentest/crawl": "workspace:*",
+    "@dsh-pentest/recon": "workspace:*",
+    "@dsh-pentest/rea": "workspace:*",
+    "@dsh-pentest/authz": "workspace:*",
+    "@dsh-pentest/export": "workspace:*",
+    "@dsh-pentest/learning": "workspace:*",
+    "@deepseek-ai/cordis": "link:../../vendor/deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-tools": "link:../../vendor/deepseek-harness/packages/core/tools",
+    "@deepseek-ai/dsh-agent": "link:../../vendor/deepseek-harness/packages/core/agent",
+    "@deepseek-ai/dsh-session": "link:../../vendor/deepseek-harness/packages/core/session",
+    "@deepseek-ai/dsh-llm": "link:../../vendor/deepseek-harness/packages/llm/llm",
+    "@deepseek-ai/dsh-user-approval": "link:../../vendor/deepseek-harness/packages/interaction/user-approval",
+    "@deepseek-ai/dsh-system-prompt": "link:../../vendor/deepseek-harness/packages/core/system-prompt",
+    "@deepseek-ai/dsh-tool-executor-native": "link:../../vendor/deepseek-harness/packages/core/tool-executor-native",
+    "@deepseek-ai/dsh-client-connection": "link:../../vendor/deepseek-harness/packages/client/connection",
+    "zod": "^4.1.12",
+    "@dsh-pentest/fuzz": "workspace:*"
+  }
+}

@@ -2,12 +2,15 @@
  * HMAC-SHA-256 tokens for the audit stream: `nsa1.<base64url claims>.<base64url signature>`.
  *
  * A seat token authenticates one course installation as a writer and as a reader of its own
- * records. A board token reads one cohort, or every cohort when its cohort is `*`. An admin
- * token revokes seats. Identity always comes from verified claims, never from uploaded data.
+ * records. A course token is a shared write-only credential for many seats: its cohort is fixed,
+ * and its installation claim is a prefix every seat id it writes must start with, so it cannot
+ * write a seat outside its course. A board token reads one cohort, or every cohort when its
+ * cohort is `*`. An admin token revokes seats and publishes operator artifacts. Identity comes
+ * from verified claims; only a course token takes the seat id from the records, inside its prefix.
  */
 
 /** Token roles. */
-export type TokenKind = 'seat' | 'board' | 'admin'
+export type TokenKind = 'seat' | 'course' | 'board' | 'admin'
 
 /** Verified token claims. */
 export interface TokenClaims {
@@ -16,7 +19,10 @@ export interface TokenClaims {
   cohort: string
   /** Student label; seat tokens only. */
   student: string
-  /** Installation label, equal to the seat exporter's `sourceId`; seat tokens only. */
+  /**
+   * Seat tokens: the installation label, equal to the seat exporter's `sourceId`.
+   * Course tokens: the prefix every written installation label must start with.
+   */
   installation: string
   /** Expiry as Unix seconds. */
   expiresAt: number
@@ -64,11 +70,14 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
 }
 
 function checkClaims(claims: TokenClaims): TokenClaims {
-  if (!['seat', 'board', 'admin'].includes(claims.kind)) throw new TokenError('unknown token kind')
+  if (!['seat', 'course', 'board', 'admin'].includes(claims.kind)) throw new TokenError('unknown token kind')
   if (!Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= 0) throw new TokenError('token expiry is invalid')
   if (typeof claims.nonce !== 'string' || claims.nonce.length < 8) throw new TokenError('token nonce is invalid')
   if (claims.kind === 'seat') {
     if (!isLabel(claims.cohort) || !isLabel(claims.student) || !isLabel(claims.installation)) throw new TokenError('seat token labels are invalid')
+  } else if (claims.kind === 'course') {
+    if (!isLabel(claims.cohort) || !isLabel(claims.installation)) throw new TokenError('course token cohort or seat prefix is invalid')
+    if (claims.student !== '') throw new TokenError('course tokens carry no student label')
   } else if (claims.kind === 'board') {
     if (claims.cohort !== '*' && !isLabel(claims.cohort)) throw new TokenError('board token cohort is invalid')
     if (claims.student !== '' || claims.installation !== '') throw new TokenError('board tokens carry no seat labels')

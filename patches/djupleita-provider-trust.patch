@@ -1,0 +1,304 @@
+diff --git a/packages/llm/llm-deepseek/README.i18n.yaml b/packages/llm/llm-deepseek/README.i18n.yaml
+index 8f1b2c46..41e6da3e 100644
+--- a/packages/llm/llm-deepseek/README.i18n.yaml
++++ b/packages/llm/llm-deepseek/README.i18n.yaml
+@@ -15,8 +15,8 @@
+   en: d152484eb41ac6b4
+   zh: 09388d293f9be9cb
+ /deepseek-ai-dsh-llm-deepseek/use-this-package:
+-  en: fe27b41cb85cd031
+-  zh: 52d833f0909d94f1
++  en: b121ce38b05286d2
++  zh: 6614d1d77c00a924
+ /deepseek-ai-dsh-llm-deepseek/use-this-package/when-to-choose-it:
+   en: 6850d08bc091ad23
+   zh: 2906e6cf1dfed6ce
+diff --git a/packages/llm/llm-deepseek/README.md b/packages/llm/llm-deepseek/README.md
+index aef05638..830992c3 100644
+--- a/packages/llm/llm-deepseek/README.md
++++ b/packages/llm/llm-deepseek/README.md
+@@ -31,6 +31,8 @@ This package exports the transport library; the provider plugins register routes
+ 
+ The adapter accepts the LLM service's [request-only user inputs](../llm/README.md#use-this-package) alongside durable history; omitting request-only identity and attribution does not alter provider content.
+ 
++Prepared calls report the captured `baseURL` as `transport.endpoints` for provider egress middleware. Later connection changes affect the next call; the prepared stream keeps its original endpoint and transport metadata together.
++
+ ### When to choose it
+ 
+ Choose this adapter for DeepSeek's official API or a Messages-compatible gateway through `baseURL`. Choose `dsh-llm-pi-ai` when the same composition also routes other providers or hand-declared gateways through pi-ai's catalogs; the two adapters can be mounted together because their route names do not collide. Registering any other adapter for `deepseek-official` fails with `DUPLICATE_ADAPTER`.
+diff --git a/packages/llm/llm-deepseek/README.zh.md b/packages/llm/llm-deepseek/README.zh.md
+index 092e9b80..f9b7b03d 100644
+--- a/packages/llm/llm-deepseek/README.zh.md
++++ b/packages/llm/llm-deepseek/README.zh.md
+@@ -31,6 +31,8 @@ kind: "package-reference"
+ 
+ 适配器接受 LLM 服务的[仅供请求使用的 user 输入](../llm/README.zh.md#use-this-package)，并可将其与持久历史混用；省略请求输入的身份与来源不会改变提供方内容。
+ 
++准备好的调用通过 `transport.endpoints` 向提供方出站中间件报告所捕获的 `baseURL`。后续连接变更会在下一次调用生效；已准备的流始终将原始端点与传输元数据保持一致。
++
+ ### 何时选择
+ 
+ 面向 DeepSeek 官方 API，或通过 `baseURL` 连接兼容 Messages 的网关时，选择本适配器。当同一组合还要通过 pi-ai 目录路由其他提供方或手工声明的网关时，选择 `dsh-llm-pi-ai`；两个适配器可以同时挂载，因为它们的路由名不冲突。为 `deepseek-official` 注册任何其他适配器会以 `DUPLICATE_ADAPTER` 失败。
+diff --git a/packages/llm/llm-deepseek/src/adapter.ts b/packages/llm/llm-deepseek/src/adapter.ts
+index 53b288f1..9b47ca76 100644
+--- a/packages/llm/llm-deepseek/src/adapter.ts
++++ b/packages/llm/llm-deepseek/src/adapter.ts
+@@ -50,7 +50,8 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
+   override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
+     const connection = await this.connection(signal)
+     this.dependencies.admit?.(connection, model)
+-    return { model: modelInfo(connection, provider, model), stream: options => this.generate(options, connection) }
++    return { model: modelInfo(connection, provider, model), transport: { endpoints: [connection.baseURL] },
++      stream: options => this.generate(options, connection) }
+   }
+   stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+     const connection = this.dependencies.options()
+diff --git a/packages/llm/llm-deepseek/tests/adapter.spec.ts b/packages/llm/llm-deepseek/tests/adapter.spec.ts
+index d1308440..4db9584b 100644
+--- a/packages/llm/llm-deepseek/tests/adapter.spec.ts
++++ b/packages/llm/llm-deepseek/tests/adapter.spec.ts
+@@ -201,7 +201,9 @@ describe('direct Messages HTTP', () => {
+     const files = new DeepSeekFileStore()
+     const llm = new DeepSeekAdapter({ options: () => config, resolveAuth: snapshot => Promise.resolve({ headers: { 'x-api-key': snapshot.maxTokens === 10 ? 'first' : 'second' } }), resolveUserId: () => 'user' as AnonymousUserId, resolveAttachments: () => undefined, resolveImageAccess: () => undefined, resolveFiles: () => files, prepareExtensions })
+     const prepared = await llm.prepareCall('deepseek-official', MODEL)
++    expect(prepared.transport).toEqual({ endpoints: [first.url] })
+     config = Messages.resolveAdapterOptions({ baseURL: second.url, maxTokens: 20 })
++    expect((await llm.prepareCall('deepseek-official', MODEL)).transport).toEqual({ endpoints: [second.url] })
+     expect(prepared.model.systemPromptUpdate).toBe('in-history')
+     expect((await llm.resolveModel('deepseek-official', MODEL)).systemPromptUpdate).toBeUndefined()
+     await chunks(prepared.stream(options()))
+diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
+index 38662a98..555c46c6 100644
+--- a/packages/llm/llm-pi-ai/README.i18n.yaml
++++ b/packages/llm/llm-pi-ai/README.i18n.yaml
+@@ -15,8 +15,8 @@
+   en: d152484eb41ac6b4
+   zh: 09388d293f9be9cb
+ /deepseek-ai-dsh-llm-pi-ai/use-this-package:
+-  en: 86cf1940fb8bb1dc
+-  zh: 862c10b2ca45a893
++  en: d3b625d5d3bff3b6
++  zh: 347a13ddc4ec6ad1
+ /deepseek-ai-dsh-llm-pi-ai/use-this-package/when-to-choose-it:
+   en: f3b761c7c7ecb82f
+   zh: e10d999aa348ef86
+diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
+index 0dcf15b9..d60927ca 100644
+--- a/packages/llm/llm-pi-ai/README.md
++++ b/packages/llm/llm-pi-ai/README.md
+@@ -29,6 +29,8 @@ Mount this plugin when a composition routes model requests through pi-ai's provi
+ 
+ The adapter accepts the LLM service's [request-only user inputs](../llm/README.md#use-this-package) alongside durable history. User identity and attribution do not enter pi-ai content; assistant replay metadata and tool-call correlation remain attached to durable messages.
+ 
++Prepared calls report the effective model API root as `transport.endpoints`, captured with the same profile snapshot used for dispatch. Provider URL overrides and installed model endpoint defaults therefore reach egress middleware without a second settings lookup.
++
+ ### When to choose it
+ 
+ Choose this adapter when the same composition serves several providers, when a route needs pi-ai's catalog defaults with a few fields corrected, or when a hand-declared gateway must be reached through its own endpoint and protocol. Choose `dsh-llm-deepseek` for the direct DeepSeek route when the deployment needs no other provider. Both adapters can be mounted together because their route names do not collide; registering a route another adapter already owns fails plugin loading.
+diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
+index c434554f..44859a79 100644
+--- a/packages/llm/llm-pi-ai/README.zh.md
++++ b/packages/llm/llm-pi-ai/README.zh.md
+@@ -29,6 +29,8 @@ kind: "package-reference"
+ 
+ 适配器接受 LLM 服务的[仅供请求使用的 user 输入](../llm/README.zh.md#use-this-package)，并可将其与持久历史混用。user 身份与来源不会进入 pi-ai 内容；assistant 回放元数据和工具调用关联仍由持久消息携带。
+ 
++准备好的调用通过 `transport.endpoints` 报告有效的模型 API 根地址，并与分发所用的 profile 快照同时捕获。因此，提供方 URL 覆盖值与已安装模型的端点默认值无需再次读取设置即可传给出站中间件。
++
+ ### 何时选择
+ 
+ 当同一组合服务多个提供方、某条路由需要 pi-ai 目录默认值并修正少数字段、或必须通过自有端点与协议到达手工声明网关时，选择本适配器。当部署不需要其他提供方时，选择 `dsh-llm-deepseek` 直连 DeepSeek 路由。两个适配器可以同时挂载，因为它们的路由名不冲突；注册其他适配器已拥有的路由会导致插件加载失败。
+diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
+index 9c8b4d3f..a1f23888 100644
+--- a/packages/llm/llm-pi-ai/src/adapter.ts
++++ b/packages/llm/llm-pi-ai/src/adapter.ts
+@@ -345,6 +345,7 @@ export class PiAiAdapter extends LlmAdapter {
+     const snapshot = this.current()
+     return Promise.resolve({
+       model: this.modelInfo(snapshot, provider, model),
++      transport: { endpoints: [this.modelOf(snapshot, provider, model).baseUrl] },
+       stream: options => this.streamWithSnapshot(options, snapshot),
+     })
+   }
+diff --git a/packages/llm/llm-pi-ai/tests/adapter.spec.ts b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+index a221037a..0fc19b78 100644
+--- a/packages/llm/llm-pi-ai/tests/adapter.spec.ts
++++ b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+@@ -74,6 +74,17 @@ beforeEach(() => {
+ })
+ 
+ describe('PiAiAdapter provider routing', () => {
++  it('reports the effective provider and model API roots without making a request', async () => {
++    const openai = adapterOf({ openai: {} })
++    const model = (await openai.listModels('openai'))[0]!
++    expect((await openai.prepareCall('openai', model.id)).transport).toEqual({ endpoints: ['https://api.openai.com/v1'] })
++    const overridden = adapterOf({ openai: { baseURL: 'https://gateway.example/v1' } })
++    expect((await overridden.prepareCall('openai', model.id)).transport).toEqual({ endpoints: ['https://gateway.example/v1'] })
++    const local = adapterOf({ local: { api: 'openai-completions', baseURL: 'http://localhost:11434/v1',
++      models: [{ id: 'local-model', contextWindow: 8192, maxTokens: 1024 }] } })
++    expect((await local.prepareCall('local', 'local-model')).transport).toEqual({ endpoints: ['http://localhost:11434/v1'] })
++  })
++
+   it('resolves a catalog model dynamically and uses a private endpoint', async () => {
+     const server = await mockServer([{ events: textEvents }])
+     const ctx = await harness(server.url)
+@@ -98,6 +109,8 @@ describe('PiAiAdapter provider routing', () => {
+     }
+     const ctx = new Context()
+     await ctx.plugin(LlmRuntime)
++    const transports: unknown[] = []
++    ctx.on('llm/dispatch', (_options, transport, next) => { transports.push(transport); return next() })
+     ctx.llm.registerAdapter(['deepseek'], new PiAiAdapter({
+       profiles: () => resolveProfiles(providers),
+       resolveApiKey: () => Promise.resolve('test-key'),
+@@ -112,6 +125,7 @@ describe('PiAiAdapter provider routing', () => {
+     expect(chunks.length).toBeGreaterThan(0)
+     expect(first.requests).toHaveLength(1)
+     expect(second.requests).toHaveLength(0)
++    expect(transports).toEqual([{ endpoints: [first.url] }])
+   })
+ 
+   it('merges profile headers with Harness attribution winning', async () => {
+diff --git a/packages/llm/llm/README.i18n.yaml b/packages/llm/llm/README.i18n.yaml
+index 215b8cb4..1e414ef6 100644
+--- a/packages/llm/llm/README.i18n.yaml
++++ b/packages/llm/llm/README.i18n.yaml
+@@ -24,8 +24,8 @@
+   en: 9d481d19dc52e404
+   zh: aa09cf4462e93ba6
+ /deepseek-ai-dsh-llm/use-this-package/what-you-can-do:
+-  en: dc61eb86585f6e0d
+-  zh: 9c0d6b240dfd2cda
++  en: 5b305656d4e32a51
++  zh: c2786c1a9f17a3cf
+ /deepseek-ai-dsh-llm/use-this-package/failures-and-recovery:
+   en: 311d8c92447b7094
+   zh: 68cf5cb1c3853cc1
+diff --git a/packages/llm/llm/README.md b/packages/llm/llm/README.md
+index 00bab76c..c6bc789b 100644
+--- a/packages/llm/llm/README.md
++++ b/packages/llm/llm/README.md
+@@ -88,6 +88,8 @@ const configure = (maxTokens: number): ConfigureCall =>
+ - **Validate call config** — an explicit or configured reasoning effort is checked against the exact model before any provider I/O, and an adapter-configured output cap is materialized when the request omits one.
+ - **Read an embedded Assistant stream without expanding it** — `assistantStreamFirstTokenTime` (first token), `assistantStreamHasVisibleContent` (any visible content), and `assistantStreamHasVisibleText` (any visible text) answer their questions from the compact records with early exit; `lastAssistantStreamChunk` scans backward to the last raw chunk of one type, `assistantStreamChunks` and `joinAssistantStreamText` scan the whole stream, and `assembleAssistantStream` feeds a `BlockAssembler` one joined delta per run with the same blocks, usage, and replay state as the per-member expansion. `runFirstTokenTime` and `runFirstVisibleTime` do the early-exit scan for one packed run, and `isTokenDelta`, `isVisibleChunk`, and `chunkHasVisibleText` define the token and visibility rules for a single chunk. `expandAssistantStream` remains the validating path for records read at a durable boundary; it is not memoized, because a retained expansion costs roughly ten times the compact stream for as long as the event lives.
+ 
++Adapter preparation may report `transport.endpoints`, the effective API roots captured with the dispatched connection. The `llm/dispatch` waterfall receives these adapter-owned roots after request projection; middleware can apply provider egress policy without trusting request arguments. Adapters that omit transport metadata retain the consumer's existing egress policy.
++
+ ### Failures and recovery
+ 
+ Every stream ends in exactly one terminal `finish` chunk: `{ kind: 'error', failure }` on failure, `{ kind: 'aborted', failure }` on cancellation. Failures carry stable codes such as `NO_ADAPTER`, `MISSING_CREDENTIAL`, `AUTH`, `RATE_LIMIT`, and `CONTEXT_WINDOW_EXCEEDED`; consumers route on the code, never on message text. `QUOTA` is provider-neutral exhaustion, while `ACCOUNT_QUOTA` is reserved for a first-party account balance that the current product can replenish. A request naming an unregistered provider fails with `NO_ADAPTER`, and a malformed credential fails with `INVALID_CREDENTIAL` instead of surfacing as an opaque fetch error. This service never re-runs a request: retrying is the job of `dsh-llm-retry` at the agent's failed-step extension point.
+diff --git a/packages/llm/llm/README.zh.md b/packages/llm/llm/README.zh.md
+index e38f24ea..6e797537 100644
+--- a/packages/llm/llm/README.zh.md
++++ b/packages/llm/llm/README.zh.md
+@@ -88,6 +88,8 @@ const configure = (maxTokens: number): ConfigureCall =>
+ - **校验调用配置**——显式或配置的推理强度会在任何提供方 I/O 之前对照精确模型校验；请求省略输出上限时，会填入适配器配置的输出上限。
+ - **不展开即读取内嵌 Assistant 流**——`assistantStreamFirstTokenTime`（首 token）、`assistantStreamHasVisibleContent`（任一可见内容）与 `assistantStreamHasVisibleText`（任一可见文本）通过可提前退出的扫描直接从紧凑记录得出结果；`lastAssistantStreamChunk` 反向扫描到某一类型的最后一个原始 chunk，`assistantStreamChunks` 与 `joinAssistantStreamText` 扫描整个流，`assembleAssistantStream` 向 `BlockAssembler` 每个 run 喂一段拼接 delta，blocks／usage／replayState 与逐成员展开相同。`runFirstTokenTime` 与 `runFirstVisibleTime` 对单个打包 run 做提前退出扫描，`isTokenDelta`、`isVisibleChunk` 与 `chunkHasVisibleText` 定义单个 chunk 的 token 与可见性规则。`expandAssistantStream` 仍是持久边界读取记录的校验路径；它不被记忆化，因为保留的展开在事件生命周期内约花费紧凑流的十倍内存。
+ 
++适配器准备调用时可通过 `transport.endpoints` 报告与分发连接同时捕获的有效 API 根地址。`llm/dispatch` 瀑布式事件在请求投影后接收这些由适配器提供的地址；中间件可据此应用提供方出站策略，而无需信任请求参数。省略传输元数据的适配器沿用消费方原有的出站策略。
++
+ ### 失败与恢复
+ 
+ 每个流都恰好以一个终止 `finish` 分片结束：失败为 `{ kind: 'error', failure }`，取消为 `{ kind: 'aborted', failure }`。失败携带稳定 code，如 `NO_ADAPTER`、`MISSING_CREDENTIAL`、`AUTH`、`RATE_LIMIT` 与 `CONTEXT_WINDOW_EXCEEDED`；消费方依据 code 路由，绝不解析消息文本。`QUOTA` 表示提供方中立的额度耗尽，`ACCOUNT_QUOTA` 专用于当前产品能够充值的第一方账号余额不足。点名未注册提供方的请求会以 `NO_ADAPTER` 失败，格式错误的凭据会以 `INVALID_CREDENTIAL` 失败，而不是表现为不透明的 fetch 错误。本服务从不自行重跑请求：重试是 `dsh-llm-retry` 在 agent 失败步骤扩展点上的职责。
+diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
+index b4a5f82a..7cc26adb 100644
+--- a/packages/llm/llm/src/index.ts
++++ b/packages/llm/llm/src/index.ts
+@@ -21,6 +21,7 @@ import type {
+   LlmModelInfo,
+   LlmResolvedModelInfo,
+   LlmProviderInfo,
++  LlmTransportInfo,
+   ModelModality,
+   StreamChunk,
+   SystemPromptUpdate,
+@@ -74,6 +75,17 @@ declare module '@deepseek-ai/cordis' {
+      */
+     'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
+ 
++    /**
++     * Waterfall at the resolved adapter boundary. Transport metadata comes only
++     * from the captured adapter, never from request options or model output.
++     * @mode waterfall
++     * @param options - projected request dispatched to the captured adapter.
++     * @param transport - captured API roots, or undefined when the adapter does not report them.
++     * @param next - delegate to the next listener and eventually the adapter.
++     */
++    'llm/dispatch'(this: LlmRuntime, options: GenerateOptions, transport: LlmTransportInfo | undefined,
++      next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
++
+   }
+ }
+ 
+@@ -195,6 +207,8 @@ export interface PreparedLlmCall {
+ export interface PreparedAdapterCall {
+   /** Exact model metadata from the same adapter generation as {@link stream}. */
+   readonly model: LlmResolvedModelInfo
++  /** Effective API roots from the dispatch generation; omission leaves egress policy to the consumer. */
++  readonly transport?: LlmTransportInfo
+   /** Dispatch through that generation without re-reading dynamic connection facts. */
+   stream(options: GenerateOptions): AsyncIterable<StreamChunk>
+ }
+@@ -1007,6 +1021,7 @@ export class LlmRuntime extends TypertRemoteService {
+           registration,
+           config: resolvedConfig,
+           modelInfo,
++          ...adapterCall.transport === undefined ? {} : { transport: deepFreeze(structuredClone(adapterCall.transport)) },
+           dispatch: options => adapterCall.stream(options),
+         })
+       },
+@@ -1072,15 +1087,18 @@ export class LlmRuntime extends TypertRemoteService {
+       let modelInfo: LlmResolvedModelInfo
+       let resolvedConfig: LlmCallConfig
+       let dispatch: (options: GenerateOptions) => AsyncIterable<StreamChunk>
++      let transport: LlmTransportInfo | undefined
+       if (prepared === undefined) {
+         const adapterCall = await adapter.prepareCall(options.provider, options.model, options.signal)
+         modelInfo = this.normalizeModelInfo(registration, options.model, adapterCall.model)
+         resolvedConfig = this.resolveCallWithInfo(options, modelInfo).config
+         dispatch = options => adapterCall.stream(options)
++        transport = adapterCall.transport
+       } else {
+         modelInfo = prepared.modelInfo
+         resolvedConfig = prepared.config
+         dispatch = prepared.dispatch
++        transport = prepared.transport
+       }
+       if (prepared !== undefined && !callConfigEquals(options, resolvedConfig)) {
+         throw new LlmError(
+@@ -1115,7 +1133,9 @@ export class LlmRuntime extends TypertRemoteService {
+         }
+         if (Object.isFrozen(resolvedOptions)) deepFreeze(projectedOptions)
+       }
+-      const stream = dispatch(this.forAdapter(projectedOptions, adapter))
++      const adapterOptions = this.forAdapter(projectedOptions, adapter)
++      const trustedTransport = transport === undefined ? undefined : deepFreeze(structuredClone(transport))
++      const stream = this.ctx.waterfall(this, 'llm/dispatch', adapterOptions, trustedTransport, () => dispatch(adapterOptions))
+       iterator = stream[Symbol.asyncIterator]()
+     } catch (error: unknown) {
+       yield adapterFailureChunk(error, options.signal)
+@@ -1212,6 +1232,7 @@ interface PreparedDispatch {
+   readonly registration: AdapterRegistration
+   readonly config: LlmCallConfig
+   readonly modelInfo: LlmResolvedModelInfo
++  readonly transport?: LlmTransportInfo
+   readonly dispatch: (options: GenerateOptions) => AsyncIterable<StreamChunk>
+ }
+ 
+diff --git a/packages/llm/llm/src/types.ts b/packages/llm/llm/src/types.ts
+index 8001ab81..9ca0f008 100644
+--- a/packages/llm/llm/src/types.ts
++++ b/packages/llm/llm/src/types.ts
+@@ -227,6 +227,12 @@ export interface LlmProviderInfo {
+   name: string
+ }
+ 
++/** Adapter-owned API roots captured with the connection used for one model call. */
++export interface LlmTransportInfo {
++  /** Effective API roots after resolving provider configuration and model catalog defaults. */
++  readonly endpoints: readonly string[]
++}
++
+ /** Merge-extensible provider model modality vocabulary. */
+ export interface ModelModalityMap {
+   text: 'text'

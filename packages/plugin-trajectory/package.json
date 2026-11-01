@@ -1,0 +1,21 @@
+{
+  "name": "@djupleita/plugin-trajectory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Included with Djupleita. Read verified, redacted chat and tool trajectories beside the conversation.",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/dsh-plugin": "workspace:*"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Djupleita \u00b7 Authorization testing",
+    "description": "Included with Djupleita. Compare requests across identity A, identity B and anonymous access."
+  }
+}

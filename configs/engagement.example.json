@@ -1,0 +1,11 @@
+{
+  "id": "cc7b582c-4c35-4dba-890b-f2289c508913",
+  "name": "New pentest engagement",
+  "objectives": ["Map authorized attack surface and verify authorization boundaries with evidence"],
+  "scope": {
+    "targets": [], "exclusions": [], "networks": [],
+    "services": { "intelligence": [], "model": [], "telemetry": [] }
+  },
+  "budget": { "requests": 1000, "durationMs": 7200000, "concurrency": 4, "requestsPerSecond": 5, "maxDepth": 5, "maxResponseBytes": 2097152 },
+  "model": { "provider": "deepseek-official", "model": "deepseek-flash" }
+}

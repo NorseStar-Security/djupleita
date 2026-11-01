@@ -1,0 +1,3 @@
+- insert:
+    - id: djupleita-trajectory
+      name: '@dsh-pentest/dsh-plugin/trajectory'
