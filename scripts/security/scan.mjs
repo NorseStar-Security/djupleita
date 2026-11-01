@@ -121,9 +121,19 @@ export function scan(mode, range) {
       run(['git', '--staged']);
       checkImages(mode, undefined, run);
     } else if (mode === 'history' || mode === 'range') {
-      const ref = range || 'HEAD';
+      let ref = range || 'HEAD';
       if (ref.startsWith('-') || !/^[A-Za-z0-9_./^~:-]+$/.test(ref)) throw new Error('Invalid scan revision');
       const tip = ref.includes('..') ? ref.split('..').at(-1) : ref;
+      if (mode === 'range' && ref.includes('..')) {
+        const base = ref.split('..')[0];
+        const present = spawnSync('git', ['cat-file', '-e', `${base}^{commit}`], { cwd: root, stdio: 'ignore' });
+        if (present.status !== 0) {
+          // After a history cleanup, a fresh CI checkout may not have the old
+          // commit. Scan more history rather than skipping or fetching it back.
+          console.log('Base revision unavailable; scanning complete new history.');
+          ref = tip;
+        }
+      }
       checkPaths(git(['ls-tree', '-r', '--name-only', '-z', tip]).split('\0').filter(Boolean), run.referencePattern);
       run(['git', `--log-opts=${ref}`]);
       checkImages(mode, ref, run);

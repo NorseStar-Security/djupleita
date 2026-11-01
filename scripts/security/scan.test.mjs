@@ -91,7 +91,7 @@ test('OCR scans staged bytes and historical images, without retaining generated 
     writeFileSync(join(root, 'screenshot.png'), clean);
     assert.equal(run('git', ['add', 'screenshot.png']).status, 0);
     const env = { ...process.env, GITLEAKS_BIN: scannerBinary(), DJUPLEITA_CONFIDENTIAL_REFERENCES: JSON.stringify([protectedName, 'PCX']) };
-    const scan = mode => run(process.execPath, ['scripts/security/scan.mjs', mode], env);
+    const scan = (mode, revision) => run(process.execPath, ['scripts/security/scan.mjs', mode, ...(revision ? [revision] : [])], env);
     assert.equal(scan('staged').status, 0);
     const privateFilename = protectedName + '.txt';
     writeFileSync(join(root, privateFilename), 'ordinary text');
@@ -112,6 +112,10 @@ test('OCR scans staged bytes and historical images, without retaining generated 
     assert.equal(run('git', ['rm', '-f', 'screenshot.png']).status, 0);
     assert.equal(run('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'Delete generated image']).status, 0);
     assert.equal(scan('history').status, 1);
+    const missingBase = scan('range', 'f'.repeat(40) + '..HEAD');
+    assert.equal(missingBase.status, 1);
+    assert.match(missingBase.stdout, /scanning complete new history/);
+    assert.match(missingBase.stderr, /screenshot contains a confidential/);
     const missing = run(process.execPath, ['scripts/security/scan.mjs', 'history'], { ...env, TESSERACT_BIN: join(root, 'missing-ocr') });
     assert.equal(missing.status, 1);
     assert.match(missing.stderr, /Screenshot scan failed/);
