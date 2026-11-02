@@ -15,7 +15,7 @@ import type { AttackGraph } from '@dsh-pentest/graph';
 import { graphId } from '@dsh-pentest/graph';
 import type { CrawlService } from '@dsh-pentest/crawl';
 import type { EvidenceStore, Redactor, TrajectoryStore } from '@dsh-pentest/trajectory';
-import { prepareSandbox, workerEnvironment, runWorker, validateExecutable } from '@dsh-pentest/worker';
+import { prepareSandbox, runtimeReadRoots, workerEnvironment, runWorker, validateExecutable } from '@dsh-pentest/worker';
 import { REA_VERSION, supportedReaNode } from './install.ts';
 import { jdkNativeDependencies } from './macos.ts';
 import { jdkLinuxDependencies } from './linux.ts';
@@ -125,7 +125,7 @@ export class ReaService {
     if (this.config.ghidra) this.ghidra = await realpath(this.config.ghidra);
     if (this.config.javaHome) this.javaHome = await realpath(this.config.javaHome);
     const javaDependencies = this.javaHome ? await (this.javaDependencies ??= process.platform === 'darwin' ? jdkNativeDependencies(this.javaHome) : jdkLinuxDependencies(this.javaHome)) : [];
-    return { node, entry: join(packageRoot, 'scripts/rea.mjs'), readableRoots: [dirname(dirname(node)), dirname(packageRoot), ...roots,
+    return { node, entry: join(packageRoot, 'scripts/rea.mjs'), readableRoots: [...runtimeReadRoots([dirname(dirname(node))]), dirname(packageRoot), ...roots,
       ...javaDependencies,
       ...(this.ghidra ? [this.ghidra] : []), ...(this.javaHome ? [this.javaHome,
         // macOS launches a JDK as an application bundle and reads Contents/Info.plist.

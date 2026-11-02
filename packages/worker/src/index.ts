@@ -1,6 +1,6 @@
 /** Confined managed processes and an authenticated, DNS-pinned egress proxy. */
 import { prepareSandbox, workerEnvironment } from './platform.ts';
-export { prepareSandbox, workerEnvironment } from './platform.ts';
+export { prepareSandbox, runtimeReadRoots, workerEnvironment } from './platform.ts';
 export type { SandboxLaunch } from './platform.ts';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';

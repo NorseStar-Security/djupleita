@@ -28,12 +28,12 @@ it.skipIf(process.platform !== 'linux')('isolates reads, host writes, namespaces
     let blocked; try { fs.readFileSync(${JSON.stringify(join(outside, 'private'))}); } catch { blocked = true; }
     fs.writeFileSync(${JSON.stringify(join(root, 'allowed'))}, 'allowed');
     fs.writeFileSync('/tmp/namespace-only', 'private tmp');
-    console.log(JSON.stringify({ blocked, selected: fs.readFileSync(${JSON.stringify(join(outside, 'selected'))}, 'utf8'),
+    console.log(JSON.stringify({ blocked, systemDocs: fs.existsSync('/usr/share/doc'), selected: fs.readFileSync(${JSON.stringify(join(outside, 'selected'))}, 'utf8'),
       home: process.env.HOME, inherited: process.env.DSH_PLATFORM_CANARY ?? null,
       userNamespace: fs.readFileSync('/proc/self/uid_map', 'utf8').trim() }));
   `], timeoutMs: 5000, maxOutputBytes: 8192 }, { writableRoots: [root], readableRoots: [join(outside, 'selected')] }, new AbortController().signal);
   expect(result.exitCode, result.stderr).toBe(0);
-  expect(JSON.parse(result.stdout)).toMatchObject({ blocked: true, selected: 'selected fixture', home: root, inherited: null });
+  expect(JSON.parse(result.stdout)).toMatchObject({ blocked: true, systemDocs: false, selected: 'selected fixture', home: root, inherited: null });
   expect(await readFile(join(root, 'allowed'), 'utf8')).toBe('allowed');
   await expect(readFile('/tmp/namespace-only')).rejects.toMatchObject({ code: 'ENOENT' });
 });

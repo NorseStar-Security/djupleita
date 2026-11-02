@@ -67,6 +67,8 @@ This permits Bubblewrap to create namespaces; its filesystem, PID and network sa
 
 Container seccomp/AppArmor policies, masked `/proc` mounts or host namespace limits can still deny Bubblewrap even when it is installed. `Can't mount proc` and `Operation not permitted` can indicate these outer restrictions. A normal Linux VM avoids an additional container sandbox for local testing. On a managed host, have its administrator provide the required namespace support; do not use privileged containers, drop confinement flags or run the app as root as an installation workaround.
 
+Workers mount runtime binaries, libraries, certificates, fonts and other selected system data. They do not automatically expose all of `/usr`, its documentation or unrelated SDKs. Select any additional SDK or analysis data through the tool's explicit input roots. Standard system Python and Node prefixes reuse these runtime mounts.
+
 ## Identity credentials
 
 macOS keeps using Keychain. Linux uses `secret-tool` and the Secret Service keyring in the web process's user D-Bus session. The keyring must be running and unlocked. Secret values travel on stdin/stdout, never command arguments; multiline browser-state data is encoded before storage. Credential failures stop the operation and do not fall back to plaintext files. Identity metadata and credential host bindings are unchanged. Model-provider credentials remain managed separately by Harness.

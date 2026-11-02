@@ -11,6 +11,10 @@ import { sandboxProfile } from './seatbelt.ts';
 import type { SandboxOptions } from './seatbelt.ts';
 
 export interface SandboxLaunch { executable: string; args: string[]; close(): Promise<void> }
+/** Linux system runtimes already have specific mounts; a prefix must not expose all SDKs. */
+export function runtimeReadRoots(prefixes: string[], platform: NodeJS.Platform = process.platform): string[] {
+  return [...new Set(prefixes.filter(path => platform !== 'linux' || path !== '/usr'))];
+}
 export function workerEnvironment(command: Pick<WorkerCommand, 'cwd' | 'env'>): Record<string, string> {
   return { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: command.cwd, TMPDIR: command.cwd,
     LANG: process.platform === 'linux' ? 'C.UTF-8' : 'en_US.UTF-8', ...command.env };
@@ -112,7 +116,10 @@ async function socketMasks(roots: string[], allowed: string[], signal: AbortSign
 async function linuxProfile(options: SandboxOptions, executable: string, signal: AbortSignal): Promise<string[]> {
   const args = ['--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/dev/shm'];
   const mounted: { source: string; destination: string; writable: boolean }[] = [];
-  const optional = ['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc/ld.so.cache', '/etc/ssl', '/etc/pki', '/etc/alternatives', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/localtime'];
+  const optional = ['/usr/bin', '/usr/sbin', '/usr/lib', '/usr/lib64', '/usr/libexec', '/bin', '/sbin', '/lib', '/lib64',
+    '/usr/share/ca-certificates', '/usr/share/fonts', '/usr/share/fontconfig', '/usr/share/glib-2.0', '/usr/share/X11',
+    '/usr/share/zoneinfo', '/usr/share/file', '/usr/share/misc', '/etc/fonts', '/etc/ld.so.cache', '/etc/ssl', '/etc/pki',
+    '/etc/alternatives', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/localtime'];
   for (const path of optional) {
     if (await access(path).then(() => true, () => false)) mounted.push({ source: await realpath(path), destination: path, writable: false });
   }

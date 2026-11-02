@@ -1,8 +1,6 @@
 // Check worker preparation separately from CPU- and filesystem-heavy suites.
 import fs, { mkdtemp, rm } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { prepareSandbox } from '../packages/worker/lib/platform.js';
@@ -23,14 +21,6 @@ try {
   finally { await launch.close(); }
 } catch (error) {
   console.log(JSON.stringify({ preparationMs: Math.round(performance.now() - start), ...inventory }));
-  if (process.platform === 'linux') {
-    const nativeStart = performance.now();
-    try {
-      const { stdout } = await promisify(execFile)('/usr/bin/find', ['/usr', '-printf', '.'],
-        { timeout: 30000, maxBuffer: 4 * 1024 * 1024, encoding: 'buffer' });
-      console.log(JSON.stringify({ nativeInventoryMs: Math.round(performance.now() - nativeStart), entries: stdout.length }));
-    } catch (failure) { console.log(JSON.stringify({ nativeInventoryFailed: true, code: failure.code })); }
-  }
   throw error;
 } finally {
   fs.readdir = original; syncBuiltinESMExports();
