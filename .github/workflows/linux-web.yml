@@ -37,6 +37,8 @@ jobs:
           pnpm setup:tools --only rea
           pnpm setup:tools --only ffuf
           pnpm setup:tools --only learning
+      - name: Check sandbox preparation on the host image
+        run: node scripts/check-sandbox.mjs
       - name: Check confined adapters with local fixtures
         env:
           DSH_TEST_WEB_UI: '1'
@@ -46,7 +48,7 @@ jobs:
           DSH_TEST_REA_ROOT: ${{ github.workspace }}/.pentest/toolchains/rea/node_modules/rea-agents
           DSH_TEST_REA_NODE: ${{ github.workspace }}/.pentest/toolchains/rea-node/24.22.1/linux-x64/bin/node
         run: |
-          pnpm exec vitest run tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/policy.test.ts tests/review.test.ts tests/replay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts packages/dsh-plugin/src/integration.test.ts
+          pnpm exec vitest run --maxWorkers=1 tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/policy.test.ts tests/review.test.ts tests/replay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts packages/dsh-plugin/src/integration.test.ts
       - name: Check Secret Service in a disposable session
         run: |
           dbus-run-session -- sh -eu -c '

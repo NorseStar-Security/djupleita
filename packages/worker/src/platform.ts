@@ -11,6 +11,10 @@ import { sandboxProfile } from './seatbelt.ts';
 import type { SandboxOptions } from './seatbelt.ts';
 
 export interface SandboxLaunch { executable: string; args: string[]; close(): Promise<void> }
+/** Linux system runtimes already have specific mounts; a prefix must not expose all SDKs. */
+export function runtimeReadRoots(prefixes: string[], platform: NodeJS.Platform = process.platform): string[] {
+  return [...new Set(prefixes.filter(path => platform !== 'linux' || path !== '/usr'))];
+}
 export function workerEnvironment(command: Pick<WorkerCommand, 'cwd' | 'env'>): Record<string, string> {
   return { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: command.cwd, TMPDIR: command.cwd,
     LANG: process.platform === 'linux' ? 'C.UTF-8' : 'en_US.UTF-8', ...command.env };
@@ -80,8 +84,10 @@ async function brokerBridge(port: number): Promise<{ socket: string; program: st
 // Symlinks are not traversed; their destinations must have a separate mount grant.
 async function socketMasks(roots: string[], allowed: string[], signal: AbortSignal): Promise<{ sockets: string[]; privateDirectories: string[] }> {
   const sockets = new Set<string>(), privateDirectories = new Set<string>(), visited = new Set<string>(); let entries = 0;
+  type Input = { path: string; info?: { isSocket(): boolean; isDirectory(): boolean } };
+  const pending: Input[] = roots.map(path => ({ path }));
   const permitted = (path: string) => allowed.some(root => { const tail = relative(root, path); return tail === '' || !tail.startsWith('..') && !isAbsolute(tail); });
-  const walk = async (path: string, info?: { isSocket(): boolean; isDirectory(): boolean }): Promise<void> => {
+  const inspect = async ({ path, info }: Input): Promise<void> => {
     signal.throwIfAborted(); if (visited.has(path) || permitted(path)) return; visited.add(path);
     info ??= await lstat(path);
     if (info.isSocket()) sockets.add(path);
@@ -93,10 +99,16 @@ async function socketMasks(roots: string[], allowed: string[], signal: AbortSign
       });
       entries += children.length;
       if (entries > 1000000) throw new PentestError('SANDBOX_INPUTS', 'Sandbox input tree exceeds its entry limit; select narrower roots');
-      for (const child of children) if (child.isDirectory() || child.isSocket()) await walk(join(path, child.name), child);
+      for (const child of children) if (child.isDirectory() || child.isSocket()) pending.push({ path: join(path, child.name), info: child });
     }
   };
-  for (const root of roots) await walk(root);
+  // Large host /usr trees must not delay every worker behind serial readdir calls.
+  // Bound concurrent I/O while retaining the complete socket inventory and entry limit.
+  for (let next = 0; next < pending.length;) {
+    signal.throwIfAborted();
+    const batch = pending.slice(next, next + 32); next += batch.length;
+    await Promise.all(batch.map(inspect));
+  }
   return { sockets: [...sockets], privateDirectories: [...privateDirectories] };
 }
 
@@ -104,7 +116,20 @@ async function socketMasks(roots: string[], allowed: string[], signal: AbortSign
 async function linuxProfile(options: SandboxOptions, executable: string, signal: AbortSignal): Promise<string[]> {
   const args = ['--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/dev/shm'];
   const mounted: { source: string; destination: string; writable: boolean }[] = [];
-  const optional = ['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc/ld.so.cache', '/etc/ssl', '/etc/pki', '/etc/alternatives', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/localtime'];
+  const triplet = process.arch === 'x64' ? 'x86_64-linux-gnu' : process.arch === 'arm64' ? 'aarch64-linux-gnu' : undefined;
+  const multiarch = triplet && await access(`/usr/lib/${triplet}`).then(() => true, () => false);
+  const libraries = multiarch ? [`/usr/lib/${triplet}`, `/lib/${triplet}`, '/usr/lib/locale', '/usr/lib/ssl', '/usr/lib/file',
+    '/lib/ld-linux-aarch64.so.1', '/usr/lib/ld-linux-aarch64.so.1'] : ['/usr/lib', '/lib'];
+  if (multiarch) {
+    for (const base of ['/usr/lib', '/lib']) {
+      const names = await readdir(base);
+      libraries.push(...names.filter(name => /^python3(?:\.\d+)?$/.test(name)).map(name => join(base, name)));
+    }
+  }
+  const optional = ['/usr/bin', '/usr/sbin', ...libraries, '/usr/lib64', '/usr/libexec', '/bin', '/sbin', '/lib64',
+    '/usr/share/ca-certificates', '/usr/share/fonts', '/usr/share/fontconfig', '/usr/share/glib-2.0', '/usr/share/X11',
+    '/usr/share/zoneinfo', '/usr/share/file', '/usr/share/misc', '/etc/fonts', '/etc/ld.so.cache', '/etc/ssl', '/etc/pki',
+    '/etc/alternatives', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/localtime'];
   for (const path of optional) {
     if (await access(path).then(() => true, () => false)) mounted.push({ source: await realpath(path), destination: path, writable: false });
   }

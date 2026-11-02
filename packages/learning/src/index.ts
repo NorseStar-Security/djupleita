@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { digest, id, PentestError } from '@dsh-pentest/contracts';
 import type { Json, SessionId } from '@dsh-pentest/contracts';
 import type { TrajectoryStore, Redactor } from '@dsh-pentest/trajectory';
-import { runWorker } from '@dsh-pentest/worker';
+import { runtimeReadRoots, runWorker } from '@dsh-pentest/worker';
 
 export const RankingSchema = z.object({ auth: z.number().min(0).max(8), object: z.number().min(0).max(8),
   query: z.number().min(0).max(8), novelty: z.number().min(0).max(8) }).strict();
@@ -59,7 +59,7 @@ export class LearningService {
       const result = await runWorker({ executable: this.config.python,
         args: [this.config.script, '--input', join(directory, 'request.json'), '--output', join(directory, 'report.json')], cwd: directory,
         timeoutMs: 300000, maxOutputBytes: 2 * 1024 * 1024, env: { PYTHONDONTWRITEBYTECODE: '1', OPENBLAS_NUM_THREADS: '1', OMP_NUM_THREADS: '1' } },
-        { writableRoots: [directory], readableRoots: [dirname(dirname(this.config.python)), dirname(dirname(await realpath(this.config.python))), this.config.script, directory] }, signal);
+        { writableRoots: [directory], readableRoots: [...runtimeReadRoots([dirname(dirname(this.config.python)), dirname(dirname(await realpath(this.config.python)))]), this.config.script, directory] }, signal);
       if (result.exitCode !== 0) throw new PentestError('LEARNING_WORKER', this.redactor.text(result.stderr || 'Optuna worker failed'));
       const report = await this.report(runId);
       if (report.datasetHash !== datasetHash) throw new PentestError('LEARNING_PROVENANCE', 'Study report does not match the committed dataset');
