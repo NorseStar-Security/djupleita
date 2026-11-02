@@ -1,6 +1,6 @@
 # Target scope and destination allowances
 
-In **Pentest → Policy**, a completely unconfigured scope opens with this editable draft. Replace `example.test` throughout with your authorized domain and choose the host or subtree to exclude. Nothing in the draft is authorized until **Apply scope and policy** succeeds.
+In **Pentest → Policy**, empty targets open with this editable draft, including when model or other service endpoints are already configured. Replace `example.test` throughout with your authorized domain and choose the host or subtree to exclude. Nothing in the draft is authorized until **Apply scope and policy** succeeds.
 
 ```json
 {
@@ -16,7 +16,9 @@ In **Pentest → Policy**, a completely unconfigured scope opens with this edita
 
 `example.test` covers the apex. `*.example.test` covers subdomains and does not include the apex. The two exclusion entries together exclude `excluded.example.test` and every descendant; exclusions take precedence over matching target rules. A target must be a complete host-rule object, not a hostname string.
 
-This first template covers HTTP and HTTPS on ports 80 and 443 and all URL paths. Other ports must currently be listed explicitly. The preview explains the draft's boundary; the server validates the submitted scope before applying it. The working reference remains available after configuration. Existing targets, exclusions, network grants and service rules are preserved when the editor opens or the app restarts.
+This first template covers HTTP and HTTPS on ports 80 and 443 and all URL paths. Other ports must currently be listed explicitly. The preview explains the draft's boundary; the server validates the submitted scope before applying it. Existing targets are preserved when the editor opens or the app restarts. Prefilling empty targets retains configured service rules and custom exclusions or network grants. Example exclusions appear only when neither exclusions nor network grants are configured.
+
+**Insert example targets** restores the apex and wildcard rules if you clear the editor. It retains the other settings in a valid JSON draft, or uses the saved settings when the draft is blank or invalid. The working reference remains available after configuration.
 
 For internal targets, use complete host rules and authorize only the intended network CIDRs. `allowPrivateAddresses` permits private IPv4 and unique-local IPv6 DNS answers for that host. `networks` can authorize other restricted ranges and is required for direct IP targets. For example, a target rule for `192.0.2.10` needs `192.0.2.10/32` in `networks`. A hostname rule, private-address permission and a CIDR perform distinct checks.
 

@@ -58,6 +58,20 @@ try {
     const example = JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8'));
     assert.deepEqual(JSON.parse(await editor.inputValue()), example);
     assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Draft must remain inactive');
+    const services = { ...example.services, model: [{ host: 'model.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/v1'], allowPrivateAddresses: false }] };
+    await ctx.pentest.updateSettings({ targets: [], exclusions: [], networks: [], services }, (await ctx.pentest.snapshot()).policy, 'web-fixture');
+    await page.reload(); await policy();
+    const configuredDraft = { ...example, services };
+    assert.deepEqual(JSON.parse(await editor.inputValue()), configuredDraft, 'Configured model services must not suppress example targets');
+    await editor.fill('');
+    await page.getByRole('button', { name: 'Insert example targets', exact: true }).click();
+    assert.deepEqual(JSON.parse(await editor.inputValue()), configuredDraft, 'A blank editor can restore the example with its saved services');
+    const customDraft = { ...configuredDraft, targets: [], exclusions: ['custom.example.test'], networks: ['192.0.2.0/24'] };
+    await editor.fill(JSON.stringify(customDraft));
+    await page.getByRole('button', { name: 'Insert example targets', exact: true }).click();
+    assert.deepEqual(JSON.parse(await editor.inputValue()), { ...customDraft, targets: example.targets }, 'Inserting targets preserves other draft settings');
+    assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Prefill and restore must remain inactive');
+    if (process.env.DSH_TEST_SCOPE_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_SCOPE_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).click();
     await poll(async () => (await ctx.pentest.toolSetup()).bannerDismissed);
     await page.reload(); await policy();
@@ -96,6 +110,6 @@ try {
     await policy();
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).waitFor();
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
-    console.log(JSON.stringify({ authenticatedWeb: true, scopeDraftAndPersistence: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ authenticatedWeb: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }

@@ -105,14 +105,29 @@ it('keeps setup dismissal through restart and refresh without changing tool conf
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-it('shows the schema-valid scope example only for an entirely unconfigured editor and enforces exclusions', () => {
+it('prefills empty target scope with a schema-valid wildcard and ports and enforces exclusions', () => {
   const empty = { targets: [], exclusions: [], networks: [], services: { model: [], intelligence: [], telemetry: [] } };
   const shown = initialScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown)), scopes = new ScopeService(parsed);
   expect(JSON.parse(shown)).toEqual(scopeExample);
   for (const url of ['https://example.test/', 'https://app.example.test/any/path']) expect(() => scopes.check({ url, purpose: 'target' })).not.toThrow();
   for (const url of ['https://excluded.example.test/', 'https://nested.excluded.example.test/', 'https://other.test/']) expect(() => scopes.check({ url, purpose: 'target' })).toThrow();
-  for (const saved of [scope(), { ...empty, exclusions: ['saved.example.test'] }, { ...empty, networks: ['10.0.0.0/8'] }, { ...empty, services: { ...empty.services, model: scope().targets } }]) expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
+  expect(JSON.parse(initialScopeDraft(scope()))).toEqual(scope());
+  expect(JSON.parse(initialScopeDraft({}))).toEqual(scopeExample);
+  for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443]);
   expect(scopePreview(shown)).toContain('ports 80, 443');
   expect(scopePreview('{')).toContain('needs attention');
   expect(scopePreview(JSON.stringify({ ...empty, targets: ['*.example.test'] }))).toContain('host-rule object');
+});
+
+it('prefills targets even after model/service setup and preserves custom boundaries and saved targets', () => {
+  const services = { model: scope().targets, intelligence: scope().targets, telemetry: scope().targets };
+  const empty = { targets: [], exclusions: [], networks: [], services };
+  const initial = ScopeSchema.parse(JSON.parse(initialScopeDraft(empty)));
+  expect(initial).toEqual({ ...scopeExample, services });
+  expect(empty.targets).toEqual([]);
+  for (const saved of [{ ...empty, exclusions: ['saved.example.test'] }, { ...empty, networks: ['192.0.2.0/24'] }]) {
+    expect(JSON.parse(initialScopeDraft(saved))).toEqual({ ...saved, targets: scopeExample.targets });
+  }
+  const saved = { ...scope(), services };
+  expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
 });

@@ -1,12 +1,14 @@
 import example from '../../../../configs/scope.example.json' with { type: 'json' };
 export const scopeExample = example;
 
-/** An example is only a draft. Any saved target, exclusion, network or service keeps the saved editor intact. */
+/** Fill missing targets in the draft without changing saved targets or service/network settings. */
 export function initialScopeDraft(scope: Record<string, unknown>): string {
-  const services = scope.services as Record<string, unknown> | undefined;
-  const empty = ['targets', 'exclusions', 'networks'].every(key => Array.isArray(scope[key]) && scope[key].length === 0)
-    && services && Object.values(services).every(value => Array.isArray(value) && value.length === 0);
-  return JSON.stringify(empty ? example : scope, null, 2);
+  if (scope.targets !== undefined && (!Array.isArray(scope.targets) || scope.targets.length > 0)) return JSON.stringify(scope, null, 2);
+  const emptyBoundary = ['exclusions', 'networks'].every(key => scope[key] === undefined || Array.isArray(scope[key]) && scope[key].length === 0);
+  return JSON.stringify({ ...example, ...scope, targets: example.targets,
+    ...(emptyBoundary ? { exclusions: example.exclusions } : {}),
+    services: { ...example.services, ...(scope.services as Record<string, unknown> | undefined) },
+  }, null, 2);
 }
 export function scopePreview(draft: string): string {
   try {
