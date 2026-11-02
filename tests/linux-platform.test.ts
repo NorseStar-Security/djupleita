@@ -45,10 +45,12 @@ it.skipIf(process.platform !== 'linux')('kills sandbox descendants on cancellati
     require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(`setInterval(() => require('node:fs').appendFileSync(${JSON.stringify(heartbeat)}, '.'), 20)`)}], { stdio: 'ignore' });
     setInterval(() => {}, 1000);
   `], timeoutMs: 10000, maxOutputBytes: 8192 }, { writableRoots: [root] }, signal.signal);
-  for (let n = 0; n < 100 && !await readFile(heartbeat).then(() => true, () => false); n++) await delay(25);
-  signal.abort(); await expect(worker).rejects.toMatchObject({ code: 'WORKER_CANCELLED' });
-  const before = await readFile(heartbeat, 'utf8'); await delay(150);
-  expect(await readFile(heartbeat, 'utf8')).toBe(before);
+  try {
+    await expect.poll(() => readFile(heartbeat).then(() => true, () => false), { timeout: 10000 }).toBe(true);
+    signal.abort(); await expect(worker).rejects.toMatchObject({ code: 'WORKER_CANCELLED' });
+    const before = await readFile(heartbeat, 'utf8'); await delay(150);
+    expect(await readFile(heartbeat, 'utf8')).toBe(before);
+  } finally { signal.abort(); await worker.catch(() => undefined); }
   await expect(runWorker({ executable: process.execPath, cwd: root, args: ['-e', "console.log('x'.repeat(100000))"],
     timeoutMs: 5000, maxOutputBytes: 64 }, { writableRoots: [root] }, new AbortController().signal)).rejects.toMatchObject({ code: 'WORKER_OUTPUT' });
 });
