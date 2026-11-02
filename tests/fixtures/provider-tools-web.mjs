@@ -42,10 +42,12 @@ const provider = createServer(async (request, response) => {
       for (const target of initialScope.targets) assert(JSON.stringify(results).includes(target.host), 'Status tool results must contain the same saved targets');
       toolReplies++;
     }
+    // Auxiliary requests (for example session titles) must not satisfy the browser's completion check.
+    const replyText = hasResult ? 'Provider tool fixture complete' : 'Fixture auxiliary response';
     const frames = [
       {type:'message_start',message:{id:'msg_fixture',type:'message',role:'assistant',model,content:[],stop_reason:null,stop_sequence:null,usage:{input_tokens:10,output_tokens:1}}},
       {type:'content_block_start',index:0,content_block:callTool ? {type:'tool_use',id:'call_fixture',name:'pentest_status',input:{}} : {type:'text',text:''}},
-      {type:'content_block_delta',index:0,delta:callTool ? {type:'input_json_delta',partial_json:'{}'} : {type:'text_delta',text:'Provider tool fixture complete'}},
+      {type:'content_block_delta',index:0,delta:callTool ? {type:'input_json_delta',partial_json:'{}'} : {type:'text_delta',text:replyText}},
       {type:'content_block_stop',index:0},
       {type:'message_delta',delta:{stop_reason:callTool?'tool_use':'end_turn',stop_sequence:null},usage:{output_tokens:1}},
       {type:'message_stop'},

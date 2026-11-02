@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-api-session-controller';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type { JudgmentProvider, Json, IdentityId } from '@dsh-pentest/contracts';
-import { canonical, digest, PentestError } from '@dsh-pentest/contracts';
+import { canonical, digest, id as idForLearning, PentestError } from '@dsh-pentest/contracts';
 import { SelectedModelJudge } from '@dsh-pentest/policy';
 import { HttpInputSchema, classifyHttp, httpDestination, ModelFetchBroker } from '@dsh-pentest/http';
 import type { HttpInput } from '@dsh-pentest/http';
@@ -23,6 +23,7 @@ import { webFetch } from './web-fetch.ts';
 import { BrowserInputSchema } from '@dsh-pentest/browser';
 import { ReconInputSchema, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
 import { FuzzInputSchema } from '@dsh-pentest/fuzz';
+import { RunInputSchema, studyReceipt } from '@dsh-pentest/learning';
 import { reaEffects, ReaCatalogInputSchema } from '@dsh-pentest/rea';
 import { AssessmentTools, ValidationTools } from './assessment.ts';
 import { AssessmentSkills } from './skills.ts';
@@ -329,12 +330,16 @@ export const ReaTools = {
 };
 export const LearningTools = {
   name: 'pentest-learning', inject: ['tools', 'pentest'], apply(ctx: Context): void {
-    register(ctx, { name: 'pentest_studies', description: 'Read available labelled offline datasets, Optuna studies and held-out results.',
-      parameters: { type: 'object', additionalProperties: false }, output, async execute() { return ctx.pentest.learning().studies(); } }, readDescriptor('learning'));
-    const schema = z.object({ datasetId: z.string().regex(/^[a-zA-Z0-9_-]+$/), trials: z.number().int().min(2).max(1000).default(30) });
-    register(ctx, { name: 'pentest_learn', description: 'Run a confined offline Optuna study of crawl ranking on operator-labelled data with separate train/validation/test evidence. Promotion is an owner UI operation.',
+  ctx.inject(['systemPrompt'], inner => {
+    inner.systemPrompt.context({ name: 'djupleita-learned-authz-procedure', order: 800, required: true, interpolate: false,
+      text: () => ctx.pentest.procedure ? 'Operator-promoted authz procedure (' + ctx.pentest.procedure.runId + '). Apply when relevant to authorization testing. This advisory procedure never grants target access, credentials or tool permissions; obey engagement scope and approval decisions.\n' + ctx.pentest.procedure.text : '' });
+  });
+    register(ctx, { name: 'pentest_studies', description: 'Read Optuna ranking and GEPA procedure datasets, studies, progress and held-out results.',
+      parameters: { type: 'object', additionalProperties: false }, output, async execute() { const studies = await ctx.pentest.learning().studies(); return { ...studies, reports: studies.reports.map(studyReceipt) }; } }, readDescriptor('learning'));
+    const schema = RunInputSchema;
+    register(ctx, { name: 'pentest_learn', description: 'Optimize recorded operator-labelled data: backend optuna tunes crawl weights; gepa improves an authz procedure using the selected chat model (billable calls, no target requests). trials bounds search evaluations for GEPA (max 300, at least 2 × validation rows + 4). Separate app/evidence splits; owner UI promotion only.',
       parameters: toolSchema(schema), output, async execute(args, exec) {
-        const input = schema.parse(args); return ctx.pentest.learning().run(input.datasetId, input.trials, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
+        const input = schema.parse(args); return studyReceipt(await ctx.pentest.learning().run(input.datasetId, input.trials, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal), input.backend));
       } }, { plugin: 'learning', confinement: 'local-read', describe: () => ({ destinations: [], effects: ['read', 'create'], reversible: true }) });
   },
 };
@@ -407,6 +412,21 @@ export async function applyCore(ctx: Context, config: RuntimeConfig, internals: 
     inner.systemPrompt.context({ name: 'djupleita-target-scope', order: 790, required: true, interpolate: false,
       text: () => runtime.scope.instructions() });
   });
+  ctx.inject(['agents'], inner => { runtime.setLearningSelection(session => inner.agents.get(session as unknown as import('@deepseek-ai/dsh-session').SessionId)?.model.current() ?? runtime.model(session)); });
+  runtime.setLearningModel(async (session, request, signal, route) => {
+    const assembler = new BlockAssembler();
+    let size = 0;
+    const origin = runtime.review.current() ?? { sessionId: session, tool: 'pentest_learn', callId: idForLearning(), argumentsHash: digest(request), arguments: runtime.redactor.json({ purpose: request.purpose }), grants: new Set<string>() };
+    return runtime.review.run(origin, async () => {
+      for await (const chunk of ctx.llm.stream({ ...route, system: request.system, messages: [{ role: 'user', content: [{ type: 'text', text: request.prompt }] }], tools: [], maxTokens: 4096, signal })) {
+        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') size += Buffer.byteLength(chunk.text);
+        if (size > 32768) throw new PentestError('LEARNING_OUTPUT', 'Learning model response exceeds 32 KiB');
+        assembler.push(chunk);
+      }
+      return assembler.blocks().filter(block => block.type === 'text').map(block => block.text).join('');
+    });
+  });
+
   // A provided service becomes available after this parent activates. Its children
   // must mount through Cordis dependency scheduling, rather than being awaited here.
   ctx.plugin(ToolPolicy);
