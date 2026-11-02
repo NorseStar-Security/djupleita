@@ -316,7 +316,10 @@ export const ReaTools = {
       parameters: toolSchema(ReaCatalogInputSchema), output, async execute(args, exec) { return ctx.pentest.rea().discover(args, ctx.pentest.signal(exec.signal)); } }, readDescriptor('rea'));
     const schema = z.object({ tool: z.string().min(1), arguments: z.record(z.string(), z.json()) });
     register(ctx, { name: 'pentest_rea', description: 'Invoke an advertised REA tool inside the offline analysis workspace. Local analysis URLs become scope-checked crawl hints. Unknown/destructive operations require review.',
-      parameters: toolSchema(schema), output, async execute(args, exec) {
+      // JSON transport already bounds these values to JSON. Advertise the open
+      // argument object without recursive $defs, which provider adapters drop;
+      // keep the original recursive validator at the execution boundary.
+      parameters: toolSchema(z.object({ tool: schema.shape.tool, arguments: z.record(z.string(), z.unknown()) })), output, async execute(args, exec) {
         const input = schema.parse(args); return ctx.pentest.rea().call(input.tool, input.arguments, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'rea', confinement: 'transport', describe(args) { return { destinations: [], ...reaEffects(schema.parse(args).tool) }; } });
   },
