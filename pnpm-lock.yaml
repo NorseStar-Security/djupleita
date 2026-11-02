@@ -18,6 +18,21 @@ importers:
         specifier: ^4.0.0
         version: 4.1.12(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2))
 
+  packages/assessment:
+    dependencies:
+      '@dsh-pentest/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@dsh-pentest/http':
+        specifier: workspace:*
+        version: link:../http
+      '@dsh-pentest/trajectory':
+        specifier: workspace:*
+        version: link:../trajectory
+      zod:
+        specifier: ^4.1.12
+        version: 4.6.7
+
   packages/authz:
     dependencies:
       '@dsh-pentest/contracts':
@@ -110,6 +125,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: link:../../vendor/deepseek-harness/packages/core/agent
         version: link:../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: link:../../vendor/deepseek-harness/packages/api/session-controller
+        version: link:../../vendor/deepseek-harness/packages/api/session-controller
       '@deepseek-ai/dsh-client-connection':
         specifier: link:../../vendor/deepseek-harness/packages/client/connection
         version: link:../../vendor/deepseek-harness/packages/client/connection
@@ -119,6 +137,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: link:../../vendor/deepseek-harness/packages/core/session
         version: link:../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: link:../../vendor/deepseek-harness/packages/skill/skill
+        version: link:../../vendor/deepseek-harness/packages/skill/skill
       '@deepseek-ai/dsh-system-prompt':
         specifier: link:../../vendor/deepseek-harness/packages/core/system-prompt
         version: link:../../vendor/deepseek-harness/packages/core/system-prompt
@@ -131,6 +152,9 @@ importers:
       '@deepseek-ai/dsh-user-approval':
         specifier: link:../../vendor/deepseek-harness/packages/interaction/user-approval
         version: link:../../vendor/deepseek-harness/packages/interaction/user-approval
+      '@dsh-pentest/assessment':
+        specifier: workspace:*
+        version: link:../assessment
       '@dsh-pentest/authz':
         specifier: workspace:*
         version: link:../authz
@@ -294,6 +318,12 @@ importers:
         specifier: ^4.1.12
         version: 4.6.7
 
+  packages/plugin-assessment:
+    dependencies:
+      '@dsh-pentest/dsh-plugin':
+        specifier: workspace:*
+        version: link:../dsh-plugin
+
   packages/plugin-authz:
     dependencies:
       '@dsh-pentest/dsh-plugin':
@@ -355,6 +385,12 @@ importers:
         version: link:../dsh-plugin
 
   packages/plugin-trajectory:
+    dependencies:
+      '@dsh-pentest/dsh-plugin':
+        specifier: workspace:*
+        version: link:../dsh-plugin
+
+  packages/plugin-validation:
     dependencies:
       '@dsh-pentest/dsh-plugin':
         specifier: workspace:*

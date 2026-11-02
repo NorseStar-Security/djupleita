@@ -3,7 +3,7 @@ export { ModelFetchBroker } from './model-fetch.ts';
 import http from 'node:http';
 import https from 'node:https';
 import { z } from 'zod';
-import { PentestError, id, canonical } from '@dsh-pentest/contracts';
+import { PentestError, id, canonical, digest } from '@dsh-pentest/contracts';
 import type { Action, Effect, Evidence, IdentityId, Json, SessionId, Purpose } from '@dsh-pentest/contracts';
 import type { EngagementService } from '@dsh-pentest/engagement';
 import type { IdentityService } from '@dsh-pentest/identities';
@@ -23,19 +23,34 @@ export interface HttpResult {
 export interface HttpConfig { timeoutMs: number; maxRedirects: number; maxRequestBytes: number }
 export interface RawResponse { status: number; headers: Record<string, string>; body: string; bytes?: Buffer }
 export interface DeliveredResponse { result: HttpResult; response: RawResponse }
+export interface HttpObserver {
+  before(input: HttpInput, session: SessionId, actionId: string): void;
+  after(input: HttpInput, session: SessionId, result: HttpResult | undefined, actionId: string): void;
+  signal?(session: SessionId): AbortSignal | undefined;
+}
 export type Transport = (grant: ConnectionGrant, input: HttpInput, headers: Record<string, string>, limit: number, signal: AbortSignal) => Promise<RawResponse>;
 
 /** Metadata is derived by the adapter; callers cannot label a delete as a read. */
 export function classifyHttp(input: HttpInput): { effects: Effect[]; reversible: boolean } {
   const parsed = new URL(input.url);
-  const path = `${parsed.pathname}${parsed.search}`;
+  let path = `${parsed.pathname}${parsed.search}`;
+  try { path = decodeURIComponent(path); } catch { /* Preserve malformed input for policy review. */ }
   const semantics = `${path}\n${input.bodyEncoding === 'base64' ? Buffer.from(input.body ?? '', 'base64').toString('utf8') : input.body ?? ''}`;
+  if (endsSession(input)) return { effects: ['disrupt'], reversible: false };
   if (input.method === 'DELETE' || /(?:\b|[_/])(?:delete|remove|destroy|drop|truncate|purge|wipe)(?:[A-Z_\s/(]|\b)/i.test(semantics)) {
     return { effects: ['delete'], reversible: false };
   }
   if (input.method === 'PUT') return { effects: ['overwrite'], reversible: false };
   if (['GET', 'HEAD', 'OPTIONS'].includes(input.method)) return { effects: ['read'], reversible: true };
   return { effects: ['modify'], reversible: true };
+}
+
+/** Applies to routed page scripts too; a GET can revoke a session. */
+export function endsSession(input: HttpInput): boolean {
+  const url = new URL(input.url);
+  let text = `${url.pathname}${url.search}\n${input.bodyEncoding === 'base64' ? Buffer.from(input.body ?? '', 'base64').toString('utf8') : input.body ?? ''}`;
+  for (let i = 0; i < 2; i++) { try { text = decodeURIComponent(text); } catch { break; } }
+  return /(?:^|[^a-z])(?:log[\s_-]?out|sign[\s_-]?out|revoke|invalidate[\s_-]?(?:session|token)|destroy[\s_-]?session)(?:[^a-z]|$)/i.test(text);
 }
 
 function publicHeaders(headers: Record<string, string>): void {
@@ -86,7 +101,8 @@ export class HttpBroker {
     private readonly scope: ScopeService, private readonly policy: PolicyService,
     private readonly identities: IdentityService, private readonly trajectory: TrajectoryStore,
     private readonly evidence: EvidenceStore, private readonly redactor: Redactor,
-    private readonly transport: Transport = pinnedTransport, private readonly revocation?: AbortSignal, private readonly defaultApproval?: ApprovalAnswerer) {
+    private readonly transport: Transport = pinnedTransport, private readonly revocation?: AbortSignal, private readonly defaultApproval?: ApprovalAnswerer,
+    private readonly observer?: HttpObserver) {
     if (!Number.isInteger(config.maxRedirects) || config.maxRedirects < 0 || config.timeoutMs <= 0 || config.maxRequestBytes <= 0) {
       throw new PentestError('HTTP_CONFIG', 'Invalid HTTP broker configuration');
     }
@@ -104,7 +120,8 @@ export class HttpBroker {
     if (!this.engagement.hasSession(sessionId)) throw new PentestError('SESSION_UNBOUND', 'Session is not attached to this engagement');
     publicHeaders(raw.headers);
     if (Buffer.from(raw.body ?? '', raw.bodyEncoding ?? 'utf8').byteLength > this.config.maxRequestBytes) throw new PentestError('REQUEST_LIMIT', 'Request body exceeded the configured byte limit');
-    const lifetime = AbortSignal.any([callerSignal, ...(this.revocation ? [this.revocation] : [])]);
+    const runSignal = this.observer?.signal?.(sessionId);
+    const lifetime = AbortSignal.any([callerSignal, ...(this.revocation ? [this.revocation] : []), ...(runSignal ? [runSignal] : [])]);
     let signal = lifetime;
     let input = structuredClone(raw);
     let parentId: string | undefined;
@@ -117,17 +134,29 @@ export class HttpBroker {
         ...(input.identityId ? { identityId: input.identityId } : {}), ...(parentId ? { parentId } : {}),
       };
       signal = lifetime;
-      await this.policy.authorize({ action, signal }, approve ?? this.defaultApproval);
+      const decision = await this.policy.authorize({ action, signal }, approve ?? this.defaultApproval);
+      if (endsSession(input) && decision.kind !== 'ask') {
+        const answer = approve ?? this.defaultApproval;
+        const allowed = Boolean(answer && await answer(action, { kind: 'ask', reasons: ['This request may end or revoke a session'],
+          source: 'session-protection', policyVersion: this.policy.version, actionHash: digest(action) }, signal));
+        signal.throwIfAborted();
+        await this.trajectory.append(sessionId, 'http/session-end-review', { actionId: action.id, actionHash: digest(action), allowed });
+        if (!allowed)
+          throw new PentestError('SESSION_END_REVIEW', 'Session-ending requests require explicit owner review');
+      }
       const grant = await this.scope.authorize({ url: input.url, purpose: 'target' }, signal);
       signal = AbortSignal.any([lifetime, AbortSignal.timeout(this.config.timeoutMs)]);
       const credentials = input.identityId ? await this.identities.headers(input.identityId, grant.url, signal) : {};
       const reservation = await this.engagement.acquire(signal);
       const started = Date.now();
       let response: RawResponse;
+      let observed = false;
       try {
+        this.observer?.before(input, sessionId, action.id); observed = true;
         await this.trajectory.append(sessionId, 'tool/start', this.redactor.json({ actionId: action.id, input }));
         response = await this.transport(grant, input, { ...input.headers, ...credentials, ...credentialHeaders }, this.engagement.engagement.budget.maxResponseBytes, signal);
       } catch (error) {
+        if (observed) this.observer?.after(input, sessionId, undefined, action.id);
         await this.trajectory.append(sessionId, 'tool/error', { actionId: action.id,
           error: this.redactor.text(error instanceof Error ? error.message : 'HTTP request failed'), outcome: 'unknown' });
         throw error;
@@ -140,6 +169,8 @@ export class HttpBroker {
       const evidence = await this.evidence.put(record, 'http_request', input.identityId);
       await this.trajectory.append(sessionId, 'tool/result', this.redactor.json({ actionId: action.id, status: response.status,
         durationMs: Date.now() - started, evidence }));
+      this.observer?.after(input, sessionId, { url: grant.url.href, status: response.status, headers: record && typeof record === 'object' && !Array.isArray(record) ? record.headers as Record<string, string> : {},
+        body: this.redactor.text(response.body), evidence, actionId: action.id, durationMs: Date.now() - started }, action.id);
       const location = response.headers.location;
       if (followRedirects && [301, 302, 303, 307, 308].includes(response.status) && location) {
         if (redirects >= this.config.maxRedirects) throw new PentestError('REDIRECT_LIMIT', 'Redirect limit reached');

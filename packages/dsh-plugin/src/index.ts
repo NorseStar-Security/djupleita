@@ -6,6 +6,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionToken, PostToolDecisio
 import type {} from '@deepseek-ai/dsh-user-approval';
 import type { ReviewOrigin } from './review.ts';
 import type {} from '@deepseek-ai/dsh-session';
+import type {} from '@deepseek-ai/dsh-api-session-controller';
 import type { JudgmentProvider, Json, IdentityId } from '@dsh-pentest/contracts';
 import { canonical, digest, PentestError } from '@dsh-pentest/contracts';
 import { SelectedModelJudge } from '@dsh-pentest/policy';
@@ -20,6 +21,10 @@ import { BrowserInputSchema } from '@dsh-pentest/browser';
 import { ReconInputSchema, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
 import { FuzzInputSchema } from '@dsh-pentest/fuzz';
 import { reaEffects, ReaCatalogInputSchema } from '@dsh-pentest/rea';
+import { AssessmentTools, ValidationTools } from './assessment.ts';
+import { AssessmentSkills } from './skills.ts';
+export { AssessmentTools, ValidationTools } from './assessment.ts';
+export { AssessmentSkills } from './skills.ts';
 export { PentestRuntime } from './runtime.ts';
 export type { EffectDescriptor, RuntimeConfig } from './runtime.ts';
 
@@ -49,6 +54,14 @@ export const ToolPolicy = {
   apply(ctx: Context): void {
     const accepted = new Map<ToolExecutionToken, { hash: string; policyVersion: string; origin: ReviewOrigin }>();
     let persistenceFailed = false;
+    ctx.on('api-session/forked', async fork => {
+      const lineage = { ...fork, sourceId: fork.sourceId as unknown as import('@dsh-pentest/contracts').SessionId,
+        childId: fork.childId as unknown as import('@dsh-pentest/contracts').SessionId };
+      ctx.pentest.assessment.recordFork(lineage);
+      ctx.pentest.attach(lineage.childId);
+      await ctx.pentest.trajectories.append(lineage.childId, 'harness/fork', lineage);
+      await ctx.pentest.trajectories.flush();
+    });
     ctx.on('session/event', (session, event) => {
       const sessionId = session.id as unknown as import('@dsh-pentest/contracts').SessionId;
       ctx.pentest.attach(sessionId);
@@ -112,7 +125,8 @@ export const ToolPolicy = {
       return undefined;
     });
     ctx.on('agent/pre-step', async (payload, next) => {
-      ctx.pentest.attach(payload.agent.id as unknown as import('@dsh-pentest/contracts').SessionId, payload.modelSelection);
+      ctx.pentest.attach(payload.agent.id as unknown as import('@dsh-pentest/contracts').SessionId, payload.modelSelection,
+        payload.agent.session?.header.parentSession as unknown as import('@dsh-pentest/contracts').SessionId | undefined);
       return next();
     });
   },
@@ -210,8 +224,10 @@ export const BrowserTools = {
     register(ctx, { name: 'pentest_browser', description: 'Use an isolated Playwright browser for a chat and identity reference. Every HTTP request uses the scope and credential broker. No arbitrary JavaScript.',
       parameters: z.toJSONSchema(schema), output, async execute(args, exec) {
         const input = schema.parse(args), session = ctx.pentest.session(exec);
-        return ctx.pentest.browser().execute(input.action, session, input.identityId as IdentityId | undefined,
+        const result = await ctx.pentest.browser().execute(input.action, session, input.identityId as IdentityId | undefined,
           exec.signal, ctx.pentest.approve);
+        await ctx.pentest.assessment.browserObservation(session, input.identityId as IdentityId | undefined, result);
+        return result;
       } }, { plugin: 'browser', confinement: 'brokered', describe(args) {
         const { action } = schema.parse(args);
         if (action.operation === 'fill' && action.value) ctx.pentest.redactor.register(action.value);
@@ -305,7 +321,7 @@ export const ModelEgressPlugin = {
   name: 'pentest-model-egress', inject: ['pentest', 'llm'], apply(ctx: Context): void {
     const broker = new ModelFetchBroker(ctx.pentest.redactor);
     ctx.effect(() => broker.install(), 'pentest: model fetch transport');
-    async function* stream(options: GenerateOptions, next: () => AsyncIterable<StreamChunk>, endpoints?: readonly string[]): AsyncIterable<StreamChunk> {
+    async function* stream(options: GenerateOptions, next: () => AsyncIterable<StreamChunk>, endpoints?: readonly string[], meter = false): AsyncIterable<StreamChunk> {
       const runtime = ctx.pentest, scope = runtime.scope;
       const providerScope = endpoints?.length ? scope.forModelEndpoints(endpoints) : undefined;
       const signal = runtime.signal(options.signal ?? new AbortController().signal);
@@ -317,18 +333,26 @@ export const ModelEgressPlugin = {
       const run = <T,>(operation: () => T): T => origin
         ? runtime.review.run(origin, () => broker.run(scope, signal, operation, providerScope)) : broker.run(scope, signal, operation, providerScope);
       const iterator = run(() => next()[Symbol.asyncIterator]());
+      let tokens: number | undefined;
       try {
         while (true) {
           const step = await run(() => iterator.next());
           if (step.done) return;
+          if (step.value.type === 'usage') {
+            const usage = step.value.usage;
+            tokens = usage.totalTokens ?? usage.inputTokens + usage.outputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+          }
           yield step.value;
         }
-      } finally { await run(() => iterator.return?.()); }
+      } finally {
+        try { await run(() => iterator.return?.()); }
+        finally { if (meter && origin) runtime.assessment.recordUsage(origin.sessionId, tokens); }
+      }
     }
     // Preparation retains the fallback boundary; dispatch adds only the API roots
     // captured by the registered adapter, including custom provider URLs.
     ctx.on('llm/stream', (options, next) => stream(options, next));
-    ctx.on('llm/dispatch', (options, transport, next) => stream(options, next, transport?.endpoints));
+    ctx.on('llm/dispatch', (options, transport, next) => stream(options, next, transport?.endpoints, true));
   },
 };
 
@@ -360,4 +384,7 @@ export async function apply(ctx: Context, config: RuntimeConfig, internals: { ju
   ctx.plugin(LearningTools);
   ctx.plugin(TrajectoryTools);
   ctx.plugin(TelemetryPlugin);
+  ctx.plugin(AssessmentTools);
+  ctx.plugin(AssessmentSkills);
+  ctx.plugin(ValidationTools);
 }

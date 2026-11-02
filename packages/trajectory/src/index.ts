@@ -214,6 +214,16 @@ function isMissing(error: unknown): boolean {
 export class EvidenceStore {
   constructor(private readonly root: string, private readonly redactor: Redactor) {}
 
+  /** Read only a content-addressed blob whose bytes still match the retained digest. */
+  async read(evidence: Evidence): Promise<Json> {
+    if (!/^[a-f0-9]{64}$/.test(evidence.contentHash) || evidence.pointer !== `blobs/${evidence.contentHash}`)
+      throw new PentestError('EVIDENCE_POINTER', 'Invalid evidence pointer');
+    const bytes = await readFile(join(this.root, evidence.pointer));
+    if (createHash('sha256').update(bytes).digest('hex') !== evidence.contentHash)
+      throw new PentestError('EVIDENCE_CORRUPT', 'Evidence digest verification failed');
+    return this.redactor.json(JSON.parse(bytes.toString('utf8')));
+  }
+
   /** Evidence is redacted before hashing, storage, graph import, or export. */
   async put(value: Json, tool: string, identityId?: IdentityId): Promise<Evidence> {
     const bytes = Buffer.from(canonical(this.redactor.json(value)));

@@ -11,10 +11,13 @@ export class EngagementService {
   private nextRequestAt = 0;
   private readonly sessions = new Set<SessionId>();
 
-  constructor(engagement: Engagement, private readonly now = Date.now) {
+  constructor(engagement: Engagement, private readonly now = Date.now,
+    private readonly checkpoint?: { initial?: { requests: number; startedAt: number }; save(value: { requests: number; startedAt: number }): void }) {
     EngagementSchema.parse(engagement);
     this.engagement = freeze(structuredClone(engagement));
-    this.startedAt = now();
+    this.startedAt = checkpoint?.initial?.startedAt ?? now();
+    this.requests = checkpoint?.initial?.requests ?? 0;
+    checkpoint?.save({ requests: this.requests, startedAt: this.startedAt });
   }
 
   attach(sessionId: SessionId): void { this.sessions.add(sessionId); }
@@ -39,6 +42,7 @@ export class EngagementService {
     if (this.requests >= budget.requests) throw new PentestError('REQUEST_BUDGET', 'Engagement request budget exhausted');
     if (this.active >= budget.concurrency) throw new PentestError('CONCURRENCY_BUDGET', 'Engagement concurrency budget reached');
     if (this.now() < this.nextRequestAt) throw new PentestError('RATE_BUDGET', 'Engagement request rate reached');
+    this.checkpoint?.save({ requests: this.requests + 1, startedAt: this.startedAt });
     this.requests++;
     this.active++;
     this.nextRequestAt = this.now() + 1000 / budget.requestsPerSecond;

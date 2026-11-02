@@ -1,0 +1,1251 @@
+diff --git a/packages/api/session-controller/src/types.ts b/packages/api/session-controller/src/types.ts
+--- a/packages/api/session-controller/src/types.ts
++++ b/packages/api/session-controller/src/types.ts
+@@ -302,6 +302,8 @@
+   readonly sessionId: SessionId
+   /** Exact inclusive source event seq; omission selects the latest completed-turn prefix. */
+   readonly atSeq?: number
++  /** Replace this human message in a new branch, retaining its attachments and excluding its later history. Mutually exclusive with atSeq. */
++  readonly replay?: { readonly messageSeq: number; readonly text: string }
+   /** False asks the Host to check for required migration before forking. Defaults to true. */
+   readonly allowMigration?: boolean
+ }
+@@ -572,6 +574,12 @@
+ declare module '@deepseek-ai/cordis' {
+   interface Events {
+     /**
++     * A child has been created, before replay admission. Rejection prevents replay.
++     * @mode serial
++     * @param fork - source, child and exact inherited cut for durable feature inheritance.
++     */
++    'api-session/forked'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void | Promise<void>
++    /**
+      * A Session became visible or its Agent was created or disposed.
+      * Consumers upsert the summary and replace its current running and availability state.
+      * @mode emit
+diff --git a/packages/api/session-controller/src/index.ts b/packages/api/session-controller/src/index.ts
+--- a/packages/api/session-controller/src/index.ts
++++ b/packages/api/session-controller/src/index.ts
+@@ -425,12 +425,14 @@
+   /**
+    * Fork one cold-readable exact event prefix into a new Session. An omitted
+    * boundary selects the latest completed-turn prefix; an open cut receives
+-   * synthetic fork closers.
+-   * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
++   * synthetic fork closers. Replay cuts before an original human message and
++   * admits revised text with its stored attachments after inheritance completes.
++   * @param request - source Session, exact boundary or replay anchor, and migration preflight choice.
++   * @param signal - caller cancellation before child creation and replay admission.
+    * @returns the new Session identity.
+    */
+   @Remote('fork')
+-  async fork(request: SessionForkRequest): Promise<SessionForkValue> {
++  async fork(request: SessionForkRequest, signal: AbortSignal): Promise<SessionForkValue> {
+     if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
+       const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
+       if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {
+@@ -439,7 +441,9 @@
+         })
+       }
+     }
+-    return this.commands.fork(request)
++    signal.throwIfAborted()
++    const principal = principalOf(this.ctx.invocation)
++    return this.commands.fork(request, signal, { kind: 'user', ...(principal === undefined ? {} : { principal }) })
+   }
+ 
+   /**
+diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/session-controller/src/commands.ts
+--- a/packages/api/session-controller/src/commands.ts
++++ b/packages/api/session-controller/src/commands.ts
+@@ -207,11 +207,21 @@
+   /**
+    * Create a new ordinary Session from an exact event prefix. An explicit
+    * `atSeq` is the inclusive cut; an omitted value selects the latest
+-   * completed-turn prefix. An open cut receives synthetic fork closers.
+-   * @param request - source Session and optional exact event boundary.
++   * completed-turn prefix. Replay excludes the selected human message and later
++   * events, then admits revised text after the serial inheritance hook.
++   * @param request - source Session and optional exact event boundary or replay.
++   * @param signal - caller cancellation before creation and replay admission.
++   * @param replaySource - authenticated caller attribution for the revised message.
+    * @returns the new Session identity.
+    */
+-  async fork(request: SessionForkRequest): Promise<SessionForkValue> {
++  async fork(request: SessionForkRequest, signal?: AbortSignal, replaySource: MessageSource = { kind: 'user' }): Promise<SessionForkValue> {
++    signal?.throwIfAborted()
++    if (request.replay !== undefined && (request.atSeq !== undefined
++      || !Number.isSafeInteger(request.replay.messageSeq) || request.replay.messageSeq < 0
++      || typeof request.replay.text !== 'string' || request.replay.text.trim().length === 0
++      || Buffer.byteLength(request.replay.text) > 1024 * 1024)) {
++      throw new RemoteError('gateway/bad-request', 'Replay requires one human message and non-empty text up to 1 MiB; atSeq must be omitted', {})
++    }
+     let atSeq: ReturnType<typeof SessionSeq> | undefined
+     try {
+       atSeq = request.atSeq === undefined ? undefined : SessionSeq(request.atSeq)
+@@ -235,8 +245,15 @@
+       )
+     }
+     using source = observed
+-    const boundary = atSeq ?? latestCompletedPrefixBoundary(source.events)
+-    if (boundary === undefined || source.events[boundary]?.seq !== boundary) {
++    const replayEvent = request.replay === undefined ? undefined : source.events[request.replay.messageSeq]
++    if (request.replay !== undefined && (replayEvent?.type !== 'user/message'
++      || replayEvent.surfaceOp !== 'append' || replayEvent.data.source.kind !== 'user')) {
++      throw new RemoteError('gateway/bad-request', 'Replay must address an original human message', {})
++    }
++    const boundary = request.replay === undefined
++      ? atSeq ?? latestCompletedPrefixBoundary(source.events)
++      : request.replay.messageSeq - 1
++    if (boundary === undefined || (boundary !== -1 && source.events[boundary]?.seq !== boundary)) {
+       throw new RemoteError(
+         'session/fork-unavailable',
+         request.atSeq === undefined
+@@ -245,7 +262,14 @@
+         { sessionId: request.sessionId },
+       )
+     }
+-    const seed = buildForkSeed(source.events, boundary)
++    const seed = boundary === -1 ? [] : buildForkSeed(source.events, SessionSeq(boundary))
++    const replay = replayEvent?.type === 'user/message' && request.replay !== undefined
++      ? createUserMessage({ content: [{ type: 'text', text: request.replay.text },
++        ...replayEvent.data.content.filter(part => part.type !== 'text')], source: replaySource })
++      : undefined
++    // Reuse only references authorized by the selected durable message. No client-supplied attachment references enter replay.
++    if (replay !== undefined) await this.ctx.attachments.admitPromptContent(replay.content as readonly AttachmentAdmissionPart[])
++    signal?.throwIfAborted()
+     let workspace: Workspace | undefined
+     try {
+       workspace = await this.forkWorkspace(source.header)
+@@ -291,6 +315,17 @@
+           { sessionId: childId, workspaceId: workspace.id },
+         )
+       }
++    }
++    signal?.throwIfAborted()
++    await this.ctx.serial('api-session/forked', {
++      sourceId: request.sessionId, childId, atSeq: boundary,
++      ...(request.replay === undefined ? {} : { replayMessageSeq: request.replay.messageSeq }),
++    })
++    signal?.throwIfAborted()
++    if (replay !== undefined) {
++      const child = this.ctx.agents.get(childId)
++      if (child === undefined) throw new RemoteError('gateway/internal', 'Replay branch is unavailable', {})
++      child.followup(replay)
+     }
+     return { sessionId: childId }
+   }
+diff --git a/packages/api/session-controller/src/client/contract/sessions.ts b/packages/api/session-controller/src/client/contract/sessions.ts
+--- a/packages/api/session-controller/src/client/contract/sessions.ts
++++ b/packages/api/session-controller/src/client/contract/sessions.ts
+@@ -135,6 +135,8 @@
+   fork(opts: {
+     sessionId: SessionId
+     atSeq?: number
++    replay?: { messageSeq: number; text: string }
++    signal?: AbortSignal
+     increaseTitle?: boolean
+     onCreated?: (childId: SessionId) => void
+     /** False refuses source migration; omission preserves the Host default. */
+diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/packages/api/session-controller/src/client/sessions/service.ts
+--- a/packages/api/session-controller/src/client/sessions/service.ts
++++ b/packages/api/session-controller/src/client/sessions/service.ts
+@@ -463,6 +463,8 @@
+   async fork(opts: {
+     sessionId: SessionId
+     atSeq?: number
++    replay?: { messageSeq: number; text: string }
++    signal?: AbortSignal
+     increaseTitle?: boolean
+     onCreated?: (childId: SessionId) => void
+     allowMigration?: boolean
+@@ -473,6 +475,8 @@
+     const result = await this.manager.fork({
+       sessionId: opts.sessionId,
+       ...(opts.atSeq === undefined ? {} : { atSeq: SessionSeq(opts.atSeq) }),
++      ...(opts.replay === undefined ? {} : { replay: opts.replay }),
++      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+       ...(opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration }),
+     })
+     if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
+diff --git a/packages/api/session-controller/src/client/sessions/manager.ts b/packages/api/session-controller/src/client/sessions/manager.ts
+--- a/packages/api/session-controller/src/client/sessions/manager.ts
++++ b/packages/api/session-controller/src/client/sessions/manager.ts
+@@ -559,14 +559,15 @@
+    * @returns the fork result (the child session id).
+    */
+   async fork(
+-    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean },
++    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean; replay?: { messageSeq: number; text: string }; signal?: AbortSignal },
+   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
+     const source = this.summaries.find(s => s.sessionId === opts.sessionId)
+     const result = await this.remote.session.fork({
+       sessionId: opts.sessionId,
+       ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
++      ...opts.replay === undefined ? {} : { replay: opts.replay },
+       ...opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration },
+-    })
++    }, ...(opts.signal === undefined ? [] : [opts.signal] as const))
+     const childId = result.ok
+       ? result.value.sessionId
+       : workspaceAttachSessionId(result.error)
+diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/client/ui-chat/src/client/contract/slots.ts
+--- a/packages/client/ui-chat/src/client/contract/slots.ts
++++ b/packages/client/ui-chat/src/client/contract/slots.ts
+@@ -217,6 +217,8 @@
+   openFile: (path: string, options?: OpenFileOptions) => void
+   inspectCall: ((callId: ToolCallId) => void) | undefined
+   forkAt: (seq: number) => void
++  /** Edit one original human message in a new branch; resolves after replay admission. */
++  replayAt?: ((seq: number, text: string, signal: AbortSignal) => Promise<void>) | undefined
+   /** Session-authorized image loader supplied by the Chat view. */
+   loadImage: MessageImageLoader
+   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
+@@ -330,6 +332,8 @@
+     read: () => ChatScrollPosition | null
+   }
+   forkAt: (seq: number) => void
++  /** Edit one original human message in a new branch; resolves after replay admission. */
++  replayAt?: ((seq: number, text: string, signal: AbortSignal) => Promise<void>) | undefined
+   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
+ }
+ 
+@@ -343,7 +347,7 @@
+ 
+ /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
+ export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
+-  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage' | 'fileMentions'> {
++  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'replayAt' | 'loadImage' | 'fileMentions'> {
+   readonly entries: readonly RenderEntry[]
+   readonly pendingInputs: readonly (PendingSubmission | InboxState['next-step'][number])[]
+   readonly lastInputTurn: number | undefined
+diff --git a/packages/client/ui-chat/src/client/chat/ChatView.tsx b/packages/client/ui-chat/src/client/chat/ChatView.tsx
+--- a/packages/client/ui-chat/src/client/chat/ChatView.tsx
++++ b/packages/client/ui-chat/src/client/chat/ChatView.tsx
+@@ -60,7 +60,7 @@
+  */
+ export function ChatView({
+   useSession, useChat, useConversation, useSessions, renderSlot,
+-  sessionId, openFile, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
++  sessionId, openFile, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, replayAt, fileMentions,
+   usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
+ }: ChatViewSlotProps) {
+   const order = useChat(s => s.order)
+@@ -232,7 +232,7 @@
+             <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink} fileImages={fileImages}>
+               {renderSlot('conversation.chat.flow', {
+                 entries, pendingInputs, lastInputTurn, deferCollapse,
+-                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage, fileMentions,
++                cwd, openFile: requestOpenFile, inspectCall, forkAt, replayAt, loadImage, fileMentions,
+               }, { hookContext: flowContext })}
+             </MarkdownDelegateProvider>
+             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""
+diff --git a/packages/client/ui-chat/src/client/chat/ChatFlow.tsx b/packages/client/ui-chat/src/client/chat/ChatFlow.tsx
+--- a/packages/client/ui-chat/src/client/chat/ChatFlow.tsx
++++ b/packages/client/ui-chat/src/client/chat/ChatFlow.tsx
+@@ -27,7 +27,7 @@
+   entries, pendingInputs, lastInputTurn, deferCollapse,
+   useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation, useConnectionState,
+   useStore, actions, renderSlot, renderFactorySlot, t, useGroupAction, useGroupHeaderAction,
+-  cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
++  cwd, openFile, inspectCall, forkAt, replayAt, loadImage, fileMentions,
+ }: ChatFlowSlotProps) {
+   const nodeStore = useChat(snapshot => snapshot.nodes)
+   const running = useSession(snapshot => snapshot.running)
+@@ -42,7 +42,7 @@
+   const seatProps = {
+     nodeStore, useChatNode, useChatNodeBottom, useChatNodeProcess, usePresentation,
+     useStore, actions, renderSlot, t, useGroupAction, deferCollapse,
+-    cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
++    cwd, openFile, inspectCall, forkAt, replayAt, loadImage, fileMentions,
+   }
+   const rows = entries.map((entry) => {
+     switch (entry.kind) {
+diff --git a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+--- a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
++++ b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+@@ -49,7 +49,7 @@
+  */
+ export const ChatNodeSeat = memo(function ChatNodeSeat({
+   nodeKey, groupPart, useChatNode, useChatNodeProcess, usePresentation,
+-  cwd, openFile, inspectCall, forkAt,
++  cwd, openFile, inspectCall, forkAt, replayAt,
+   loadImage, fileMentions, useStore, actions, renderSlot, t, useChatNodeBottom, deferCollapse, useGroupAction,
+ }: ChatNodeSeatProps) {
+   const bottom = useChatNodeBottom(nodeKey)
+@@ -136,12 +136,12 @@
+       cwd,
+       openFile,
+       inspectCall,
+-      forkAt,
++      forkAt, replayAt,
+       loadImage,
+       fileMentions,
+       turnProcess,
+     }, [
+-    node, groupPart, cwd, openFile, inspectCall, forkAt,
++    node, groupPart, cwd, openFile, inspectCall, forkAt, replayAt,
+     loadImage, fileMentions, turnProcess,
+   ])
+   if (routedNode === undefined || owner === null) return null
+diff --git a/packages/client/ui-chat/src/client/apply.ts b/packages/client/ui-chat/src/client/apply.ts
+--- a/packages/client/ui-chat/src/client/apply.ts
++++ b/packages/client/ui-chat/src/client/apply.ts
+@@ -296,6 +296,10 @@
+             },
+             read: () => chatScrollPositions.get(sessionId) ?? null,
+           },
++          replayAt: async (seq, text, signal) => {
++            const childId = await ctx.sessions.fork({ sessionId, replay: { messageSeq: seq, text }, signal })
++            ctx.uiWorkspace.openSession(childId)
++          },
+           forkAt: (seq) => {
+             const turn = [...chat.getSnapshot().timeline.turns.values()].find(turn => turn.end?.seq === seq)
+             const messageId = turn?.data.get('turn-tail')?.closing?.finalNode.messageId
+diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/client/ui-chat/src/client/chat/MessageItem.tsx
+--- a/packages/client/ui-chat/src/client/chat/MessageItem.tsx
++++ b/packages/client/ui-chat/src/client/chat/MessageItem.tsx
+@@ -1,4 +1,4 @@
+-import { memo, useEffect, useMemo, useState } from 'react'
++import { memo, useEffect, useMemo, useRef, useState } from 'react'
+ import type { ReactNode } from 'react'
+ import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
+ import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+@@ -299,10 +299,31 @@
+ 
+ /** User and admitted-steering keyed Chat renderer. */
+ export const UserMessageNodeView = memo(function UserMessageNodeView({
+-  node, renderFactorySlot, loadImage, t,
++  node, renderFactorySlot, loadImage, replayAt, useAccess, t,
+ }: ChatNodeViewProps<'user' | 'steering'>) {
+   const data = node.data
+-  return (
++  const forkAllowed = useAccess?.('session/fork') === true
++  const pendingReplay = useRef<AbortController | null>(null)
++  const replayEditor = useRef<HTMLTextAreaElement | null>(null)
++  const replayTrigger = useRef<HTMLButtonElement | null>(null)
++  const restoreFocus = useRef(false)
++  useEffect(() => () => { pendingReplay.current?.abort() }, [])
++  const [editing, setEditing] = useState(false)
++  const [draft, setDraft] = useState('')
++  const [busy, setBusy] = useState(false)
++  const [failure, setFailure] = useState(false)
++  useEffect(() => {
++    if (editing) replayEditor.current?.focus()
++    else if (restoreFocus.current) {
++      restoreFocus.current = false
++      replayTrigger.current?.focus()
++    }
++  }, [editing])
++  const canReplay = replayAt !== undefined && forkAllowed
++    && typeof data.source === 'object' && data.source !== null
++    && 'kind' in data.source && data.source.kind === 'user'
++  return (
++    <>
+     <UserStyleBubble
+       content={data.content}
+       interactive
+@@ -315,12 +336,35 @@
+         <MessageIconActions
+           text={text}
+           time={data.time}
++          extraActions={canReplay ? <button ref={replayTrigger} type="button" disabled={busy || editing} className={css.replayAction}
++            onClick={() => { setDraft(text); setFailure(false); setEditing(true) }}>{t('message.editReplay')}</button> : undefined}
+           clock="start"
+           className={css.actions}
+           t={t}
+         />
+       )}
+     />
++    {editing && <form className={css.replayForm} aria-busy={busy} onSubmit={event => {
++      event.preventDefault()
++      if (pendingReplay.current || busy || !draft.trim() || replayAt === undefined) return
++      const pending = new AbortController()
++      pendingReplay.current = pending
++      setBusy(true); setFailure(false)
++      void replayAt(data.seq, draft, pending.signal)
++        .then(() => { if (!pending.signal.aborted) { restoreFocus.current = true; setEditing(false) } })
++        .catch(() => { if (!pending.signal.aborted) setFailure(true) })
++        .finally(() => { if (pendingReplay.current === pending) { pendingReplay.current = null; setBusy(false) } })
++    }}>
++      <label>{t('message.editReplay')}<textarea ref={replayEditor} value={draft} disabled={busy} rows={5}
++        onChange={event => { setDraft(event.target.value) }} /></label>
++      <p>{t('message.replayHelp')}</p>
++      {failure && <p role="alert">{t('message.replayFailed')}</p>}
++      <div className={css.replayButtons}>
++        <button type="button" onClick={() => { pendingReplay.current?.abort(); pendingReplay.current = null; setBusy(false); restoreFocus.current = true; setEditing(false) }}>{t('cancel')}</button>
++        <button type="submit" disabled={busy || !draft.trim()}>{t('message.replaySubmit')}</button>
++      </div>
++    </form>}
++    </>
+   )
+ })
+ 
+diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.module.css b/packages/client/ui-chat/src/client/chat/MessageItem.module.css
+--- a/packages/client/ui-chat/src/client/chat/MessageItem.module.css
++++ b/packages/client/ui-chat/src/client/chat/MessageItem.module.css
+@@ -358,3 +358,21 @@
+   font-size: 12px;
+   line-height: 15px;
+ }
++
++.replayAction, .replayButtons button {
++  border: 0;
++  border-radius: var(--dsw-radius-md);
++  padding: 6px 8px;
++  background: var(--dsw-specific-input-major);
++  color: var(--dsw-alias-label-primary);
++  font: inherit;
++  cursor: pointer;
++}
++.replayForm { display: grid; gap: 8px; width: 100%; min-width: 0; padding: 12px; box-sizing: border-box; }
++.replayForm label { display: grid; gap: 8px; }
++.replayForm textarea { width: 100%; min-width: 0; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px; border-radius: var(--dsw-radius-md); border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-primary); }
++.replayForm p { margin: 0; color: var(--dsw-alias-label-secondary); }
++.replayForm [role='alert'] { color: var(--dsw-alias-state-error-primary); }
++.replayButtons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
++.replayButtons button:disabled { opacity: 0.5; cursor: default; }
++@media (pointer: coarse) { .replayForm textarea { font-size: max(16px, 1em); } }
+diff --git a/packages/client/ui-chat/src/client/locale.ts b/packages/client/ui-chat/src/client/locale.ts
+--- a/packages/client/ui-chat/src/client/locale.ts
++++ b/packages/client/ui-chat/src/client/locale.ts
+@@ -160,6 +160,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': '已停止',
+   'message.branch': '在新对话中分支',
++  'message.editReplay': "编辑并重放",
++  'message.replaySubmit': "在新对话中重放",
++  'message.replayHelp': "在此请求之前创建新对话。附件会保留，原对话仍然可用。",
++  'message.replayFailed': "无法重放此请求。编辑后的文本仍然保留。",
+   'message.branchUnavailable': '仅可从已完成轮次的最后一条消息分支',
+   'message.retry.active': '正在重试模型请求',
+   'message.retry.cancelled': '模型请求重试已取消',
+@@ -362,6 +366,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Stopped',
+   'message.branch': 'Branch into a new conversation',
++  'message.editReplay': 'Edit and replay',
++  'message.replaySubmit': 'Replay in new chat',
++  'message.replayHelp': 'Creates a new chat before this request. Attachments are retained; your original chat stays available.',
++  'message.replayFailed': 'Could not replay this request. Your edited text is still available.',
+   'message.branchUnavailable': 'Available only on the last message of a completed turn',
+   'message.retry.active': 'Retrying model request',
+   'message.retry.cancelled': 'Model request retry cancelled',
+@@ -561,6 +569,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': '停止しました',
+   'message.branch': '新しい会話に分岐',
++  'message.editReplay': "編集して再実行",
++  'message.replaySubmit': "新しいチャットで再実行",
++  'message.replayHelp': "このリクエストの直前から新しいチャットを作成します。添付ファイルと元のチャットは保持されます。",
++  'message.replayFailed': "このリクエストを再実行できませんでした。編集したテキストは保持されています。",
+   'message.branchUnavailable': '完了したターンの最後のメッセージでのみ利用できます',
+   'message.retry.active': 'モデルリクエストを再試行中',
+   'message.retry.cancelled': 'モデルリクエストの再試行をキャンセルしました',
+@@ -760,6 +772,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Detenido',
+   'message.branch': 'Pasar a una nueva conversación',
++  'message.editReplay': "Editar y repetir",
++  'message.replaySubmit': "Repetir en un chat nuevo",
++  'message.replayHelp': "Crea un chat nuevo antes de esta solicitud. Se conservan los archivos adjuntos y el chat original.",
++  'message.replayFailed': "No se pudo repetir esta solicitud. El texto editado sigue disponible.",
+   'message.branchUnavailable': 'Disponible solo en el último mensaje de un turno completado',
+   'message.retry.active': 'Reintentando solicitud de modelo',
+   'message.retry.cancelled': 'Reintento de solicitud de modelo cancelado',
+@@ -959,6 +975,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Arrêté',
+   'message.branch': 'Lancez-vous dans une nouvelle conversation',
++  'message.editReplay': "Modifier et relancer",
++  'message.replaySubmit': "Relancer dans un nouveau chat",
++  'message.replayHelp': "Crée un nouveau chat avant cette demande. Les pièces jointes et le chat d’origine sont conservés.",
++  'message.replayFailed': "Impossible de relancer cette demande. Le texte modifié reste disponible.",
+   'message.branchUnavailable': "Disponible uniquement sur le dernier message d'un tour terminé",
+   'message.retry.active': 'Nouvelle tentative de demande de modèle',
+   'message.retry.cancelled': 'Nouvelle tentative de demande de modèle annulée',
+@@ -1158,6 +1178,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Angehalten',
+   'message.branch': 'Verzweigen Sie in ein neues Gespräch',
++  'message.editReplay': "Bearbeiten und erneut ausführen",
++  'message.replaySubmit': "In neuem Chat ausführen",
++  'message.replayHelp': "Erstellt einen neuen Chat vor dieser Anfrage. Anhänge und ursprünglicher Chat bleiben erhalten.",
++  'message.replayFailed': "Diese Anfrage konnte nicht erneut ausgeführt werden. Der bearbeitete Text bleibt erhalten.",
+   'message.branchUnavailable': 'Nur verfügbar bei der letzten Nachricht einer abgeschlossenen Runde',
+   'message.retry.active': 'Modellanforderung wird erneut versucht',
+   'message.retry.cancelled': 'Wiederholungsversuch der Modellanforderung abgebrochen',
+@@ -1357,6 +1381,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Остановлено',
+   'message.branch': 'Перейти к новому разговору',
++  'message.editReplay': "Изменить и повторить",
++  'message.replaySubmit': "Повторить в новом чате",
++  'message.replayHelp': "Создаёт новый чат перед этим запросом. Вложения и исходный чат сохраняются.",
++  'message.replayFailed': "Не удалось повторить запрос. Изменённый текст сохранён.",
+   'message.branchUnavailable': 'Доступно только в последнем сообщении о завершенном ходу.',
+   'message.retry.active': 'Повторный запрос модели',
+   'message.retry.cancelled': 'Повтор запроса модели отменен.',
+@@ -1556,6 +1584,10 @@
+   'message.turnProcess.separator': ' · ',
+   'message.stopped': 'Parado',
+   'message.branch': 'Ramifique para uma nova conversa',
++  'message.editReplay': "Editar e repetir",
++  'message.replaySubmit': "Repetir em novo chat",
++  'message.replayHelp': "Cria um novo chat antes desta solicitação. Os anexos e o chat original são preservados.",
++  'message.replayFailed': "Não foi possível repetir a solicitação. O texto editado continua disponível.",
+   'message.branchUnavailable': 'Disponível apenas na última mensagem de um turno concluído',
+   'message.retry.active': 'Tentando novamente a solicitação de modelo',
+   'message.retry.cancelled': 'Nova tentativa de solicitação de modelo cancelada',
+diff --git a/packages/client/ui-chat/README.md b/packages/client/ui-chat/README.md
+--- a/packages/client/ui-chat/README.md
++++ b/packages/client/ui-chat/README.md
+@@ -212,3 +212,5 @@
+ None.
+ 
+ </details>
++
++Human messages offer **Edit and replay**. Edit the text, then choose **Replay in new chat** to branch before the selected request and submit the replacement with its original attachments. Cancel leaves the original chat unchanged. A failed submission retains the edited text.
+diff --git a/packages/api/session-controller/README.md b/packages/api/session-controller/README.md
+--- a/packages/api/session-controller/README.md
++++ b/packages/api/session-controller/README.md
+@@ -139,3 +139,5 @@
+ None.
+ 
+ </details>
++
++`session.fork` accepts `replay: { messageSeq, text }` instead of `atSeq`. The Host validates an original human message, inherits only the preceding events, retains that message’s admitted attachments, and admits a fresh user message after the serial `api-session/forked` integration hook. Cancellation before admission leaves any created branch idle. The hook also runs for ordinary forks and lets feature owners persist lineage and run membership before replay starts.
+diff --git a/packages/api/session-controller/tests/test-remote.ts b/packages/api/session-controller/tests/test-remote.ts
+--- a/packages/api/session-controller/tests/test-remote.ts
++++ b/packages/api/session-controller/tests/test-remote.ts
+@@ -78,7 +78,7 @@
+   selectModel(request: SessionSelectModelRequest): Promise<RemoteResult<SessionSelectModelValue>>
+   modelCatalog(): Promise<RemoteResult<ModelCatalog>>
+   rename(request: SessionRenameRequest): Promise<RemoteResult<SessionRenameValue>>
+-  fork(request: SessionForkRequest): Promise<RemoteResult<SessionForkValue>>
++  fork(request: SessionForkRequest, signal?: AbortSignal): Promise<RemoteResult<SessionForkValue>>
+   prompt(request: SessionPromptRequest, signal?: AbortSignal): Promise<RemoteResult<SessionPromptValue>>
+   attachment(request: SessionAttachmentRequest): Promise<RemoteResult<SessionAttachmentValue>>
+   updateQueue(request: SessionUpdateQueueRequest): Promise<RemoteResult<SessionUpdateQueueValue>>
+@@ -375,7 +375,7 @@
+     selectModel: request => remoteResult(() => direct.selectModel(request)),
+     modelCatalog: () => remoteResult(() => direct.modelCatalog()),
+     rename: request => remoteResult(() => direct.rename(request)),
+-    fork: request => remoteResult(() => direct.fork(request)),
++    fork: (request, signal = new AbortController().signal) => remoteResult(() => direct.fork(request, signal), signal),
+     prompt: (request, signal = new AbortController().signal) => remoteResult(
+       () => direct.prompt(request, signal),
+       signal,
+diff --git a/packages/api/session-controller/tests/session-replay.host.spec.ts b/packages/api/session-controller/tests/session-replay.host.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/api/session-controller/tests/session-replay.host.spec.ts
+@@ -0,0 +1,127 @@
++import { mkdtemp, rm } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { afterEach, expect, it, vi } from 'vitest'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import { Context } from '@deepseek-ai/cordis'
++import { createUserMessage } from '@deepseek-ai/dsh-llm'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
++import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
++import { ApiSessionAgentController } from '../src/agent.ts'
++import { SessionCommandController } from '../src/commands.ts'
++import { installSessionReadTestServices } from './test-remote.ts'
++
++const contexts: Context[] = []
++const temporaryRoots: string[] = []
++afterEach(async () => {
++  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
++  for (const root of temporaryRoots.splice(0)) await rm(root, { recursive: true, force: true })
++})
++
++async function fixture() {
++  const ctx = new Context(); contexts.push(ctx)
++  await mountAgentLoopTestDependencies(ctx)
++  const harness = await mountAgentLoopTestHarness(ctx)
++  const adapter = new MockAdapter(Array.from({ length: 8 }, () => textResponse('original answer')))
++  ctx.llm.registerAdapter(['mock'], adapter)
++  ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
++  installSessionReadTestServices(ctx)
++  ctx.provide('attachments', { admitPromptContent: async (content: unknown) => content } as never)
++  ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'mock', model: 'mock' }) } as never)
++  const commands = new SessionCommandController(ctx, new ApiSessionAgentController(ctx), '/workspace')
++  const source = await harness.create(SessionId('source'), { provider: 'mock', model: 'mock' })
++  return { ctx, adapter, commands, source }
++}
++
++it.each([1, 2])('replays request %i without its original answer, retaining earlier history and attachments', async request => {
++  const { ctx, adapter, commands, source } = await fixture()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'first request' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'second request' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const events = source.session.snapshotEvents()
++  const selected = events.filter(event => event.type === 'user/message')[request - 1]!
++  const original = JSON.stringify(events)
++  const count = adapter.requests.length
++  const inherited = vi.fn()
++  ctx.on('api-session/forked', inherited)
++  const result = await commands.fork({ sessionId: source.id, replay: { messageSeq: selected.seq, text: 'revised request' } })
++  const child = ctx.agents.get(result.sessionId)!
++  await child.whenIdle()
++  const users = child.session.deriveMessages().filter(message => message.role === 'user')
++    .flatMap(message => message.content.flatMap(part => part.type === 'text' ? [part.text] : []))
++  expect(users).toEqual(request === 1 ? ['revised request'] : ['first request', 'revised request'])
++  expect(child.session.inheritedEventCount).toBe(selected.seq)
++  expect(inherited).toHaveBeenCalledWith({ sourceId: source.id, childId: child.id, atSeq: selected.seq - 1, replayMessageSeq: selected.seq })
++  expect(adapter.requests).toHaveLength(count + 1)
++  expect(JSON.stringify(adapter.requests.at(-1)?.messages)).not.toContain(request === 1 ? 'first request' : 'second request')
++  expect(JSON.stringify(source.session.snapshotEvents())).toBe(original)
++})
++
++it('retains only the selected message’s admitted attachment references', async () => {
++  const { ctx, commands, source } = await fixture()
++  const attachment = { attachmentId: 'fixture-image', mediaType: 'image/png', bytes: 8, encodedBytes: 12, width: 1, height: 1, sha256: 'a'.repeat(64) }
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'image request' }, { type: 'image', attachment } as never], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const selected = source.session.snapshotEvents().find(event => event.type === 'user/message')!
++  const admit = vi.spyOn(ctx.attachments, 'admitPromptContent')
++  const result = await commands.fork({ sessionId: source.id, replay: { messageSeq: selected.seq, text: 'edited image request' } })
++  const child = ctx.agents.get(result.sessionId)!; await child.whenIdle()
++  expect(admit).toHaveBeenCalled()
++  expect(child.session.deriveMessages().filter(message => message.role === 'user').at(-1)?.content)
++    .toEqual([{ type: 'text', text: 'edited image request' }, { type: 'image', attachment }])
++})
++
++it('refuses invalid anchors and empty edits before creating a branch', async () => {
++  const { ctx, commands, source } = await fixture()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'request' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const selected = source.session.snapshotEvents().find(event => event.type === 'user/message')!
++  const create = vi.spyOn(ctx.agents, 'create')
++  for (const replay of [{ messageSeq: selected.seq, text: ' ' }, { messageSeq: -1, text: 'revised' }, { messageSeq: 9999, text: 'revised' }, { messageSeq: 0, text: 'revised' }]) {
++    await expect(commands.fork({ sessionId: source.id, replay })).rejects.toMatchObject({ code: 'gateway/bad-request' })
++  }
++  await expect(commands.fork({ sessionId: source.id, atSeq: 0, replay: { messageSeq: selected.seq, text: 'revised' } })).rejects.toMatchObject({ code: 'gateway/bad-request' })
++  expect(create).not.toHaveBeenCalled()
++})
++
++it('does not admit replay after cancellation or a failed inheritance hook', async () => {
++  const { ctx, adapter, commands, source } = await fixture()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'request' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const selected = source.session.snapshotEvents().find(event => event.type === 'user/message')!
++  const input = { sessionId: source.id, replay: { messageSeq: selected.seq, text: 'revised' } }
++  const count = adapter.requests.length
++  await expect(commands.fork(input, AbortSignal.abort())).rejects.toBeDefined()
++  const abort = new AbortController()
++  const stop = ctx.on('api-session/forked', () => { abort.abort() })
++  await expect(commands.fork(input, abort.signal)).rejects.toBeDefined()
++  stop()
++  ctx.on('api-session/forked', () => { throw new Error('membership persistence unavailable') })
++  await expect(commands.fork(input)).rejects.toThrow('membership persistence unavailable')
++  expect(adapter.requests).toHaveLength(count)
++})
++
++it('replays a persisted source without resuming or changing that source', async () => {
++  const { ctx, commands, source } = await fixture()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'persisted request' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const events = source.session.snapshotEvents()
++  const coldId = SessionId('cold-source')
++  const header = { ...source.session.header, id: coldId }
++  const root = await mkdtemp(join(tmpdir(), 'dsh-replay-cold-'))
++  temporaryRoots.push(root)
++  await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
++  const stored = await ctx.sessionPersistence.create(header)
++  await stored.append(events)
++  await stored.close()
++  const selected = events.find(event => event.type === 'user/message')!
++  const resume = vi.spyOn(ctx.agents, 'resume')
++  const result = await commands.fork({ sessionId: coldId, replay: { messageSeq: selected.seq, text: 'revised after restart' } })
++  const child = ctx.agents.get(result.sessionId)!; await child.whenIdle()
++  expect(ctx.sessions.get(coldId)).toBeUndefined()
++  expect(resume).not.toHaveBeenCalled()
++  expect(JSON.stringify(child.session.deriveMessages())).toContain('revised after restart')
++  expect(JSON.stringify(child.session.deriveMessages())).not.toContain('persisted request')
++})
+diff --git a/packages/client/ui-chat/tests/replay-edit.client.spec.tsx b/packages/client/ui-chat/tests/replay-edit.client.spec.tsx
+new file mode 100644
+--- /dev/null
++++ b/packages/client/ui-chat/tests/replay-edit.client.spec.tsx
+@@ -0,0 +1,58 @@
++// @vitest-environment jsdom
++import { afterEach, expect, it, vi } from 'vitest'
++import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
++import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
++import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
++import { en } from '../src/client/locale.ts'
++import { UserMessageNodeView } from '../src/client/chat/MessageItem.tsx'
++import type { ChatNodeViewProps, UserContentInput } from '../src/client/contract/slots.ts'
++import { createUserContentFixture } from './user-content-component-fixture.tsx'
++import { unusedImageLoader } from './reasoning-component-fixture.tsx'
++
++afterEach(cleanup)
++const t = makeTranslate(en, commonEn)
++function show(replayAt = vi.fn(async () => {}), allowed = true) {
++  const content = createUserContentFixture()
++  const props = {
++    t, replayAt, useAccess: () => allowed, loadImage: unusedImageLoader,
++    node: { key: 'user:7', kind: 'user', id: '7', target: 'chat', anchorSeq: 7, location: { kind: 'session' }, visibility: 'visible',
++      data: { kind: 'user', seq: 7, time: 0, content: [{ type: 'text', text: 'original request' }], source: { kind: 'user' } } },
++    renderFactorySlot: (_name: string, input: UserContentInput) => content(input, () => null, t),
++  } as unknown as ChatNodeViewProps<'user'>
++  return { replayAt, ...render(<UserMessageNodeView {...props} />) }
++}
++it('edits and submits a new branch, while cancel leaves the original message intact', async () => {
++  const { replayAt } = show()
++  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
++  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'revised request' } })
++  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
++  expect(replayAt).not.toHaveBeenCalled()
++  expect(screen.getByText('original request')).toBeTruthy()
++  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
++  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'revised request' } })
++  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replay in new chat' })) })
++  expect(replayAt).toHaveBeenCalledWith(7, 'revised request', expect.any(AbortSignal))
++  expect(screen.queryByRole('textbox')).toBeNull()
++})
++it('retains the edited text after failure and refuses blank submissions', async () => {
++  const replayAt = vi.fn(async () => { throw new Error('offline') })
++  show(replayAt)
++  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
++  fireEvent.change(screen.getByRole('textbox'), { target: { value: ' ' } })
++  expect((screen.getByRole('button', { name: 'Replay in new chat' }) as HTMLButtonElement).disabled).toBe(true)
++  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'retained edit' } })
++  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replay in new chat' })) })
++  expect(screen.getByRole('alert').textContent).toContain('edited text is still available')
++  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('retained edit')
++})
++it('cancels an in-flight replay and hides replay from callers without fork access', async () => {
++  let signal: AbortSignal | undefined
++  const pending = vi.fn((_seq: number, _text: string, value: AbortSignal) => { signal = value; return new Promise<void>(() => {}) })
++  show(pending as never)
++  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
++  fireEvent.click(screen.getByRole('button', { name: 'Replay in new chat' }))
++  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
++  expect(signal?.aborted).toBe(true)
++  cleanup(); show(vi.fn(), false)
++  expect(screen.queryByRole('button', { name: 'Edit and replay' })).toBeNull()
++})
+diff --git a/benchmarks/session-corpus/session-corpus.worker.ts b/benchmarks/session-corpus/session-corpus.worker.ts
+--- a/benchmarks/session-corpus/session-corpus.worker.ts
++++ b/benchmarks/session-corpus/session-corpus.worker.ts
+@@ -346,7 +346,7 @@
+     for (const rank of ranks) {
+       const forkStarted = performance.now()
+       const forkCpuStarted = cpuMs()
+-      const { sessionId } = await controller.fork({ sessionId: corpusSessionId(rank) })
++      const { sessionId } = await controller.fork({ sessionId: corpusSessionId(rank) }, new AbortController().signal)
+       const forkMs = performance.now() - forkStarted
+       const forkCpuMs = cpuMs() - forkCpuStarted
+       const child = ctx.sessions.get(sessionId)
+diff --git a/packages/client/ui-chat/README.zh.md b/packages/client/ui-chat/README.zh.md
+--- a/packages/client/ui-chat/README.zh.md
++++ b/packages/client/ui-chat/README.zh.md
+@@ -212,3 +212,5 @@
+ 无。
+ 
+ </details>
++
++人类消息提供 **编辑并重放** 操作。修改文本后选择 **在新对话中重放**，即可从所选请求之前创建分支，并保留该请求的原始附件。取消不会修改原对话；提交失败时仍保留编辑后的文本。
+diff --git a/packages/api/session-controller/README.zh.md b/packages/api/session-controller/README.zh.md
+--- a/packages/api/session-controller/README.zh.md
++++ b/packages/api/session-controller/README.zh.md
+@@ -139,3 +139,5 @@
+ 无。
+ 
+ </details>
++
++`session.fork` 可接收 `replay: { messageSeq, text }` 代替 `atSeq`。主机验证原始人类消息，仅继承之前的事件并保留该消息已接纳的附件，在串行 `api-session/forked` 集成钩子完成后接纳新的用户消息。接纳前取消会使已创建的分支保持空闲。普通分支也触发该钩子，使功能所有者能在重放开始前持久化来源和运行归属。
+diff --git a/apps/web/tests/edit-replay.e2e.ts b/apps/web/tests/edit-replay.e2e.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/web/tests/edit-replay.e2e.ts
+@@ -0,0 +1,105 @@
++// Keyless built-client exercise of editing a cold human request into a new chat.
++import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { chromium, type Browser, type Page } from 'playwright'
++import { afterAll, beforeAll, expect, it } from 'vitest'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import {
++  launchWebScaffold, readPersistedEvents, seedSession, selectedSessionFixture,
++  watchConsole, type WebScaffold,
++} from './scaffold.ts'
++import { newEnglishPage } from './support.ts'
++
++const SOURCE = SessionId('edit-replay-web-e2e')
++const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
++const REVISED = 'Explain the earlier request using only the history in this branch.'
++const ANSWER = 'EDIT_REPLAY_DONE'
++let scaffold: WebScaffold
++let browser: Browser
++let page: Page
++let temporary: string
++let consoleState: ReturnType<typeof watchConsole>
++
++beforeAll(async () => {
++  temporary = await mkdtemp(join(tmpdir(), 'dsh-edit-replay-web-'))
++  const override = join(temporary, 'override.json')
++  await writeFile(override, JSON.stringify([{ kind: 'chunks', chunks: [
++    { type: 'block-start', index: 0, blockType: 'text' },
++    { type: 'text-delta', index: 0, text: ANSWER },
++    { type: 'block-end', index: 0, block: { type: 'text', text: ANSWER } },
++    { type: 'usage', usage: { inputTokens: 16, outputTokens: 8 } },
++    { type: 'finish', reason: { kind: 'stop' } },
++  ] }]))
++  scaffold = await launchWebScaffold({ replayFixture: join(temporary, 'override-only.jsonl'), replayOverride: override })
++  await seedSession(scaffold, await readFile(await selectedSessionFixture(SEED), 'utf8'), SOURCE)
++  browser = await chromium.launch()
++  page = await newEnglishPage(browser)
++  consoleState = watchConsole(page)
++  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
++  await page.locator('[role="treeitem"]').first().click()
++  await page.locator('[role="treeitem"]').nth(1).click()
++}, 120_000)
++
++afterAll(async () => {
++  const failures: unknown[] = []
++  await browser?.close().catch((error: unknown) => failures.push(error))
++  await scaffold?.close().catch((error: unknown) => failures.push(error))
++  if (temporary) await rm(temporary, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
++  if (failures.length) throw new AggregateError(failures, 'edit replay cleanup failed')
++})
++
++it('opens the accessible editor, cancels without mutation, and fits narrow viewports', async () => {
++  const edit = page.getByRole('button', { name: 'Edit and replay', exact: true }).first()
++  await edit.focus()
++  await edit.click()
++  const textbox = page.getByRole('textbox', { name: 'Edit and replay', exact: true })
++  await expect.poll(() => textbox.evaluate(element => element === document.activeElement)).toBe(true)
++  await textbox.fill(REVISED)
++  const form = textbox.locator('xpath=ancestor::form')
++  expect(await form.ariaSnapshot()).toMatchInlineSnapshot(`
++    "- text: Edit and replay
++    - textbox "Edit and replay": Explain the earlier request using only the history in this branch.
++    - paragraph: Creates a new chat before this request. Attachments are retained; your original chat stays available.
++    - button "Cancel"
++    - button "Replay in new chat""
++  `)
++  for (const width of [390, 1680]) {
++    await page.setViewportSize({ width, height: 1000 })
++    await textbox.scrollIntoViewIfNeeded()
++    await expect.poll(async () => {
++      const box = await form.boundingBox()
++      return box !== null && box.x >= 0 && box.x + box.width <= width
++    }).toBe(true)
++  }
++  if (process.env.DSH_REPLAY_REVIEW_DIR) {
++    await page.screenshot({ path: join(process.env.DSH_REPLAY_REVIEW_DIR, 'editor.png') })
++  }
++  await form.getByRole('button', { name: 'Cancel', exact: true }).click()
++  await expect.poll(() => textbox.count()).toBe(0)
++  await expect.poll(() => edit.evaluate(element => element === document.activeElement)).toBe(true)
++}, 60_000)
++
++it('replays through the client transport and opens the child without changing the cold source', async () => {
++  const before = await readPersistedEvents(scaffold, SOURCE)
++  const selected = before.find(event => event.type === 'user/message' && event.data.source.kind === 'user')
++  if (!selected) throw new Error('seed has no human message')
++  const edit = page.getByRole('button', { name: 'Edit and replay', exact: true }).first()
++  await edit.focus()
++  await edit.click()
++  await page.getByRole('textbox', { name: 'Edit and replay', exact: true }).fill(REVISED)
++  const settled = scaffold.whenTurnSettled(60_000)
++  await page.getByRole('button', { name: 'Replay in new chat', exact: true }).click()
++  const childId = await settled
++  expect(childId).not.toBe(SOURCE)
++  await page.getByText(ANSWER, { exact: true }).waitFor({ timeout: 15_000 })
++  await page.getByText(REVISED, { exact: true }).waitFor({ timeout: 15_000 })
++  const child = scaffold.ctx.agents.get(childId)
++  expect(child?.session.inheritedEventCount).toBe(selected.seq)
++  expect(child?.session.deriveMessages().filter(message => message.role === 'user' && message.source.kind === 'user').at(-1)?.content)
++    .toEqual([{ type: 'text', text: REVISED }])
++  expect(await readPersistedEvents(scaffold, SOURCE)).toEqual(before)
++  expect(consoleState.pageErrors).toEqual([])
++  expect(consoleState.warnings).toEqual([])
++}, 60_000)
+diff --git a/packages/api/session-controller/README.i18n.yaml b/packages/api/session-controller/README.i18n.yaml
+--- a/packages/api/session-controller/README.i18n.yaml
++++ b/packages/api/session-controller/README.i18n.yaml
+@@ -36,5 +36,5 @@
+   en: 5db0f9f69a8be926
+   zh: 6ba1cc4a3850fcbc
+ /session-controller/known-limitations-and-deferred-work/dev-note:
+-  en: e67f633dc6fe7773
+-  zh: e88aeb617ffb74ea
++  en: a5521ab92ecdd157
++  zh: 138127348fa481ee
+diff --git a/packages/client/ui-chat/README.i18n.yaml b/packages/client/ui-chat/README.i18n.yaml
+--- a/packages/client/ui-chat/README.i18n.yaml
++++ b/packages/client/ui-chat/README.i18n.yaml
+@@ -48,5 +48,5 @@
+   en: 811787a5d2feaa90
+   zh: 3f1697bbc1fc7691
+ /deepseek-ai-dsh-client-ui-chat/known-limitations-and-deferred-work/dev-note:
+-  en: e67f633dc6fe7773
+-  zh: e88aeb617ffb74ea
++  en: afde6c2fd09c36ad
++  zh: 1abc23edf06f0980
+diff --git a/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.md b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.md
+new file mode 100644
+--- /dev/null
++++ b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.md
+@@ -0,0 +1,31 @@
++# Agent Note: Edit a human request into an independent replay
++
++Status: implemented
++
++English | [中文](2026-11-02-edit-and-replay.zh.md)
++
++## Problem
++
++Continuing after a completed answer cannot evaluate a revised earlier request without carrying its original answer into the model context. Replacing a stored event would change the original record and could misrepresent external actions already performed. Assessment extensions also need to bind a new chat to existing request limits before its first step runs.
++
++## Decision
++
++The existing fork request accepts an optional replay anchor and revised text. The Host observes the source without activating its agent, requires an original human append, and copies only the prefix before that message. The existing fork algorithm closes any open turn or tool boundary. The replacement receives a fresh message identity and the stored non-text content, including attachment references. The browser cannot provide replacement attachment references.
++
++An awaited `api-session/forked` event runs after child creation and workspace attachment, before replay admission. Extensions can persist assessment membership and reject admission when that persistence fails. The event also covers ordinary forks. This operation-local extension point does not add source metadata to native Session logs; [independent fork semantics](../architecture/2026-10-23-independent-session-forks.md) remain intact.
++
++The Chat owner supplies a callback through the existing props and injection contracts. Its accessible editor keeps the original message visible, retains drafts on failure, and returns focus on cancel. Cancellation before admission prevents a new request; after admission it cannot undo accepted work.
++
++## Alternatives considered
++
++**Edit the original log.** Mutation would invalidate the original record and mix observations produced by different requests.
++
++**Fork after the original answer and submit a correction.** The earlier answer remains in context and can influence the revised run.
++
++**Bind assessment state after the RPC returns.** The new agent can start before the client receives the child id, allowing its first step to miss the shared limits.
++
++## Consequences
++
++History branching preserves the original conversation but does not restore files, browser state or target state. Existing external actions remain real. A cancellation or failed extension hook can leave an idle child listed; an ambiguous transport failure requires checking the chat list before retrying. Assessment lineage belongs to the consuming extension, with its own persistence and audit requirements.
++
++Verification covers exact request boundaries, trusted attachments, cold JSONL reads, cancellation, rejected inheritance, the editor lifecycle, and the built browser transport. Distribution tests separately verify durable assessment membership and shared request reserves before the real loop admits replay.
+diff --git a/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.zh.md b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.zh.md
+new file mode 100644
+--- /dev/null
++++ b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.zh.md
+@@ -0,0 +1,31 @@
++# Agent Note: 将真人请求编辑为独立回放
++
++Status: implemented
++
++[English](2026-11-02-edit-and-replay.md) | 中文
++
++## 问题
++
++从已完成的答复之后继续，无法在不把原答复带入模型上下文的情况下评估修改后的早期请求。替换已存储的事件会改变原始记录，并可能歪曲已经执行的外部操作。评估扩展也需要在首个步骤运行之前，将新对话绑定到现有请求额度。
++
++## 决策
++
++现有 fork 请求接受可选的回放锚点和修改后的文本。Host 读取来源会话而不激活其 agent（智能体），要求锚点是原始真人追加消息，并且仅复制该消息之前的前缀。现有 fork 算法负责闭合未完成的轮次或工具边界。替换消息获得新的消息标识，并保留已存储的非文本内容，包括附件引用。浏览器无法提供替换附件引用。
++
++可等待的 `api-session/forked` 事件在子会话创建并附加到工作区后运行，先于回放接纳。扩展可持久化评估成员关系，并在持久化失败时拒绝接纳。该事件也覆盖普通 fork。这个操作期间的扩展点不会在原生会话日志中添加来源元数据；[独立 fork 语义](../architecture/2026-10-23-independent-session-forks.zh.md)保持不变。
++
++Chat 所有者通过现有 props 和注入约定提供回调。可访问的编辑器持续显示原消息，在失败时保留草稿，并在取消时归还焦点。接纳之前的取消会阻止新请求；接纳之后则无法撤销已接受的工作。
++
++## 考虑过的替代方案
++
++**编辑原日志。** 修改会使原始记录失效，并混合由不同请求产生的观测。
++
++**在原答复之后 fork 并提交修正。** 早期答复仍留在上下文中，可能影响修改后的运行。
++
++**RPC 返回后再绑定评估状态。** 新 agent 可能在客户端收到子会话标识之前启动，使首个步骤遗漏共享额度。
++
++## 影响
++
++历史分支保留原对话，但不会恢复文件、浏览器状态或目标状态。已有外部操作仍然有效。取消或扩展钩子失败可能留下一个列于列表中的空闲子会话；遇到结果不明确的传输失败时，需要先检查对话列表再重试。评估来源关系归消费扩展所有，由其承担持久化和审计要求。
++
++验证覆盖精确请求边界、可信附件、冷 JSONL 读取、取消、继承被拒绝、编辑器生命周期以及构建后浏览器传输。发行版测试另外验证真实循环接纳回放之前的持久化评估成员关系和共享请求预留额度。
+diff --git a/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.i18n.yaml b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.i18n.yaml
+new file mode 100644
+--- /dev/null
++++ b/.agents/notes/implemented/feature/2026-11-02-edit-and-replay.i18n.yaml
+@@ -0,0 +1,19 @@
++# Bilingual-pair consistency record for 2026-11-02-edit-and-replay.md (docs/i18n/README.md): per heading
++# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
++# After editing either side, bring the other along and re-record with:
++#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-02-edit-and-replay.md
++/agent-note-edit-a-human-request-into-an-independent-replay:
++  en: 2f6f13f4769f3cba
++  zh: 9e222b1677eeff09
++/agent-note-edit-a-human-request-into-an-independent-replay/problem:
++  en: d766fd4d26c66852
++  zh: 37d0b29979c3c208
++/agent-note-edit-a-human-request-into-an-independent-replay/decision:
++  en: 6e4dd39de309e565
++  zh: 1e400d18498866cb
++/agent-note-edit-a-human-request-into-an-independent-replay/alternatives-considered:
++  en: 4cfc1be94e5d2444
++  zh: 6efe9d58d6c88b79
++/agent-note-edit-a-human-request-into-an-independent-replay/consequences:
++  en: 7fbeedfd283bdbe3
++  zh: 7810cc3b70cd009f
+diff --git a/apps/web/tsconfig.json b/apps/web/tsconfig.json
+--- a/apps/web/tsconfig.json
++++ b/apps/web/tsconfig.json
+@@ -171,6 +171,7 @@
+     "tests/message-actions.e2e.ts",
+     "tests/open-in-app-ssh.e2e.ts",
+     "tests/fork-mid-turn.e2e.ts",
++    "tests/edit-replay.e2e.ts",
+     "tests/message-feedback.e2e.ts",
+     "tests/markdown-images.e2e.ts",
+     "tests/markdown-image-refresh.e2e.ts",
+diff --git a/tsconfig.host.json b/tsconfig.host.json
+--- a/tsconfig.host.json
++++ b/tsconfig.host.json
+@@ -163,6 +163,7 @@
+     "apps/web/tests/message-actions.e2e.ts",
+     "apps/web/tests/open-in-app-ssh.e2e.ts",
+     "apps/web/tests/fork-mid-turn.e2e.ts",
++    "apps/web/tests/edit-replay.e2e.ts",
+     "apps/web/tests/message-feedback.e2e.ts",
+     "apps/web/tests/markdown-images.e2e.ts",
+     "apps/web/tests/markdown-image-refresh.e2e.ts",
+diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
+--- a/scripts/gen-cordis-catalog.ts
++++ b/scripts/gen-cordis-catalog.ts
+@@ -907,6 +907,7 @@
+ 
+ /** Project types deliberately documented outside the subsystems catalog. */
+ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
++  LlmTransportInfo: 'provider dispatch metadata is owned by packages/llm/llm/src/types.ts',
+   ActionCardDecision: 'packages/experimental/action-cards/README.md',
+   ActionCardKind: 'packages/experimental/action-cards/README.md',
+   ActionCardResult: 'packages/experimental/action-cards/README.md',
+diff --git a/packages/extensions/tool-cordis/src/api-catalog.ts b/packages/extensions/tool-cordis/src/api-catalog.ts
+--- a/packages/extensions/tool-cordis/src/api-catalog.ts
++++ b/packages/extensions/tool-cordis/src/api-catalog.ts
+@@ -2331,9 +2331,9 @@
+         returns: 'the accepted title and durable event sequence.',
+       },
+       {
+-        signature: '@Remote(\'fork\') async fork(request: SessionForkRequest): Promise<SessionForkValue>',
+-        description: 'Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.',
+-        parameters: [{ name: 'request', description: 'source Session, optional exact inclusive event boundary, and migration preflight choice.' }],
++        signature: '@Remote(\'fork\') async fork(request: SessionForkRequest, signal: AbortSignal): Promise<SessionForkValue>',
++        description: 'Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers. Replay cuts before an original human message and admits revised text with its stored attachments after inheritance completes.',
++        parameters: [{ name: 'request', description: 'source Session, exact boundary or replay anchor, and migration preflight choice.' }, { name: 'signal', description: 'caller cancellation before child creation and replay admission.' }],
+         returns: 'the new Session identity.',
+       },
+       {
+@@ -4353,6 +4353,14 @@
+     parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'message', description: 'user-safe failure chain.' }],
+   },
+   {
++    name: 'api-session/forked',
++    mode: 'serial',
++    signature: '\'api-session/forked\'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void | Promise<void>',
++    summary: 'A child has been created, before replay admission.',
++    description: 'A child has been created, before replay admission. Rejection prevents replay.',
++    parameters: [{ name: 'fork', description: 'source, child and exact inherited cut for durable feature inheritance.' }],
++  },
++  {
+     name: 'api-session/removed',
+     mode: 'emit',
+     signature: '\'api-session/removed\'(sessionId: SessionId): void',
+@@ -4585,6 +4593,14 @@
+     parameters: [],
+   },
+   {
++    name: 'llm/dispatch',
++    mode: 'waterfall',
++    signature: '\'llm/dispatch\'(this: LlmRuntime, options: GenerateOptions, transport: LlmTransportInfo | undefined, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>',
++    summary: 'Waterfall at the resolved adapter boundary.',
++    description: 'Waterfall at the resolved adapter boundary. Transport metadata comes only from the captured adapter, never from request options or model output.',
++    parameters: [{ name: 'options', description: 'projected request dispatched to the captured adapter.' }, { name: 'transport', description: 'captured API roots, or undefined when the adapter does not report them.' }, { name: 'next', description: 'delegate to the next listener and eventually the adapter.' }],
++  },
++  {
+     name: 'llm/stream',
+     mode: 'waterfall',
+     signature: '\'llm/stream\'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>',
+@@ -6285,6 +6301,10 @@
+     declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
+   },
+   {
++    name: 'LlmTransportInfo',
++    declaration: 'export interface LlmTransportInfo {\n    readonly endpoints: readonly string[];\n}',
++  },
++  {
+     name: 'LocalAtInput',
+     declaration: 'export interface LocalAtInput {\n    readonly date: string;\n    readonly time: string;\n    readonly time_zone: string;\n}',
+   },
+@@ -6798,7 +6818,7 @@
+   },
+   {
+     name: 'PreparedAdapterCall',
+-    declaration: 'export interface PreparedAdapterCall {\n    readonly model: LlmResolvedModelInfo;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
++    declaration: 'export interface PreparedAdapterCall {\n    readonly model: LlmResolvedModelInfo;\n    readonly transport?: LlmTransportInfo;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+   },
+   {
+     name: 'PreparedDeepSeekLlmApiExtension',
+@@ -7542,7 +7562,7 @@
+   },
+   {
+     name: 'SessionForkRequest',
+-    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n}',
++    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly replay?: {\n        readonly messageSeq: number;\n        readonly text: string;\n    };\n    readonly allowMigration?: boolean;\n}',
+   },
+   {
+     name: 'SessionForkSource',
+diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
+--- a/docs/subsystems/llm-streaming.md
++++ b/docs/subsystems/llm-streaming.md
+@@ -1170,6 +1170,26 @@
+ 
+ Source: [`packages/llm/llm/src/types.ts`](../../packages/llm/llm/src/types.ts)
+ 
++<a id="llmdispatch--waterfall"></a>
++
++#### `llm/dispatch` — waterfall
++
++Waterfall at the resolved adapter boundary. Transport metadata comes only from the captured adapter, never from request options or model output.
++
++```ts cordis-catalog
++/**
++ * Waterfall at the resolved adapter boundary. Transport metadata comes only
++ * from the captured adapter, never from request options or model output.
++ * @mode waterfall
++ * @param options - projected request dispatched to the captured adapter.
++ * @param transport - captured API roots, or undefined when the adapter does not report them.
++ * @param next - delegate to the next listener and eventually the adapter.
++ */
++'llm/dispatch'(this: LlmRuntime, options: GenerateOptions, transport: LlmTransportInfo | undefined, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
++```
++
++Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
++
+ <a id="llmstream--waterfall"></a>
+ 
+ #### `llm/stream` — waterfall
+diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
+--- a/docs/subsystems/llm-streaming.zh.md
++++ b/docs/subsystems/llm-streaming.zh.md
+@@ -1176,6 +1176,26 @@
+ 
+ Source: [`packages/llm/llm/src/types.ts`](../../packages/llm/llm/src/types.ts)
+ 
++<a id="llmdispatch--waterfall"></a>
++
++#### `llm/dispatch` — waterfall
++
++Waterfall at the resolved adapter boundary. Transport metadata comes only from the captured adapter, never from request options or model output.
++
++```ts cordis-catalog
++/**
++ * Waterfall at the resolved adapter boundary. Transport metadata comes only
++ * from the captured adapter, never from request options or model output.
++ * @mode waterfall
++ * @param options - projected request dispatched to the captured adapter.
++ * @param transport - captured API roots, or undefined when the adapter does not report them.
++ * @param next - delegate to the next listener and eventually the adapter.
++ */
++'llm/dispatch'(this: LlmRuntime, options: GenerateOptions, transport: LlmTransportInfo | undefined, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
++```
++
++Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
++
+ <a id="llmstream--waterfall"></a>
+ 
+ #### `llm/stream` — waterfall
+diff --git a/docs/subsystems/session.md b/docs/subsystems/session.md
+--- a/docs/subsystems/session.md
++++ b/docs/subsystems/session.md
+@@ -923,11 +923,13 @@
+ /**
+  * Fork one cold-readable exact event prefix into a new Session. An omitted
+  * boundary selects the latest completed-turn prefix; an open cut receives
+- * synthetic fork closers.
+- * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
++ * synthetic fork closers. Replay cuts before an original human message and
++ * admits revised text with its stored attachments after inheritance completes.
++ * @param request - source Session, exact boundary or replay anchor, and migration preflight choice.
++ * @param signal - caller cancellation before child creation and replay admission.
+  * @returns the new Session identity.
+  */
+-@Remote('fork') async fork(request: SessionForkRequest): Promise<SessionForkValue>
++@Remote('fork') async fork(request: SessionForkRequest, signal: AbortSignal): Promise<SessionForkValue>
+ 
+ /**
+  * Admit one prompt after explicitly resuming its Session.
+@@ -1206,6 +1208,25 @@
+ 
+ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
+ 
++<a id="api-sessionforked--serial"></a>
++
++#### `api-session/forked` — serial
++
++A child has been created, before replay admission. Rejection prevents replay.
++
++```ts cordis-catalog
++/**
++ * A child has been created, before replay admission. Rejection prevents replay.
++ * @mode serial
++ * @param fork - source, child and exact inherited cut for durable feature inheritance.
++ */
++'api-session/forked'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void | Promise<void>
++```
++
++Types: [SessionId](core.md)
++
++Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
++
+ <a id="api-sessionremoved--emit"></a>
+ 
+ #### `api-session/removed` — emit
+diff --git a/docs/subsystems/session.zh.md b/docs/subsystems/session.zh.md
+--- a/docs/subsystems/session.zh.md
++++ b/docs/subsystems/session.zh.md
+@@ -927,11 +927,13 @@
+ /**
+  * Fork one cold-readable exact event prefix into a new Session. An omitted
+  * boundary selects the latest completed-turn prefix; an open cut receives
+- * synthetic fork closers.
+- * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
++ * synthetic fork closers. Replay cuts before an original human message and
++ * admits revised text with its stored attachments after inheritance completes.
++ * @param request - source Session, exact boundary or replay anchor, and migration preflight choice.
++ * @param signal - caller cancellation before child creation and replay admission.
+  * @returns the new Session identity.
+  */
+-@Remote('fork') async fork(request: SessionForkRequest): Promise<SessionForkValue>
++@Remote('fork') async fork(request: SessionForkRequest, signal: AbortSignal): Promise<SessionForkValue>
+ 
+ /**
+  * Admit one prompt after explicitly resuming its Session.
+@@ -1210,6 +1212,25 @@
+ 
+ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
+ 
++<a id="api-sessionforked--serial"></a>
++
++#### `api-session/forked` — serial
++
++A child has been created, before replay admission. Rejection prevents replay.
++
++```ts cordis-catalog
++/**
++ * A child has been created, before replay admission. Rejection prevents replay.
++ * @mode serial
++ * @param fork - source, child and exact inherited cut for durable feature inheritance.
++ */
++'api-session/forked'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void | Promise<void>
++```
++
++Types: [SessionId](core.zh.md)
++
++Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
++
+ <a id="api-sessionremoved--emit"></a>
+ 
+ #### `api-session/removed` — emit

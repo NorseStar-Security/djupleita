@@ -50,3 +50,13 @@
 .setupEntry { border-top: 1px solid #3a5149; padding: 12px 0; }.setupEntry header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; }
 .setupEntry span { color: #e4bd6b; font-size: 11px; }.setupEntry span[data-status=ready] { color: #8fd4b4; }.setupEntry span[data-status=configured], .setupEntry span[data-status=optional] { color: #afc2d6; }
 .setupEntry code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; padding: 8px; background: #101c18; border-radius: 5px; }
+.assessment { overflow-wrap: anywhere; }
+.assessment > label { display: grid; gap: 6px; margin-top: 16px; }
+.assessment button, .assessment > label input, .assessment select { border: 1px solid #475268; background: #263247; color: #e5edf7; border-radius: 6px; padding: 7px 10px; font: inherit; }
+.assessment button { cursor: pointer; }.assessment button:disabled { opacity: .45; cursor: default; }
+.assessment select { min-width: 0; max-width: 100%; }.assessment summary { cursor: pointer; padding: 12px 0; }
+.assessment .form input[type=checkbox] { width: auto; margin-right: 6px; }
+.assessment .form label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 4px; }
+.assessmentStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 18px; }
+.assessmentStats span { padding: 12px; border: 1px solid #303b50; border-radius: 8px; color: #9eacc1; font-size: 11px; }
+.assessmentStats strong { display: block; font-size: 18px; font-weight: 600; color: #93dfbd; }

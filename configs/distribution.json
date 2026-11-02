@@ -143,6 +143,28 @@
         "plugins",
         "trajectory"
       ]
+    },
+    {
+      "id": "assessment",
+      "name": "@djupleita/plugin-assessment",
+      "row": "djupleita-assessment",
+      "title": "Assessment workflow",
+      "description": "Durable bounded runs, readiness checks, coverage cells, persistent leads, scorecards and bundled assessment skills.",
+      "configKeys": [],
+      "tabs": [
+        "assessment"
+      ]
+    },
+    {
+      "id": "validation",
+      "name": "@djupleita/plugin-validation",
+      "row": "djupleita-validation",
+      "title": "Finding validation",
+      "description": "Owner-defined object authorization proofs, negative controls, independent review and redacted reports.",
+      "configKeys": [],
+      "tabs": [
+        "assessment"
+      ]
     }
   ]
 }

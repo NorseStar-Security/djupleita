@@ -1,0 +1,21 @@
+{
+  "name": "@djupleita/plugin-assessment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Durable bounded runs, readiness checks, coverage cells, persistent leads, scorecards and bundled assessment skills.",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/dsh-plugin": "workspace:*"
+  }
+}
