@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt';
 import type { JudgmentProvider, Json, IdentityId } from '@dsh-pentest/contracts';
 import { canonical, digest, PentestError } from '@dsh-pentest/contracts';
 import { SelectedModelJudge } from '@dsh-pentest/policy';
-import { HttpInputSchema, classifyHttp, ModelFetchBroker } from '@dsh-pentest/http';
+import { HttpInputSchema, classifyHttp, httpDestination, ModelFetchBroker } from '@dsh-pentest/http';
 import type { HttpInput } from '@dsh-pentest/http';
 import { z } from 'zod';
 import { toolSchema } from './tool-schema.ts';
@@ -176,7 +176,7 @@ export const HarnessControlEffects = {
       describe: () => ({ destinations: [], effects: ['delete'], reversible: false }) }), 'pentest: schedule delete effects');
     ctx.effect(() => ctx.pentest.registerDescriptor('web_fetch', { plugin: 'harness-web', confinement: 'transport',
       describe(args) { const input = z.object({ url: z.url() }).passthrough().parse(args);
-        return { destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp({ url: input.url, method: 'GET', headers: {} }) }; }
+        return { destinations: [httpDestination({ url: input.url, method: 'GET', headers: {} })], ...classifyHttp({ url: input.url, method: 'GET', headers: {} }) }; }
     }), 'pentest: web fetch effects');
     for (const tool of ['create_goal', 'update_goal', 'subagent', 'subagent_fork', 'send_message', 'interrupt_agent']) {
       ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-control', confinement: 'transport',
@@ -187,7 +187,7 @@ export const HarnessControlEffects = {
 
 export const HttpTools = {
   name: 'pentest-http', inject: ['tools', 'pentest'], apply(ctx: Context): void {
-    register(ctx, { name: 'pentest_http', description: 'Send an in-scope HTTP request. Use identityId for credentials. Redirects and every connection are checked.',
+    register(ctx, { name: 'pentest_http', description: 'Send a bounded HTTP request. Ordinary reads may research unlisted, non-excluded sites; writes and destructive requests require target scope. Use identityId for credentials. Every redirect and connection is checked.',
       parameters: toolSchema(HttpInputSchema), output,
       async execute(args, exec) {
         const input = HttpInputSchema.parse(args) as HttpInput;
@@ -196,7 +196,7 @@ export const HttpTools = {
           ctx.pentest.approve));
       } }, { plugin: 'http', confinement: 'brokered', describe(args) {
         const input = HttpInputSchema.parse(args) as HttpInput;
-        return { destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp(input), ...(input.identityId ? { identityId: input.identityId } : {}) };
+        return { destinations: [httpDestination(input)], ...classifyHttp(input), ...(input.identityId ? { identityId: input.identityId } : {}) };
       } });
   },
 };
@@ -262,7 +262,7 @@ export const BrowserTools = {
       } }, { plugin: 'browser', confinement: 'brokered', describe(args) {
         const { action } = schema.parse(args);
         if (action.operation === 'fill' && action.value) ctx.pentest.redactor.register(action.value);
-        return { destinations: action.operation === 'navigate' ? [{ url: action.url, purpose: 'target' }] : [],
+        return { destinations: action.operation === 'navigate' ? [httpDestination({ url: action.url, method: 'GET', headers: {} })] : [],
           effects: action.operation === 'navigate' || action.operation === 'snapshot' ? ['read']
             : action.operation === 'fill' ? ['modify'] : ['unknown'],
           reversible: action.operation !== 'click' };

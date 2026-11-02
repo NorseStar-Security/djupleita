@@ -21,8 +21,8 @@ export function ScopeEditor({ scope, title }: { scope: Record<string, unknown>; 
     <p>The switch changes the draft. Select Apply scope and policy to activate it. Action reviews, credential host bindings, service destinations and budgets remain active.</p>
     <label>{title}<textarea className={css.editor} name="scope" value={draft} onChange={event => setDraft(event.target.value)} required spellCheck={false} /></label>
     <button type="button" className={css.button} onClick={insertExampleTargets}>Insert course targets</button>
-    <p>The course permits {scopeExample.targets[0]!.host}, {scopeExample.targets[1]!.host} and {scopeExample.targets[2]!.host}. The website is the only production system in scope. All other production hosts and all outside destinations are out of scope, even if reachable.</p>
-    <p>These rules cover HTTP and HTTPS on ports 80/443 and every path, including private internal addresses. Wildcards cover subdomains only. Unlisted hosts are denied when scope management is on; a production wildcard exclusion would also block the allowed website because exclusions take precedence.</p>
+    <p>The course permits active testing of {scopeExample.targets[0]!.host}, {scopeExample.targets[1]!.host} and {scopeExample.targets[2]!.host}. The website is the only production system authorized for active testing. Ordinary web reads and passive research may use unlisted sites, such as CVE databases and exploit blogs.</p>
+    <p>Exclusions block both research and active testing, including when scope management is off, unless you explicitly approve an override. These target rules cover HTTP and HTTPS on ports 80/443 and every path, including private internal addresses. Wildcards cover subdomains only. Reachability does not authorize scans or writes; private-network checks, credential bindings and action reviews still apply.</p>
     <details><summary>Default course scope</summary><pre>{JSON.stringify(scopeExample, null, 2)}</pre></details>
     <details open><summary>Draft scope preview</summary><pre aria-live="polite">{scopePreview(draft)}</pre></details>
   </>;

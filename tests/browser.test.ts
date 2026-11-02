@@ -16,18 +16,19 @@ import { CrawlFrontier, CrawlService } from '../packages/crawl/src/index.ts';
 import { id } from '../packages/contracts/src/index.ts';
 import { engagement, policyConfig, testJudge, scope } from './fixtures.ts';
 
-it.skipIf(!['darwin', 'linux'].includes(process.platform))('brokers a real browser, isolates A/B credentials and rejects cross-scope requests', async () => {
+it.skipIf(!['darwin', 'linux'].includes(process.platform))('brokers research outside target scope, isolates credentials and blocks exclusions and writes', async () => {
   const observed: string[] = [];
   const server = http.createServer((req, res) => {
     observed.push(`${req.url}:${req.headers.authorization ?? 'anonymous'}`);
     res.setHeader('content-type', 'text/html');
-    res.end('<title>Identity lab</title><h1>Authorized fixture</h1><a href="/object/1">Object</a><img src="http://outside.invalid/leak"><script>fetch("/api/me")</script>');
+    res.end('<title>Identity lab</title><h1>Authorized fixture</h1><a href="/object/1">Object</a><img src="http://excluded.example.test/leak"><script>fetch("/api/me"); fetch("/mutate", {method:"POST"})</script>');
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('No lab port');
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-browser-')));
   const config = engagement({ scope: scope('localhost', address.port) });
   config.scope.targets[0]!.schemes = ['http']; config.scope.networks = ['127.0.0.1/32'];
+  config.scope.exclusions = ['excluded.example.test'];
   const scopes = new ScopeService(config.scope, async () => [{ address: '127.0.0.1', family: 4 }]);
   const redactor = new Redactor(), trajectories = new TrajectoryStore(join(root, 'trajectory'), config.id, redactor), evidence = new EvidenceStore(root, redactor);
   const secretValues = new Map<string, string>();
@@ -50,6 +51,12 @@ it.skipIf(!['darwin', 'linux'].includes(process.platform))('brokers a real brows
     expect(events.some(event => event.type === 'browser/blocked')).toBe(true);
     expect(JSON.stringify(events)).not.toContain('alice-lab-secret'); expect(JSON.stringify(events)).not.toContain('bob-lab-secret');
     expect(crawl.frontier.snapshot().queued.some(candidate => candidate.url.endsWith('/object/1'))).toBe(true);
-    await expect(browser.execute({ operation: 'navigate', url: 'http://outside.invalid/' }, session, a.id, AbortSignal.timeout(1000))).rejects.toThrow();
+    const research = await browser.execute({ operation: 'navigate', url: `http://research.example.test:${address.port}/blog` }, session, undefined, AbortSignal.timeout(20000));
+    expect(JSON.stringify(research)).toContain('Authorized fixture');
+    expect(observed).toContain('/blog:anonymous');
+    expect(observed).not.toContain('/mutate:anonymous');
+    expect(crawl.frontier.snapshot().queued.some(candidate => candidate.url.includes('research.example.test'))).toBe(false);
+    await expect(browser.execute({ operation: 'navigate', url: `http://research.example.test:${address.port}/items?action=delete` }, session, undefined, AbortSignal.timeout(1000))).rejects.toThrow(/outside/);
+    await expect(browser.execute({ operation: 'navigate', url: 'http://excluded.example.test/' }, session, undefined, AbortSignal.timeout(1000))).rejects.toThrow(/Excluded/);
   } finally { await browser.close(); graph.close(); server.closeAllConnections(); server.close(); await once(server, 'close'); }
 }, 60000);

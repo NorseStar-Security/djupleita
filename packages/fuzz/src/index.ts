@@ -91,7 +91,7 @@ export class FuzzGateway {
       // The adapter supplies fixed headers/body. Worker-controlled routing and cookies never pass through.
       const result = await this.broker.deliver({ url, method: this.input.method, headers: this.input.headers,
         ...(this.input.body === undefined ? {} : { body: this.input.body }),
-        ...(this.input.identityId ? { identityId: this.input.identityId as IdentityId } : {}) }, this.session, signal, undefined, {}, false);
+        ...(this.input.identityId ? { identityId: this.input.identityId as IdentityId } : {}) }, this.session, signal, undefined, {}, false, 'active');
       this.successful++;
       this.responses.set(url, { ...result.result, body: '' });
       // Return redacted bytes only; do not hand target cookies, redirects or credentials to ffuf.

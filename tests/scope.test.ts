@@ -28,11 +28,12 @@ describe('engagement destinations', () => {
     const resolver = vi.fn(async () => [{ address: '127.0.0.1', family: 4 }]);
     const config = { ...scope(), enabled: false, exclusions: ['excluded.example.test'] };
     const service = new ScopeService(config, resolver);
-    for (const host of ['excluded.example.test', '127.0.0.1', '[::1]']) {
+    for (const host of ['outside.example.test', '127.0.0.1', '[::1]']) {
       const grant = await service.authorize({ url: `http://${host}:8123/private`, purpose: 'target' });
       expect(grant.addresses).toHaveLength(1); expect(Object.isFrozen(grant.addresses)).toBe(true);
     }
     expect(resolver).toHaveBeenCalledTimes(1);
+    expect(() => service.check({ url: 'https://excluded.example.test/', purpose: 'target', access: 'read' })).toThrow('Excluded');
     for (const purpose of ['model', 'intelligence', 'telemetry'] as const) {
       expect(() => service.check({ url: 'https://outside.example.test/', purpose })).toThrow('outside');
     }

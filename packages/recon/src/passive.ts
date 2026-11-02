@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { digest, PentestError } from '@dsh-pentest/contracts';
 import type { IdentityId, Json, SessionId } from '@dsh-pentest/contracts';
 import type { ScopeService } from '@dsh-pentest/scope';
-import { matchesHost } from '@dsh-pentest/scope';
 import type { EngagementService } from '@dsh-pentest/engagement';
 import type { EvidenceStore, TrajectoryStore, Redactor } from '@dsh-pentest/trajectory';
 import { graphId } from '@dsh-pentest/graph';
@@ -25,8 +24,7 @@ export class PassiveReconService {
   check(domain: string): void {
     if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(domain)) throw new PentestError('RECON_DOMAIN', 'Use a bare domain');
     const name = new URL(`https://${domain}`).hostname;
-    if (!this.scope.scope.targets.some(rule => matchesHost(name, rule.host) || rule.host === `*.${name}`)
-      || this.scope.scope.exclusions.some(rule => matchesHost(name, rule))) this.scope.check({ url: `https://${name}/`, purpose: 'target' });
+    this.scope.check({ url: `https://${name}/`, purpose: 'target', access: 'read' });
   }
   async run(raw: PassiveInput, session: SessionId, signal: AbortSignal): Promise<Json> {
     const input = PassiveInputSchema.parse(raw); this.check(input.domain);

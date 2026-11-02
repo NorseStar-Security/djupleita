@@ -20,7 +20,7 @@ export function scopePreview(draft: string): string {
       if (typeof rule.host !== 'string' || !Array.isArray(rule.schemes) || !Array.isArray(rule.ports) || !Array.isArray(rule.pathPrefixes)) throw new Error('Each target needs a host-rule object with host, schemes, ports and pathPrefixes; a hostname string alone is invalid.');
       return `${rule.host}: ${rule.schemes.join('/')} · ports ${rule.ports.join(', ')} · paths ${rule.pathPrefixes.join(', ')}`;
     });
-    return [`Scope management: ${scope.enabled === false ? 'OFF · target boundaries are not enforced' : 'ON · unlisted targets are out of scope'}`, ...targets, `Excluded: ${scope.exclusions.join(', ') || 'none'}`, `Network grants: ${scope.networks.join(', ') || 'none'}`,
-      'Exclusions take precedence. This draft becomes active only after Apply.'].join('\n');
+    return [`Scope management: ${scope.enabled === false ? 'OFF · target boundaries are not enforced' : 'ON · active testing requires target authorization'}`, ...targets, `Excluded: ${scope.exclusions.join(', ') || 'none'}`, `Network grants: ${scope.networks.join(', ') || 'none'}`,
+      'Ordinary web reads and passive research may use unlisted sites. Exclusions block reads and active testing even when scope management is off. This draft becomes active only after Apply.'].join('\n');
   } catch (error) { return `Scope draft needs attention: ${error instanceof Error ? error.message : 'Invalid JSON'}`; }
 }

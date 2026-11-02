@@ -45,7 +45,7 @@ export class AuthzService {
     for (const identity of replayIds) {
       const { identityId: _ignored, ...request } = input.request;
       results.set(identity, await this.http.request({ ...request,
-        ...(identity !== 'anonymous' ? { identityId: identity as IdentityId } : {}) }, sessionId, signal));
+        ...(identity !== 'anonymous' ? { identityId: identity as IdentityId } : {}) }, sessionId, signal, undefined, 'active'));
     }
     const replays = [...results].map(([identity, response]) => ({ identity, status: response.status,
       bodyHash: digest(response.body), size: Buffer.byteLength(response.body), evidence: response.evidence }));

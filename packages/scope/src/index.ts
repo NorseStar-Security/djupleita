@@ -106,21 +106,22 @@ export class ScopeService {
     const scheme = url.protocol.slice(0, -1);
     if (!['http', 'https', 'tcp', 'tls'].includes(scheme)) throw new PentestError('INVALID_DESTINATION', 'Destination protocol is not supported');
     const port = url.port ? Number(url.port) : scheme === 'https' || scheme === 'tls' ? 443 : scheme === 'http' ? 80 : 0;
-    if (!this.enabled && destination.purpose === 'target') return { url,
-      rule: { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: ['/'], allowPrivateAddresses: true } };
     const override = this.reviewer?.allows('scope', destination) ?? false;
     if (!override && this.scope.exclusions.some(rule => matchesHost(host, rule))) {
       throw new PentestError('OUT_OF_SCOPE', `Excluded destination: ${host}`);
     }
+    if (!this.enabled && destination.purpose === 'target') return { url,
+      rule: { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: ['/'], allowPrivateAddresses: true } };
+    const read = destination.purpose === 'target' && destination.access === 'read' && ['http', 'https'].includes(scheme);
     const rules = destination.purpose === 'target' ? this.scope.targets : this.scope.services[destination.purpose];
     const rule = rules.find(candidate => matchesHost(host, candidate.host)
       && candidate.schemes.some(allowed => allowed === scheme)
       && candidate.ports.includes(port)
       && candidate.pathPrefixes.some(prefix => url.pathname === prefix
         || url.pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)));
-    const selected = rule ?? (override ? { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: [url.pathname], allowPrivateAddresses: false } : undefined);
+    const selected = rule ?? (override || read ? { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: [url.pathname], allowPrivateAddresses: false } : undefined);
     if (!selected) throw new PentestError('OUT_OF_SCOPE', `Destination is outside ${destination.purpose} scope: ${host}:${port}`);
-    if (!override && destination.purpose === 'target' && isIP(host) && !this.scope.networks.some(network => inNetwork(host, network))) {
+    if (!override && !read && destination.purpose === 'target' && isIP(host) && !this.scope.networks.some(network => inNetwork(host, network))) {
       throw new PentestError('OUT_OF_SCOPE', 'Direct IP access requires an explicit scope network');
     }
     return { url, rule: selected };
@@ -169,7 +170,8 @@ export class ScopeService {
   instructions(): string {
     return [`Target scope management is ${this.enabled ? 'ON: target boundaries are enforced.' : 'OFF: target host, port, path and network boundaries are not enforced.'}`,
       'Follow the declared engagement scope even when enforcement is off. An available route or credential does not authorize another target. Only the operator can change scope management in Plugins → Djupleita → Policy.',
-      'Only the listed target rules are authorized; every unlisted destination is out of scope. Wildcards cover subdomains, not the apex. Exclusions take precedence. Service destinations are separate from targets. Action review, credential host bindings and request budgets remain active.',
+      'Listed targets authorize active testing, scanning, fuzzing, credential replay and writes, subject to action-effect review. Bounded HTTP(S) reads, ordinary browsing and passive research may use unlisted, non-excluded sites to look up CVEs, documentation and exploit writeups. Reachability and discovery never grant active testing permission.',
+      'Exclusions block reads and active testing even when target enforcement is off, unless the owner explicitly grants an override. Wildcards cover subdomains, not the apex. DNS and private-network checks, service destinations, credential host bindings and request budgets remain independent.',
       JSON.stringify({ targets: this.scope.targets, exclusions: this.scope.exclusions, networks: this.scope.networks }),
     ].join('\n');
   }

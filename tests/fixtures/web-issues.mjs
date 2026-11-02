@@ -74,6 +74,9 @@ try {
     await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
     await poll(() => ctx.pentest.scope.enabled);
     assert.throws(() => ctx.pentest.scope.check({ url: 'https://mail.prod.example.test/', purpose: 'target' }), /outside/);
+    assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'read' }));
+    assert.throws(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'active' }), /outside/);
+    await page.getByText('Ordinary web reads and passive research may use unlisted sites', { exact: false }).first().waitFor();
     for (const host of ['www.prod.example.test', 'app.dev.example.test', 'app.test.example.test']) {
       assert.doesNotThrow(() => ctx.pentest.scope.check({ url: `https://${host}/`, purpose: 'target' }));
     }
@@ -97,6 +100,12 @@ try {
     await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
     assert.deepEqual(await readScope(), { ...customDraft, targets: example.targets }, 'Inserting targets preserves other draft settings');
     assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Prefill and restore must remain inactive');
+    await editor.fill(JSON.stringify(customDraft));
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => ctx.pentest.scope.scope.exclusions.includes('custom.example.test'));
+    assert.equal(ctx.pentest.scope.enabled, false);
+    assert.throws(() => ctx.pentest.scope.check({ url: 'https://custom.example.test/', purpose: 'target', access: 'read' }), /Excluded/);
+    assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'read' }));
     if (process.env.DSH_TEST_SCOPE_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_SCOPE_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).click();
     await poll(async () => (await ctx.pentest.toolSetup()).bannerDismissed);

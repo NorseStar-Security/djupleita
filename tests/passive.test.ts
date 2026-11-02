@@ -12,6 +12,7 @@ import { engagement } from './fixtures.ts';
 
 it('preserves passive provenance, strips credential samples and never grants scope to associated domains', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-passive-')), config = engagement(), redactor = new Redactor();
+  config.scope.exclusions = ['excluded.example.test'];
   const graph = new AttackGraph(':memory:', config.id), sessions = new EngagementService(config), session = id<'SessionId'>(); sessions.attach(session);
   const scopes = new ScopeService(config.scope), store = new TrajectoryStore(join(root, 'events'), config.id, redactor), evidence = new EvidenceStore(root, redactor);
   const calls: string[] = [], candidates: string[] = [];
@@ -23,8 +24,9 @@ it('preserves passive provenance, strips credential samples and never grants sco
     expect(result.queued).toBe(0); expect(candidates).toContain('https://outside.invalid/'); expect(graph.paths(graph.snapshot().nodes[0]!.id, 'outside.invalid', 3)).toEqual([]);
     const exposure = await service.run({ operation: 'breach-exposure', domain: 'app.example.test', page: 1 }, session, new AbortController().signal);
     expect(JSON.stringify(exposure)).toContain('total_leaks'); expect(JSON.stringify(exposure)).not.toContain('breached-secret');
-    await expect(service.run({ operation: 'dns', domain: 'outside.invalid', page: 1 }, session, new AbortController().signal)).rejects.toThrow('scope');
-    expect(calls).toHaveLength(2); expect(sessions.snapshot().requests).toBe(2);
+    await expect(service.run({ operation: 'dns', domain: 'excluded.example.test', page: 1 }, session, new AbortController().signal)).rejects.toThrow('Excluded');
+    await service.run({ operation: 'dns', domain: 'research.example.test', page: 1 }, session, new AbortController().signal);
+    expect(calls).toHaveLength(9); expect(sessions.snapshot().requests).toBe(9);
     expect(graph.snapshot().edges.every(edge => edge.attributes.walkable === false)).toBe(true);
   } finally { graph.close(); }
 });

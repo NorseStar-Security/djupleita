@@ -17,7 +17,7 @@ export async function lab() {
   const observed: { path: string; authorization: string | undefined }[] = [];
   const server = http.createServer((req, res) => {
     observed.push({ path: req.url ?? '', authorization: req.headers.authorization });
-    if (req.url === '/redirect') { res.writeHead(302, { location: 'http://outside.invalid/private' }); res.end(); return; }
+    if (req.url === '/redirect') { res.writeHead(302, { location: 'http://excluded.example.test/private' }); res.end(); return; }
     if (req.url === '/large') { res.end('a'.repeat(4096)); return; }
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ object: 'alice-owned', owner: 'alice', authorization: req.headers.authorization }));
@@ -29,6 +29,7 @@ export async function lab() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-http-'));
   const config = engagement({ scope: scope('localhost', address.port) });
   config.scope.targets[0]!.schemes = ['http']; config.scope.networks = ['127.0.0.1/32'];
+  config.scope.exclusions = ['excluded.example.test'];
   const scopes = new ScopeService(config.scope, async () => [{ address: '127.0.0.1', family: 4 }]);
   const redactor = new Redactor();
   const trajectories = new TrajectoryStore(join(root, 'trajectories'), config.id, redactor);

@@ -384,3 +384,28 @@ it('carries one HTTP approval through nested policy checks without executing the
     expect(h.runtime.review.snapshot().pending).toHaveLength(0);
   } finally { await h.close(); }
 });
+
+it('allows research through the real tool pipeline without granting external mutations or exclusions', async () => {
+  const h = await harness(); let requests = 0;
+  try {
+    const session = h.runtime.session({ agent: h.agent } as ToolExecution);
+    await h.runtime.updateSettings({ ...h.runtime.scope.scope,
+      targets: [{ host: 'target.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/'], allowPrivateAddresses: false }],
+      exclusions: ['excluded.example.test'] }, policyConfig, session);
+    const scopes = new ScopeService(h.runtime.scope.scope, async () => [{ address: '93.184.216.34', family: 4 }], h.runtime.review);
+    vi.spyOn(h.runtime, 'http').mockImplementation(chat => new HttpBroker({ timeoutMs: 1000, maxRedirects: 2, maxRequestBytes: 1024 },
+      h.runtime.engagement, scopes, h.runtime.policy(chat), h.runtime.identities, h.runtime.trajectories, h.runtime.evidence, h.runtime.redactor,
+      async () => { requests++; return { status: 200, headers: {}, body: 'Synthetic CVE research' }; }, undefined, h.runtime.approve));
+    await h.ctx.plugin(HttpTools);
+    for (const method of ['GET', 'HEAD', 'OPTIONS']) {
+      expect((await h.invoke('pentest_http', { url: 'https://research.example.test/blog', method })).isError).toBe(false);
+    }
+    for (const args of [{ url: 'https://research.example.test/blog', method: 'POST' },
+      { url: 'https://research.example.test/items?action=delete', method: 'GET' },
+      { url: 'https://excluded.example.test/blog', method: 'GET' }]) {
+      expect((await h.invoke('pentest_http', args)).isError).toBe(true);
+    }
+    expect(requests).toBe(3);
+    expect(h.runtime.review.snapshot().pending).toHaveLength(0);
+  } finally { await h.close(); }
+});

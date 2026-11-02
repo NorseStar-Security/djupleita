@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { PentestError, id, digest } from '@dsh-pentest/contracts';
 import type { Json, SessionId } from '@dsh-pentest/contracts';
 import type { ScopeService } from '@dsh-pentest/scope';
-import { matchesHost } from '@dsh-pentest/scope';
 import type { EngagementService } from '@dsh-pentest/engagement';
 import type { AttackGraph } from '@dsh-pentest/graph';
 import { graphId } from '@dsh-pentest/graph';
@@ -39,10 +38,7 @@ export class ReconService {
     if (reconMode(input.tool) === 'active') { this.scope.check({ url: input.target, purpose: 'target' }); return; }
     const hostname = new URL(`https://${input.target}/`).hostname;
     if (hostname !== input.target.toLowerCase() || !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(input.target)) throw new PentestError('RECON_TARGET', 'Passive reconnaissance requires a bare domain');
-    if (!this.scope.scope.targets.some(rule => matchesHost(hostname, rule.host) || rule.host === `*.${hostname}`)) {
-      this.scope.check({ url: `https://${hostname}/`, purpose: 'target' });
-    }
-    if (this.scope.scope.exclusions.some(rule => matchesHost(hostname, rule))) this.scope.check({ url: `https://${hostname}/`, purpose: 'target' });
+    this.scope.check({ url: `https://${hostname}/`, purpose: 'target', access: 'read' });
   }
   private async binary(tool: ReconTool): Promise<string> {
     const install = this.config.binaries[tool];
