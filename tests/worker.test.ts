@@ -38,7 +38,7 @@ it.skipIf(process.platform !== 'darwin')('permits the private Unix bridge while 
   expect(JSON.parse(result.stdout)).toEqual({ inside: 'private-bridge', outside: 'EPERM', tcp: 'EPERM' });
 }, 20000);
 
-it.skipIf(process.platform !== 'darwin')('denies direct worker sockets and filesystem writes while allowing the private scoped proxy', async () => {
+it.skipIf(!['darwin', 'linux'].includes(process.platform))('denies direct worker sockets and filesystem writes while allowing the private scoped proxy', async () => {
   let hits = 0;
   const server = http.createServer((_req, res) => { hits++; res.end('lab-response'); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');

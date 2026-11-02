@@ -65,7 +65,7 @@ it('cancels pending broker calls when the worker gateway closes', async () => {
   finally { await f.close(); }
 });
 
-it.skipIf(!process.env.DSH_TEST_FFUF || process.platform !== 'darwin')('runs real ffuf through the macOS worker and records only matching broker observations', async () => {
+it.skipIf(!process.env.DSH_TEST_FFUF || !['darwin', 'linux'].includes(process.platform))('runs real ffuf through the confined worker and records only matching broker observations', async () => {
   const f = await lab(), binary = process.env.DSH_TEST_FFUF!;
   const graph = new AttackGraph(join(f.root, 'graph.sqlite'), f.config.id);
   const crawl = new CrawlService(new CrawlFrontier({ maxPages: 100, maxDepth: 4, maxQueued: 100, maxPerTemplate: 3, stalePageLimit: 5 }, f.scopes), f.broker, graph);

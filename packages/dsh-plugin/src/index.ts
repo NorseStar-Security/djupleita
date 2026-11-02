@@ -13,6 +13,7 @@ import { SelectedModelJudge } from '@dsh-pentest/policy';
 import { HttpInputSchema, classifyHttp, ModelFetchBroker } from '@dsh-pentest/http';
 import type { HttpInput } from '@dsh-pentest/http';
 import { z } from 'zod';
+import { toolSchema } from './tool-schema.ts';
 import { PentestRuntime } from './runtime.ts';
 import type { EffectDescriptor, RuntimeConfig } from './runtime.ts';
 import { DesktopChannel } from './rpc.ts';
@@ -32,18 +33,23 @@ declare module '@deepseek-ai/cordis' { interface Context { pentest: PentestRunti
 export const inject = ['tools', 'llm'];
 export const name = 'dsh-pentest';
 
-function modelJudge(ctx: Context): JudgmentProvider {
+export function modelJudge(ctx: Context): JudgmentProvider {
   return new SelectedModelJudge(async ({ model, system, state, signal }) => {
     const assembler = new BlockAssembler();
     const stream = ctx.llm.stream({ provider: model.provider, model: model.model, system,
       messages: [{ role: 'user', content: [{ type: 'text', text: canonical(state) }] }], tools: [], maxTokens: 1024, signal });
     let bytes = 0;
     for await (const chunk of stream) {
+      if (chunk.type === 'finish' && (chunk.reason.kind === 'error' || chunk.reason.kind === 'aborted')) {
+        throw new PentestError('JUDGE_TRANSPORT', `Risk judgment failed: ${chunk.reason.failure?.message ?? chunk.reason.kind}`);
+      }
       if (chunk.type === 'text-delta') bytes += Buffer.byteLength(chunk.text);
       if (bytes > 65536) throw new PentestError('JUDGE_OUTPUT', 'Risk judgment exceeded its response limit');
       assembler.push(chunk);
     }
     const text = assembler.blocks().filter(block => block.type === 'text').map(block => block.text).join('');
+    signal.throwIfAborted();
+    if (!text.trim()) throw new PentestError('JUDGE_EMPTY', 'Risk judgment returned no text');
     return JSON.parse(text.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ''));
   });
 }
@@ -98,7 +104,7 @@ export const ToolPolicy = {
       const origin = ctx.pentest.review.current();
       if (!origin) return next();
       const allowed = await ctx.pentest.review.request('approval', { tool: request.toolName, reason: request.reason ?? '' },
-        request.reason ?? 'This operation requires your approval', request.signal ?? new AbortController().signal);
+        `Harness access: ${request.reason ?? 'This operation requires your approval'}. This access check is independent of a saved destination or action-effect allowance.`, request.signal ?? new AbortController().signal);
       return allowed ? 'allowed-once' : 'rejected';
     }, { prepend: true });
     ctx.tools.guard(exec => {
@@ -144,9 +150,33 @@ const readDescriptor = (plugin: string): EffectDescriptor => ({ plugin, confinem
 /** Describe local Harness controls; child tools still cross the same global execution policy. */
 export const HarnessControlEffects = {
   name: 'pentest-harness-controls', inject: ['pentest'], apply(ctx: Context): void {
-    for (const tool of ['get_goal', 'list_agents', 'list_subagent_models']) {
+    for (const tool of ['get_goal', 'list_agents', 'list_subagent_models', 'ask_user_question',
+      'read', 'read_image', 'glob', 'grep', 'skill', 'job_list', 'job_output', 'schedule_list', 'current_time']) {
       ctx.effect(() => ctx.pentest.registerDescriptor(tool, readDescriptor('harness-control')), `pentest: ${tool} effects`);
     }
+    ctx.effect(() => ctx.pentest.registerDescriptor('working_directory', { plugin: 'harness-control', confinement: 'local-read',
+      describe(args) {
+        const input = z.object({ cd: z.string().optional() }).strict().parse(args);
+        return { destinations: [], effects: [input.cd === undefined ? 'read' : 'modify'], reversible: true };
+      } }), 'pentest: working directory effects');
+    for (const tool of ['write', 'edit']) {
+      ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-filesystem', confinement: 'transport',
+        describe: () => ({ destinations: [], effects: ['overwrite'], reversible: false }) }), `pentest: ${tool} effects`);
+    }
+    for (const tool of ['bash', 'run_code', 'web_search', 'cordis']) {
+      ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-execution', confinement: 'transport',
+        describe: () => ({ destinations: [], effects: ['unknown'], reversible: false }) }), `pentest: ${tool} effects`);
+    }
+    for (const tool of ['load_workspace_dependencies', 'todo_write', 'schedule_create', 'schedule_update', 'present', 'job_kill']) {
+      ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-control', confinement: 'transport',
+        describe: () => ({ destinations: [], effects: ['modify'], reversible: true }) }), `pentest: ${tool} effects`);
+    }
+    ctx.effect(() => ctx.pentest.registerDescriptor('schedule_delete', { plugin: 'harness-control', confinement: 'transport',
+      describe: () => ({ destinations: [], effects: ['delete'], reversible: false }) }), 'pentest: schedule delete effects');
+    ctx.effect(() => ctx.pentest.registerDescriptor('web_fetch', { plugin: 'harness-web', confinement: 'transport',
+      describe(args) { const input = z.object({ url: z.url() }).passthrough().parse(args);
+        return { destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp({ url: input.url, method: 'GET', headers: {} }) }; }
+    }), 'pentest: web fetch effects');
     for (const tool of ['create_goal', 'update_goal', 'subagent', 'subagent_fork', 'send_message', 'interrupt_agent']) {
       ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-control', confinement: 'transport',
         describe: () => ({ destinations: [], effects: ['modify'], reversible: true }) }), `pentest: ${tool} effects`);
@@ -157,7 +187,7 @@ export const HarnessControlEffects = {
 export const HttpTools = {
   name: 'pentest-http', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     register(ctx, { name: 'pentest_http', description: 'Send an in-scope HTTP request. Use identityId for credentials. Redirects and every connection are checked.',
-      parameters: z.toJSONSchema(HttpInputSchema), output,
+      parameters: toolSchema(HttpInputSchema), output,
       async execute(args, exec) {
         const input = HttpInputSchema.parse(args) as HttpInput;
         const session = ctx.pentest.session(exec);
@@ -184,7 +214,7 @@ export const GraphTools = {
       async execute() { return { format: 'rage/0.1', ndjson: ctx.pentest.graph.exportRage() }; } }, readDescriptor('graph'));
     const schema = z.object({ source: z.string(), target: z.string(), maxDepth: z.number().int().min(1).max(16).default(6), includeInferred: z.boolean().default(false) });
     register(ctx, { name: 'pentest_graph_paths', description: 'Query evidence-backed paths. Inferred relationships are excluded unless explicitly requested; discovery-only edges are never treated as access capabilities.',
-      parameters: z.toJSONSchema(schema), output, async execute(args) {
+      parameters: toolSchema(schema), output, async execute(args) {
         const input = schema.parse(args); return { paths: ctx.pentest.graph.paths(input.source, input.target, input.maxDepth, input.includeInferred) };
       } }, readDescriptor('graph'));
   },
@@ -193,7 +223,7 @@ export const CrawlTools = {
   name: 'pentest-crawl', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     const schema = z.object({ seeds: z.array(z.url()).min(1).max(100) });
     register(ctx, { name: 'pentest_crawl', description: 'Crawl scoped seeds within shared budgets; prioritize new endpoints and stop when coverage saturates.',
-      parameters: z.toJSONSchema(schema), output,
+      parameters: toolSchema(schema), output,
       async execute(args, exec) {
         const input = schema.parse(args), session = ctx.pentest.session(exec), crawler = ctx.pentest.crawl(session);
         crawler.observe(input.seeds, 'seed');
@@ -207,7 +237,7 @@ export const AuthzTools = {
   name: 'pentest-authz', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     const compareSchema = z.object({ request: HttpInputSchema, identityA: z.string().uuid(), identityB: z.string().uuid(), anonymous: z.boolean().default(true) });
     register(ctx, { name: 'pentest_authz_compare', description: 'Replay a read request with identity A, identity B and optionally anonymous; retain evidence and mark unverified matches as candidates.',
-      parameters: z.toJSONSchema(compareSchema), output,
+      parameters: toolSchema(compareSchema), output,
       async execute(args, exec) {
         const input = compareSchema.parse(args) as import('@dsh-pentest/authz').ComparisonInput;
         const session = ctx.pentest.session(exec);
@@ -222,7 +252,7 @@ export const BrowserTools = {
   name: 'pentest-browser', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     const schema = z.object({ action: BrowserInputSchema, identityId: z.string().uuid().optional() });
     register(ctx, { name: 'pentest_browser', description: 'Use an isolated Playwright browser for a chat and identity reference. Every HTTP request uses the scope and credential broker. No arbitrary JavaScript.',
-      parameters: z.toJSONSchema(schema), output, async execute(args, exec) {
+      parameters: toolSchema(schema), output, async execute(args, exec) {
         const input = schema.parse(args), session = ctx.pentest.session(exec);
         const result = await ctx.pentest.browser().execute(input.action, session, input.identityId as IdentityId | undefined,
           exec.signal, ctx.pentest.approve);
@@ -241,7 +271,7 @@ export const BrowserTools = {
 export const ReconTools = {
   name: 'pentest-recon', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     register(ctx, { name: 'pentest_intelligence', description: 'Passive DNS records, PDCP associated domains, Chaos subdomains and breach-exposure statistics for scoped subjects. Results feed the evidence graph without expanding target scope.',
-      parameters: z.toJSONSchema(PassiveInputSchema), output, async execute(args, exec) {
+      parameters: toolSchema(PassiveInputSchema), output, async execute(args, exec) {
         return ctx.pentest.intelligence().run(PassiveInputSchema.parse(args), ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'passive-intelligence', confinement: 'brokered', describe(args) {
         const input = PassiveInputSchema.parse(args);
@@ -251,7 +281,7 @@ export const ReconTools = {
     register(ctx, { name: 'pentest_recon_doctor', description: 'Inspect configured ProjectDiscovery executables and verify their pinned checksums.',
       parameters: { type: 'object', additionalProperties: false }, output, async execute() { return ctx.pentest.recon().doctor(); } }, readDescriptor('recon'));
     register(ctx, { name: 'pentest_recon', description: 'Run typed ProjectDiscovery reconnaissance: passive subfinder/asnmap/uncover, or explicit active httpx/katana. Discovery feeds the evidence graph and shared scoped frontier.',
-      parameters: z.toJSONSchema(ReconInputSchema), output, async execute(args, exec) {
+      parameters: toolSchema(ReconInputSchema), output, async execute(args, exec) {
         const input = ReconInputSchema.parse(args), session = ctx.pentest.session(exec);
         return ctx.pentest.recon().run(input, session, ctx.pentest.signal(exec.signal));
       } }, { plugin: 'recon', confinement: 'transport', describe(args) {
@@ -267,7 +297,7 @@ export const FuzzTools = {
     register(ctx, { name: 'pentest_ffuf_doctor', description: 'Verify the pinned ffuf executable and list configured wordlist IDs.',
       parameters: { type: 'object', additionalProperties: false }, output, async execute() { return ctx.pentest.fuzz().doctor(); } }, readDescriptor('ffuf'));
     register(ctx, { name: 'pentest_ffuf', description: 'Fuzz FUZZ in an HTTP(S) URL path or query on a fixed host using ffuf. Supply words or a configured wordlistId (common is built in). Supports status/size/word/line filters and identityId. Every request is individually scoped, effect-reviewed and budgeted; matches feed the evidence graph and crawl frontier. Redirects are not followed.',
-      parameters: z.toJSONSchema(FuzzInputSchema), output, async execute(args, exec) {
+      parameters: toolSchema(FuzzInputSchema), output, async execute(args, exec) {
         return ctx.pentest.fuzz().run(FuzzInputSchema.parse(args), ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'ffuf', confinement: 'brokered', describe(args) {
         const input = FuzzInputSchema.parse(args);
@@ -281,10 +311,10 @@ export const ReaTools = {
     register(ctx, { name: 'pentest_rea_doctor', description: 'Check REA Node compatibility, selected analysis roots and native Ghidra/JDK health. artifactInventoryReady is independent of native decompilation. Unselected engines and external CLI skill registration are informational; this embedded integration does not require rea setup.',
       parameters: { type: 'object', additionalProperties: false }, output, async execute(_args, exec) { return ctx.pentest.rea().doctor(ctx.pentest.signal(exec.signal)); } }, readDescriptor('rea'));
     register(ctx, { name: 'pentest_rea_catalog', description: 'Search advertised REA tools using query and pages; request tool by exact name for its inputSchema. Large schemas can be narrowed with schemaPath. Read the schema before invoking; never guess names. Archive/DMG inventory uses open_binary then inspect_artifact and does not require Ghidra.',
-      parameters: z.toJSONSchema(ReaCatalogInputSchema), output, async execute(args, exec) { return ctx.pentest.rea().discover(args, ctx.pentest.signal(exec.signal)); } }, readDescriptor('rea'));
+      parameters: toolSchema(ReaCatalogInputSchema), output, async execute(args, exec) { return ctx.pentest.rea().discover(args, ctx.pentest.signal(exec.signal)); } }, readDescriptor('rea'));
     const schema = z.object({ tool: z.string().min(1), arguments: z.record(z.string(), z.json()) });
-    register(ctx, { name: 'pentest_rea', description: 'Invoke an advertised REA tool inside the offline macOS workspace. Local analysis URLs become scope-checked crawl hints. Unknown/destructive operations require review.',
-      parameters: z.toJSONSchema(schema), output, async execute(args, exec) {
+    register(ctx, { name: 'pentest_rea', description: 'Invoke an advertised REA tool inside the offline analysis workspace. Local analysis URLs become scope-checked crawl hints. Unknown/destructive operations require review.',
+      parameters: toolSchema(schema), output, async execute(args, exec) {
         const input = schema.parse(args); return ctx.pentest.rea().call(input.tool, input.arguments, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'rea', confinement: 'transport', describe(args) { return { destinations: [], ...reaEffects(schema.parse(args).tool) }; } });
   },
@@ -295,7 +325,7 @@ export const LearningTools = {
       parameters: { type: 'object', additionalProperties: false }, output, async execute() { return ctx.pentest.learning().studies(); } }, readDescriptor('learning'));
     const schema = z.object({ datasetId: z.string().regex(/^[a-zA-Z0-9_-]+$/), trials: z.number().int().min(2).max(1000).default(30) });
     register(ctx, { name: 'pentest_learn', description: 'Run a confined offline Optuna study of crawl ranking on operator-labelled data with separate train/validation/test evidence. Promotion is an owner UI operation.',
-      parameters: z.toJSONSchema(schema), output, async execute(args, exec) {
+      parameters: toolSchema(schema), output, async execute(args, exec) {
         const input = schema.parse(args); return ctx.pentest.learning().run(input.datasetId, input.trials, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'learning', confinement: 'local-read', describe: () => ({ destinations: [], effects: ['read', 'create'], reversible: true }) });
   },
@@ -303,7 +333,7 @@ export const LearningTools = {
 export const TrajectoryTools = {
   name: 'pentest-trajectory', inject: ['tools', 'pentest'], apply(ctx: Context): void {
     register(ctx, { name: 'pentest_trajectory', description: 'List a bounded page of this chat’s verified trajectory metadata (latest 20 by default). Use nextBefore as before for older pages, or eventSeq for one bounded payload preview. Full data stays in the UI and log.',
-      parameters: z.toJSONSchema(TrajectoryInputSchema), output, async execute(args, exec) {
+      parameters: toolSchema(TrajectoryInputSchema), output, async execute(args, exec) {
         return inspectTrajectory(ctx.pentest.trajectories, ctx.pentest.session(exec), args);
       } }, readDescriptor('trajectory'));
   },
@@ -327,9 +357,10 @@ export const ModelEgressPlugin = {
       const signal = runtime.signal(options.signal ?? new AbortController().signal);
       const agent = ctx.get('agents')?.currentInitiator();
       const current = runtime.review.current();
-      const origin = current ?? (agent ? { sessionId: agent.id as unknown as import('@dsh-pentest/contracts').SessionId,
+      const origin = current || agent ? { sessionId: current?.sessionId ?? agent!.id as unknown as import('@dsh-pentest/contracts').SessionId,
         tool: 'model_request', argumentsHash: digest({ provider: options.provider, model: options.model }),
-        arguments: { provider: options.provider, model: options.model }, grants: new Set<string>() } : undefined);
+        ...(current?.callId ? { callId: current.callId } : {}),
+        arguments: { provider: options.provider, model: options.model }, grants: new Set<string>() } : undefined;
       const run = <T,>(operation: () => T): T => origin
         ? runtime.review.run(origin, () => broker.run(scope, signal, operation, providerScope)) : broker.run(scope, signal, operation, providerScope);
       const iterator = run(() => next()[Symbol.asyncIterator]());

@@ -13,6 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import css from './Panel.module.css';
+import { ScopeEditor } from './ScopeEditor.tsx';
 import distribution from '../../../../configs/distribution.json' with { type: 'json' };
 import { registerBrand } from './brand.tsx';
 import type { ReviewQuestion, ReviewGrant } from '../../../dsh-plugin/src/review.ts';
@@ -27,7 +28,7 @@ const en = {
   identities: 'Identities', policy: 'Policy', plugins: 'Plugins', loading: 'Loading engagement…', refresh: 'Refresh',
   requests: 'requests', nodes: 'nodes', edges: 'relationships', noEvents: 'Tool activity will appear here as this chat runs.',
   addIdentity: 'Add identity', name: 'Name', role: 'Role', tenant: 'Tenant', hosts: 'Hosts, separated by commas',
-  secret: 'Secret', kind: 'Credential type', save: 'Save to Keychain', saved: 'Identity saved',
+  secret: 'Secret', kind: 'Credential type', save: 'Save to secure store', saved: 'Identity saved',
   candidate: 'Inferred', verified: 'Verified', observed: 'Observed', detail: 'Details', scope: 'Target scope',
   saveSettings: 'Apply scope and policy', settingsSaved: 'Settings applied; previous requests and crawl frontier were cancelled.',
   modelScope: 'API endpoints configured in Models are allowed automatically. Target scope changes do not require another provider approval.',
@@ -38,13 +39,15 @@ const en = {
   studyCompleted: 'Study completed',
   reviewTitle: 'Action review', blocked: 'Action blocked · waiting for you', allowOnce: 'Allow once', allowAlways: 'Always allow', reject: 'Keep blocked',
   reviewScope: 'Once resumes this call. Always remembers this exact operation and destination for this engagement, until revoked or its configuration changes.',
+  allowHost: 'Always allow all calls to', hostScope: 'All tools, chats, paths, methods and ports for this exact host/IP in this engagement, until revoked. Independent action-effect and filesystem approvals still apply.', manageHosts: 'Manage destination allowances', hostLabel: 'Exact hostname or IP', addHost: 'Add destination allowance', hostSaved: 'Destination allowance saved.',
   savedAllowances: 'Saved allowances', revoke: 'Revoke', reviewDetails: 'Operation and destinations', reviewDone: 'Decision applied.',
   revoked: 'Allowance revoked.', closeReviewNotice: 'Dismiss decision notice',
   pendingApprovals: 'Pending approvals', allAgents: 'All chats and subagents in this engagement',
   noApprovals: 'No pending approvals.', thisChat: 'This chat', subagent: 'Subagent', agent: 'Agent',
   included: 'Included with Djupleita', coreTitle: 'Djupleita · Engagement and identities',
-  coreDescription: 'Engagement scope, request budgets, action review and Keychain identities.',
-  toolSetup: 'Tool setup', setupNeeded: 'Testing tools need setup', setupIntro: 'Plugins are included with Djupleita. Their executable dependencies are installed locally on first use.',
+  coreDescription: 'Engagement scope, request budgets, action review and securely stored identities.',
+  hideSetup: 'Hide setup reminder', showSetup: 'Show setup reminder', setupHidden: 'Setup reminder hidden. Tool setup remains in Plugins.', setupShown: 'Setup reminder restored.',
+  toolSetup: 'Tool setup', setupNeeded: 'Testing tools need setup', setupIntro: 'Install only the tools you need for this engagement. Other toolchains are optional; a requested tool reports its own missing prerequisites.',
   installRecon: 'Install recon tools', installFfuf: 'Install ffuf', ffufInstalled: 'ffuf installed, verified and applied. Retry the failed tool call.', installingTools: 'Installing tools…', loadSetup: 'Load local setup', checkTools: 'Check tools',
   installRea: 'Install REA', reaInstalled: 'REA and its supported Node runtime installed and applied. Native decompilation also requires Ghidra/JDK.',
   setupHelp: 'Install managed recon tools, ffuf, or REA with a supported Node runtime. Archive/DMG inventory is built in; native decompilation needs Ghidra/JDK. Terminal commands run from the Djupleita project folder. Applying tools cancels in-flight tool requests.',
@@ -69,12 +72,14 @@ const zh: Record<Key, string> = {
   studyCompleted: '实验已完成',
   reviewTitle: '操作审查', blocked: '操作已阻止 · 等待您的决定', allowOnce: '允许一次', allowAlways: '始终允许', reject: '保持阻止',
   reviewScope: '允许一次会继续此调用。始终允许会在本次测试中记住完全相同的操作和目标，直到撤销或配置更改。',
+  allowHost: '始终允许所有调用至', hostScope: '在本次测试中允许所有工具、聊天、路径、方法和端口访问此精确主机/IP，直到撤销。操作效果及文件系统审批仍单独适用。', manageHosts: '管理目标许可', hostLabel: '精确主机名或 IP', addHost: '添加目标许可', hostSaved: '目标许可已保存。',
   savedAllowances: '已保存的许可', revoke: '撤销', reviewDetails: '操作和目标', reviewDone: '已应用决定。',
   revoked: '已撤销许可。', closeReviewNotice: '关闭决定通知',
   pendingApprovals: '待批准的操作', allAgents: '本次测试中的所有聊天和子代理',
   noApprovals: '没有待批准的操作。', thisChat: '当前聊天', subagent: '子代理', agent: '代理',
   included: 'Djupleita 内置插件', coreTitle: 'Djupleita · 测试范围与身份',
   coreDescription: '测试范围、请求预算、操作审查与钥匙串身份。',
+  hideSetup: '隐藏安装提醒', showSetup: '显示安装提醒', setupHidden: '安装提醒已隐藏；仍可在插件中安装工具。', setupShown: '已恢复安装提醒。',
   toolSetup: '工具安装', setupNeeded: '测试工具需要安装', setupIntro: 'Djupleita 包含这些插件。首次使用时需在本地安装可执行依赖。',
   installRecon: '安装侦察工具', installFfuf: '安装 ffuf', ffufInstalled: 'ffuf 已安装、验证并启用。请重试失败的工具调用。', installingTools: '正在安装工具…', loadSetup: '载入本地安装', checkTools: '检查工具',
   installRea: '安装 REA', reaInstalled: 'REA 及受支持的 Node 已安装并启用。本机反编译还需要 Ghidra/JDK。',
@@ -129,6 +134,8 @@ function ToolSetupCard({ setup, t, busy, operate, compact = false }: PropsLocale
 }): ReactNode {
   return <section className={css.setup} aria-label={t('toolSetup')}>
     <h3>{t(compact ? 'setupNeeded' : 'toolSetup')}</h3><p>{t('setupIntro')}</p>
+    {compact && <button className={css.reviewButton} disabled={busy} onClick={() => operate('setup/dismiss', t('setupHidden'))}>{t('hideSetup')}</button>}
+    {!compact && setup.bannerDismissed && <button className={css.reviewButton} disabled={busy} onClick={() => operate('setup/show', t('setupShown'))}>{t('showSetup')}</button>}
     <div className={css.setupActions}>
       <button className={css.button} disabled={busy || setup.installing || !setup.installAvailable}
         onClick={() => operate('setup/install-recon', t('setupInstalled'))}>{t(setup.installing ? 'installingTools' : 'installRecon')}</button>
@@ -193,7 +200,9 @@ export function ReviewCards({ useReviews, reviewOperation, sessionId, useSession
       <p>{question.reason}</p>
       <details><summary>{t('reviewDetails')}</summary><pre>{stringify({ operation: question.operation, details: question.details })}</pre></details>
       <small>{t('reviewScope')}</small>
+      {question.host && <p><code>{question.host}</code><br /><small>{t('hostScope')}</small></p>}
       <div className={css.reviewActions}>
+        {question.host && <button className={css.reviewButton} disabled={Boolean(busy)} onClick={() => { void decide('review/decide', { requestId: question.id, sessionId: question.sessionId, choice: 'destination' }, question.id, t('reviewDone')); }}>{t('allowHost')} {question.host}</button>}
         {(['once', 'always', 'reject'] as const).map(choice => <button className={css.reviewButton} key={choice} disabled={Boolean(busy)}
           onClick={() => { void decide('review/decide', { requestId: question.id, sessionId: question.sessionId, choice }, question.id, t('reviewDone')); }}>
           {t(choice === 'once' ? 'allowOnce' : choice === 'always' ? 'allowAlways' : 'reject')}
@@ -201,15 +210,20 @@ export function ReviewCards({ useReviews, reviewOperation, sessionId, useSession
       </div>
     </article>)}</section>)}
     </div>}
-    {setup && needsRecon && <ToolSetupCard setup={setup} t={t} busy={Boolean(busy)} compact
+    {setup && needsRecon && !setup.bannerDismissed && <ToolSetupCard setup={setup} t={t} busy={Boolean(busy)} compact
       operate={(endpoint, success) => { void decide(endpoint, {}, 'setup', success); }} />}
     {notice && <div className={css.reviewNotice} role="status">{notice}<button className={css.reviewButton} aria-label={t('closeReviewNotice')} onClick={() => setNotice('')}>×</button></div>}
     {error && <p role="alert">{error}</p>}
     {state.error && <p role="alert">{state.error}</p>}
+    <details><summary>{t('manageHosts')}</summary><p>{t('hostScope')}</p>
+      <form className={css.form} onSubmit={event => { event.preventDefault(); const host = String(new FormData(event.currentTarget).get('host') ?? ''); void decide('review/destination', { host }, 'destination', t('hostSaved')); }}>
+        <label>{t('hostLabel')}<input name="host" required maxLength={253} placeholder="api.example.test" /></label><button className={css.reviewButton} disabled={Boolean(busy)}>{t('addHost')}</button>
+      </form>
+    </details>
     {Boolean(review?.grants.length) && <>
       <button className={css.reviewButton} aria-expanded={showGrants} onClick={() => setShowGrants(!showGrants)}>{t('savedAllowances')} ({review?.grants.length})</button>
       {showGrants && review?.grants.map(grant => <article className={css.reviewGrant} key={grant.id}>
-        <code>{grant.tool}</code><p>{grant.reason}</p>
+        <code>{grant.kind === 'destination' ? grant.host : grant.tool}</code><p>{grant.reason}</p>{grant.kind === 'destination' && <small>{t('hostScope')}</small>}
         <details><summary>{t('reviewDetails')}</summary><pre>{stringify({ operation: grant.operation, details: grant.details })}</pre></details>
         <button className={css.reviewButton} disabled={Boolean(busy)} onClick={() => { void decide('review/revoke', { grantId: grant.id }, grant.id, t('revoked')); }}>{t('revoke')}</button>
       </article>)}
@@ -339,7 +353,7 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
           <p role="status">{notice}</p></form></div>}
       {tab === 'policy' && <div><ReviewCards useReviews={useReviews} useSessions={useSessions} reviewOperation={reviewOperation} sessionId={sessionId} t={t} /><h3>{t('scope')}</h3><p>{t('modelScope')}</p><div className={css.pills}>{data.engagement.scope.targets.map(rule => <code key={rule.host}>{rule.host}</code>)}</div>
         <form className={css.form} key={data.policyVersion} onSubmit={event => { void saveSettings(event); }}>
-          <label>{t('scope')}<textarea className={css.editor} name="scope" defaultValue={stringify(data.engagement.scope)} required spellCheck={false} /></label>
+          <ScopeEditor scope={data.engagement.scope} title={t('scope')} />
           <label>{t('policy')}<textarea className={css.editor} name="policy" defaultValue={stringify(data.policy)} required spellCheck={false} /></label>
           <button className={css.button} disabled={saving}>{t('saveSettings')}</button><p role="status">{notice}</p>
         </form></div>}

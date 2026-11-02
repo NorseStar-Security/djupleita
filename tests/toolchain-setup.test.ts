@@ -21,8 +21,8 @@ async function fixture() {
   const hash = createHash('sha256').update(archive).digest('hex');
   const tools = Object.fromEntries(ReconToolSchema.options.map(tool => [tool, { version: '1.2.3',
     checksums: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/checksums.txt`,
-    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64'].map(platform => [platform, {
-      url: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/${tool}_1.2.3_macOS_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.zip`, sha256: hash,
+    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].map(platform => [platform, {
+      url: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/${tool}_1.2.3_${platform.startsWith('darwin') ? 'macOS' : 'linux'}_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.zip`, sha256: hash,
     }])),
   }]));
   const lock = { schemaVersion: 1, tools };

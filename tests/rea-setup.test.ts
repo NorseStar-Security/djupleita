@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installReaNode, installRea } from '../packages/rea/src/install.ts';
@@ -12,13 +12,13 @@ const directories: string[] = [];
 afterEach(async () => { vi.unstubAllGlobals(); await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'djupleita-rea-setup-')); directories.push(root);
-  const platform = `darwin-${process.arch}`, prefix = `node-v24.22.1-${platform}`;
+  const platform = `${process.platform}-${process.arch}`, prefix = `node-v24.22.1-${platform}`;
   await mkdir(join(root, 'configs')); await mkdir(join(root, 'fixture', prefix, 'bin'), { recursive: true });
   await writeFile(join(root, 'fixture', prefix, 'bin/node'), '#!/bin/sh\nprintf "v24.22.1\\n"\n', { mode: 0o700 });
   await writeFile(join(root, 'fixture', prefix, 'LICENSE'), 'Node test fixture license');
   execFileSync('/usr/bin/tar', ['-czf', 'release.tar.gz', prefix], { cwd: join(root, 'fixture') });
   const bytes = await readFile(join(root, 'fixture/release.tar.gz'));
-  const lock = { schemaVersion: 1, version: '24.22.1', checksums: 'https://nodejs.org/dist/v24.22.1/SHASUMS256.txt', assets: Object.fromEntries(['darwin-arm64', 'darwin-x64'].map(platform => [platform, {
+  const lock = { schemaVersion: 1, version: '24.22.1', checksums: 'https://nodejs.org/dist/v24.22.1/SHASUMS256.txt', assets: Object.fromEntries(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].map(platform => [platform, {
     url: `https://nodejs.org/dist/v24.22.1/node-v24.22.1-${platform}.tar.gz`, sha256: createHash('sha256').update(bytes).digest('hex'),
   }])) };
   const save = () => writeFile(join(root, 'configs/rea-node.lock.json'), JSON.stringify(lock)); await save();
@@ -58,4 +58,22 @@ it('installs from the owner action and preserves selected analysis roots and eng
     expect(saved.rea.node).toContain('rea-node/24.22.1');
     expect((await runtime.toolSetup()).entries.find(entry => entry.id === 'REA')?.status).toBe('configured');
   } finally { await runtime.close(); }
+});
+it('isolates npm configuration in distinct private files when installing REA', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'djupleita-rea-npm-')); directories.push(root);
+  const runtime = join(root, 'runtime'), node = join(runtime, 'bin/node');
+  await mkdir(join(runtime, 'bin'), { recursive: true }); await mkdir(join(runtime, 'lib/node_modules/npm/bin'), { recursive: true });
+  // The synthetic selected runtime forwards npm to this test's Node, without network.
+  await writeFile(node, `#!/bin/sh\nif [ "$1" = --version ]; then printf 'v24.22.1\\n'; else exec '${process.execPath.replaceAll("'", "'\\''")}' "$@"; fi\n`, { mode: 0o700 });
+  await writeFile(join(runtime, 'lib/node_modules/npm/bin/npm-cli.js'), `
+const fs = require('node:fs'), path = require('node:path');
+const user = process.env.npm_config_userconfig, global = process.env.npm_config_globalconfig;
+if (user === global || fs.readFileSync(user, 'utf8') !== '' || fs.readFileSync(global, 'utf8') !== '') process.exit(2);
+const prefix = process.argv[process.argv.indexOf('--prefix') + 1], pkg = path.join(prefix, 'node_modules/rea-agents');
+fs.mkdirSync(path.join(pkg, 'dist'), {recursive: true});
+fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({name: 'rea-agents', version: '6.8.0'}));
+fs.writeFileSync(path.join(pkg, 'dist/mcp-catalog-full.json'), '{}');
+`);
+  const result = await installRea(root, new AbortController().signal, node);
+  expect(result.node).toBe(await realpath(node)); expect(result.packageRoot).toContain('node_modules/rea-agents');
 });

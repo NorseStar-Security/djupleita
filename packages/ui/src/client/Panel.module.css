@@ -28,6 +28,7 @@
 .includedBadge { display: inline-flex; padding: 3px 8px; border: 1px solid #4b8570; border-radius: 20px; color: #69ad8e; font-size: 11px; }
 .brandName { font-size: 17px; font-weight: 650; letter-spacing: -.35px; }
 .reviewDock { flex: none; width: 100%; max-height: 44vh; overflow: auto; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.panel .reviewDock { --dsw-alias-label-primary: #dce3ef; --dsw-alias-border-l3: #3c485f; --dsw-specific-input-major: #1a2230; --dsw-alias-interactive-bg-hover: #263247; }
 .reviewSummary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; position: sticky; top: 0; z-index: 1; width: 100%; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 9px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .reviewSummary strong { display: inline-block; min-width: 1.6em; margin-left: 5px; border-radius: 12px; text-align: center; background: var(--dsw-alias-interactive-bg-hover); }
 .reviewSummary strong[data-pending=true] { background: #f1c76d; color: #27200e; }

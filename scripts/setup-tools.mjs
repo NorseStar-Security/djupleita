@@ -1,6 +1,6 @@
 /** Install project-local plugin dependencies. Never runs REA's client setup or scans a target. */
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir, access, realpath, readdir, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, access, realpath, rename } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join, resolve, isAbsolute } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -9,7 +9,7 @@ const root = resolve(import.meta.dirname, '..');
 const { values } = parseArgs({ options: { only: { type: 'string', default: 'all' }, 'rea-node': { type: 'string' },
   python: { type: 'string' }, ghidra: { type: 'string' }, 'java-home': { type: 'string' }, 'analysis-root': { type: 'string' }, help: { type: 'boolean' } } });
 if (values.help) {
-  console.log('Usage: pnpm setup:tools [--only recon|ffuf|browser|rea|learning|all]\n\nRecon and ffuf install pinned official macOS releases and verify archive SHA-256 values.\nBrowser installs Chromium from the pinned Playwright package.\nREA installs its pinned supported Node runtime by default. Optional overrides:\n  --rea-node /absolute/node [--ghidra /absolute/ghidra --java-home /absolute/jdk/Contents/Home]\nLearning: --python /absolute/python3 (defaults to the prepared desktop Python).\n\nInstallations stay under .pentest/toolchains. Select Load local setup in Pentest → Plugins afterwards.');
+  console.log('Usage: pnpm setup:tools [--only recon|ffuf|browser|rea|learning|all]\n\nRecon and ffuf install pinned official macOS/Linux releases and verify archive SHA-256 values.\nBrowser installs Chromium from the pinned Playwright package.\nREA installs its pinned supported Node runtime by default. Optional overrides:\n  --rea-node /absolute/node [--ghidra /absolute/ghidra --java-home /absolute/jdk/Contents/Home]\nLearning: --python /absolute/python3 (defaults to /usr/bin/python3 on Linux, or the prepared desktop Python on macOS).\n\nInstallations stay under .pentest/toolchains. Select Load local setup in Pentest → Plugins afterwards.');
   process.exit(0);
 }
 if (!['all', 'recon', 'ffuf', 'browser', 'rea', 'learning'].includes(values.only)) throw new Error('--only must be all, recon, ffuf, browser, rea or learning');
@@ -40,10 +40,11 @@ if (['all', 'browser'].includes(values.only)) {
   const directory = join(root, '.pentest/toolchains/browser');
   await run(process.execPath, [join(root, 'packages/browser/node_modules/playwright/cli.js'), 'install', 'chromium'],
     { ...process.env, PLAYWRIGHT_BROWSERS_PATH: directory });
-  const shell = (await readdir(directory)).find(name => /^chromium_headless_shell-\d+$/.test(name));
-  if (!shell) throw new Error('Playwright did not install its pinned Chromium headless shell');
-  config.browser = { ...config.browser, headless: true, executable: await executable(join(directory, shell,
-    `chrome-headless-shell-mac-${process.arch}`, 'chrome-headless-shell')) };
+  // Resolve from the pinned Playwright revision, rather than reusing an older
+  // directory left by a previous setup. Set this before importing Playwright.
+  process.env.PLAYWRIGHT_BROWSERS_PATH = directory;
+  const { browserExecutable } = await import('../packages/browser/lib/index.js');
+  config.browser = { ...config.browser, headless: true, executable: await executable(browserExecutable({ headless: true })) };
   await save(); console.log('Playwright Chromium configured.');
 }
 if (['all', 'rea'].includes(values.only)) {
@@ -58,7 +59,7 @@ if (['all', 'rea'].includes(values.only)) {
 }
 if (['all', 'learning'].includes(values.only)) {
   const bundled = join(root, 'vendor/deepseek-harness/apps/desktop/.desktop-build/targets', `mac-${process.arch === 'arm64' ? 'arm64' : 'x64'}`, 'runtime/primary-runtime/dependencies/python/bin/python3.12');
-  const python = await executable(values.python ?? bundled), environment = join(root, '.pentest/toolchains/optuna');
+  const python = await executable(values.python ?? (process.platform === 'linux' ? '/usr/bin/python3' : bundled)), environment = join(root, '.pentest/toolchains/optuna');
   await run(python, ['-m', 'venv', environment]);
   const pythonEnv = join(environment, 'bin/python');
   await run(pythonEnv, ['-m', 'pip', 'install', '--disable-pip-version-check', '--requirement', join(root, 'packages/learning/python/requirements.txt')]);

@@ -24,13 +24,14 @@ export async function checkReaNode(node: string, signal: AbortSignal): Promise<s
   return version;
 }
 const LockSchema = z.object({ schemaVersion: z.literal(1), version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.url(),
-  assets: z.record(z.enum(['darwin-arm64', 'darwin-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
+  assets: z.partialRecord(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
 const hash = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 export async function installReaNode(root: string, signal: AbortSignal): Promise<string> {
-  if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed REA runtime supports macOS arm64 and x64.');
+  if (!['darwin', 'linux'].includes(process.platform) || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed REA runtime supports macOS and Linux arm64/x64.');
   const lock = LockSchema.parse(JSON.parse(await readFile(join(root, 'configs/rea-node.lock.json'), 'utf8')));
   if (!supportedReaNode(lock.version)) throw new Error('Pinned REA Node version is unsupported');
-  const platform = `darwin-${process.arch}` as 'darwin-arm64' | 'darwin-x64', asset = lock.assets[platform];
+  const platform = `${process.platform}-${process.arch}` as 'darwin-arm64' | 'darwin-x64' | 'linux-arm64' | 'linux-x64', asset = lock.assets[platform];
+  if (!asset) throw new Error(`No pinned REA Node release for ${platform}`);
   const prefix = `node-v${lock.version}-${platform}`;
   if (asset.url !== `https://nodejs.org/dist/v${lock.version}/${prefix}.tar.gz`) throw new Error('Invalid official Node release URL');
   const directory = join(root, '.pentest/toolchains/rea-node', lock.version, platform), node = join(directory, 'bin/node');
@@ -75,10 +76,12 @@ export async function installRea(root: string, signal: AbortSignal, selectedNode
   await mkdir(prefix, { recursive: true, mode: 0o700 });
   const home = await mkdtemp(join(prefix, '.npm-'));
   try {
+    const userConfig = join(home, 'user.npmrc'), globalConfig = join(home, 'global.npmrc');
+    await Promise.all([userConfig, globalConfig].map(path => writeFile(path, '', { mode: 0o600, flag: 'wx' })));
     await execute(node, [npm, 'install', '--prefix', prefix, `rea-agents@${REA_VERSION}`, '--registry=https://registry.npmjs.org',
       '--ignore-scripts', '--no-audit', '--no-fund', '--engine-strict'], { signal, timeout: 600000, maxBuffer: 2 * 1024 * 1024,
       cwd: prefix, env: { PATH: `${dirname(node)}:/usr/bin:/bin:/usr/sbin:/sbin`, HOME: home, TMPDIR: home,
-        npm_config_userconfig: '/dev/null', npm_config_globalconfig: '/dev/null' } });
+        npm_config_userconfig: userConfig, npm_config_globalconfig: globalConfig } });
     const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as { name: string; version: string };
     if (manifest.name !== 'rea-agents' || manifest.version !== REA_VERSION) throw new Error('Unexpected installed REA package');
     return { node, packageRoot };

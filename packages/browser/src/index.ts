@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { mkdir, writeFile, realpath, mkdtemp, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { z } from 'zod';
 import { PentestError, id } from '@dsh-pentest/contracts';
 import type { IdentityId, Json, SessionId } from '@dsh-pentest/contracts';
@@ -13,7 +14,7 @@ import { matchesHost } from '@dsh-pentest/scope';
 import type { ApprovalAnswerer } from '@dsh-pentest/policy';
 import type { EvidenceStore, Redactor, TrajectoryStore } from '@dsh-pentest/trajectory';
 import type { CrawlService } from '@dsh-pentest/crawl';
-import { sandboxProfile } from '@dsh-pentest/worker';
+import { prepareSandbox } from '@dsh-pentest/worker';
 
 export const BrowserInputSchema = z.discriminatedUnion('operation', [
   z.object({ operation: z.literal('navigate'), url: z.url() }),
@@ -27,7 +28,7 @@ export interface BrowserConfig { root: string; executable?: string | undefined; 
 export function browserExecutable(config: Pick<BrowserConfig, 'executable' | 'headless'>): string {
   if (config.executable) return config.executable;
   const standard = chromium.executablePath();
-  return (config.headless ?? true) ? standard.replace(/chromium-(\d+)\/chrome-mac-(arm64|x64)\/.+$/, 'chromium_headless_shell-$1/chrome-headless-shell-mac-$2/chrome-headless-shell') : standard;
+  return (config.headless ?? true) ? standard.replace(/chromium-(\d+)\/chrome-mac-(arm64|x64)\/.+$/, 'chromium_headless_shell-$1/chrome-headless-shell-mac-$2/chrome-headless-shell').replace(/chromium-(\d+)\/chrome-linux64\/chrome$/, 'chromium_headless_shell-$1/chrome-headless-shell-linux64/chrome-headless-shell').replace(/chromium-(\d+)\/chrome-linux\/chrome$/, 'chromium_headless_shell-$1/chrome-linux/headless_shell') : standard;
 }
 interface Handle { context: BrowserContext; page: Page; identityId?: IdentityId; approve?: ApprovalAnswerer; signal: AbortSignal }
 const shell = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -89,21 +90,26 @@ export class BrowserService {
     if (this.browser) return this.browser;
     if (this.starting) return this.starting;
     this.starting = (async () => {
-      if (process.platform !== 'darwin') throw new PentestError('BROWSER_SANDBOX', 'The browser worker requires the macOS sandbox backend');
       await mkdir(this.config.root, { recursive: true, mode: 0o700 });
       const root = await realpath(this.config.root);
       // macOS Unix socket names have a 103-byte limit. Keep the browser's
       // temporary socket directory private and short even for long engagement paths.
-      const temporary = this.temporary ??= await mkdtemp('/private/tmp/dsh-chrome-');
+      const temporary = this.temporary ??= await mkdtemp(process.platform === 'darwin' ? '/private/tmp/dsh-chrome-' : join(tmpdir(), 'dsh-chrome-'));
       // Playwright's headless shell avoids Chromium's macOS process singleton,
       // which writes to the user's system-selected temp directory regardless of
       // TMPDIR. Its path is derived from the pinned Playwright browser revision.
       const executable = await realpath(browserExecutable(this.config));
       const wrapper = join(root, `chromium-${id<'ProcessId'>()}.sh`);
-      await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/sandbox-exec -p ${shell(sandboxProfile({ writableRoots: [root, temporary], unixSocketRoots: [temporary, root], readableRoots: [dirname(dirname(dirname(executable)))] }))} ${shell(executable)} "$@"\n`, { mode: 0o700, flag: 'wx' });
-      const primary = await chromium.launchPersistentContext(join(root, 'profile'), { executablePath: wrapper, headless: this.config.headless ?? true,
-        env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: root, TMPDIR: temporary }, downloadsPath: root,
-        args: ['--disable-crash-reporter', '--disable-background-networking', '--disable-component-update', '--disable-quic', '--disable-webrtc', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'] });
+      const sandbox = await prepareSandbox({ executable, args: [], cwd: root }, {
+        writableRoots: [root, temporary], unixSocketRoots: [temporary, root], readableRoots: [dirname(dirname(dirname(executable)))],
+      }, this.revocation);
+      await writeFile(wrapper, `#!/bin/sh\nexec ${[sandbox.executable, ...sandbox.args].map(shell).join(' ')} "$@"\n`, { mode: 0o700, flag: 'wx' });
+      let primary: BrowserContext;
+      try {
+        primary = await chromium.launchPersistentContext(join(root, 'profile'), { executablePath: wrapper, headless: this.config.headless ?? true,
+          env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: root, TMPDIR: temporary }, downloadsPath: root,
+          args: ['--disable-crash-reporter', '--disable-background-networking', '--disable-component-update', '--disable-quic', '--disable-webrtc', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'] });
+      } finally { await sandbox.close(); await rm(wrapper, { force: true }); }
       this.browser = primary.browser()!;
       return this.browser;
     })();

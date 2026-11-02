@@ -5,6 +5,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { mergeProfilePatch } from './profile-patch.mjs';
+import { pentestPresetPatch } from './pentest-presets.mjs';
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const upstream = join(root, 'vendor/deepseek-harness');
 export const home = join(root, '.pentest/home');
@@ -67,7 +68,8 @@ export async function prepareProfile(destination = profile) {
     '- id: agent-preset-registry\n  config:\n    default: pentest',
     '- id: desktop-product-telemetry\n  disabled: true',
     '- id: product-analytics\n  disabled: true',
-    `- insert:\n    - id: pentest\n      name: '@dsh-pentest/dsh-plugin/core'\n      config: ${JSON.stringify(config)}\n    - id: pentest-ui\n      name: '@dsh-pentest/ui'\n    - id: preset-pentest\n      name: '@deepseek-ai/dsh-agent-preset'\n      config: ${JSON.stringify(preset)}`,
+    `- insert:\n    - id: pentest\n      name: '@dsh-pentest/dsh-plugin/core'\n      config: ${JSON.stringify(config)}\n    - id: pentest-ui\n      name: '@dsh-pentest/ui'`,
+    await pentestPresetPatch(root, preset),
   ].join('\n');
   const patchPath = join(destination, 'cordis.patch.yml');
   const savedPatch = await readFile(patchPath, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return '[]\n'; });

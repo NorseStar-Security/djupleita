@@ -47,6 +47,20 @@ it('retains network review for public provider DNS answers that resolve privatel
   expect(request).toHaveBeenCalledWith('network', expect.anything(), expect.any(String), expect.any(AbortSignal));
 });
 
+it('accepts configured named private gateways and explicit auxiliary roots without trusting loopback DNS rebinding', async () => {
+  const request = vi.fn(async () => false);
+  for (const address of [{ address: '10.20.30.40', family: 4 }, { address: 'fd00::40', family: 6 }]) {
+    const scopes = new ScopeService(scope('target.example.test'), async () => [address], { request, allows: () => false });
+    const provider = scopes.forModelEndpoints(['https://gateway.example.test/v1', 'https://uploads.example.test/files']);
+    for (const url of ['https://gateway.example.test/v1/responses', 'https://uploads.example.test/files/input']) {
+      expect((await provider.authorize({ url, purpose: 'model' })).addresses).toEqual([address]);
+      expect(() => scopes.check({ url, purpose: 'target' })).toThrow();
+    }
+    await expect(provider.authorize({ url: 'https://undeclared.example.test/v1', purpose: 'model' })).rejects.toThrow('outside');
+  }
+  expect(request).toHaveBeenCalledTimes(2);
+});
+
 it('reviews unexpected endpoints and refuses redirects even for configured providers', async () => {
   let hits = 0;
   const server = http.createServer((_req, res) => { hits++; res.writeHead(302, { location: '/v1/final' }); res.end(); });

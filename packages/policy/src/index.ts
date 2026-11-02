@@ -23,6 +23,29 @@ export const PolicyConfigSchema = z.object({
 export type PolicyConfig = z.infer<typeof PolicyConfigSchema>;
 export interface PolicyRequest { action: Action; signal: AbortSignal }
 export type ApprovalAnswerer = (action: Readonly<Action>, decision: Readonly<Decision>, signal: AbortSignal) => Promise<boolean>;
+export type JudgmentBudget = <T>(milliseconds: number, signal: AbortSignal, operation: (signal: AbortSignal) => Promise<T>) => Promise<T>;
+
+/** Count execution time, excluding a reviewer-controlled pause. Cancellation still applies while paused. */
+export async function withJudgmentBudget<T>(milliseconds: number, signal: AbortSignal,
+  operation: (signal: AbortSignal, pause: () => () => void) => Promise<T>): Promise<T> {
+  const controller = new AbortController(), combined = AbortSignal.any([signal, controller.signal]);
+  let remaining = milliseconds, started = performance.now(), pauses = 0, closed = false, timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => { started = performance.now(); timer = setTimeout(() => controller.abort(new PentestError('JUDGE_TIMEOUT', 'Risk judgment execution timed out')), Math.max(0, remaining)); };
+  const pause = () => {
+    if (pauses++ === 0) { clearTimeout(timer); remaining -= performance.now() - started; }
+    let resumed = false;
+    return () => { if (!resumed) { resumed = true; if (--pauses === 0 && !closed && !combined.aborted) arm(); } };
+  };
+  arm();
+  let abort: () => void = () => {};
+  try {
+    combined.throwIfAborted();
+    return await Promise.race([operation(combined, pause), new Promise<never>((_resolve, reject) => {
+      abort = () => reject(combined.reason); combined.addEventListener('abort', abort, { once: true });
+      if (combined.aborted) abort();
+    })]);
+  } finally { closed = true; clearTimeout(timer); combined.removeEventListener('abort', abort); }
+}
 
 function matchesTool(name: string, glob: string): boolean {
   const escaped = glob.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
@@ -34,7 +57,7 @@ export class PolicyService {
   readonly config: PolicyConfig;
   constructor(config: PolicyConfig, private readonly scope: ScopeService, private readonly provider: JudgmentProvider,
     private readonly model: Readonly<ModelSelection>, private readonly trajectory: TrajectorySink,
-    private readonly redactor: Redactor) {
+    private readonly redactor: Redactor, private readonly judgmentBudget: JudgmentBudget = (ms, signal, operation) => withJudgmentBudget(ms, signal, operation)) {
     this.config = freeze(PolicyConfigSchema.parse(config));
     this.version = digest({ config: this.config, scope: scope.version, provider: provider.name, model });
   }
@@ -61,15 +84,17 @@ export class PolicyService {
       decision = { ...base, kind: 'ask', reasons: ['Deletion or destructive overwrite requires your decision'], source: 'effects' };
     } else if (action.effects.includes('unknown') || (!action.reversible && action.effects.some(effect => effect !== 'read'))) {
       decision = { ...base, kind: 'ask', reasons: [action.plugin === 'unadapted' ? `Tool ${action.tool} has no trusted pentest execution adapter. Its destinations and effects cannot be verified.` : 'The operation has an unknown or irreversible effect'], source: 'effects' };
+    } else if (action.trustedLocalRead === true && action.plugin !== 'unadapted' && action.reversible
+      && action.destinations.length === 0 && action.effects.every(effect => effect === 'read')) {
+      decision = { ...base, kind: 'allow', reasons: ['Trusted local read; existing filesystem and access permissions still apply'], source: `descriptor:${action.plugin}:local-read` };
     } else {
       try {
-        const timeout = AbortSignal.timeout(this.config.judgmentTimeoutMs);
         await this.trajectory.append(action.sessionId, 'policy/judgment-request', this.redactor.json({
           actionId: action.id, actionHash: base.actionHash, provider: this.provider.name, model: this.model,
           action: { ...action, arguments: this.redactor.json(action.arguments) },
         }));
-        const judgment = await this.provider.judge(
-          { ...action, arguments: this.redactor.json(action.arguments) }, this.model, AbortSignal.any([signal, timeout]));
+        const judgment = await this.judgmentBudget(this.config.judgmentTimeoutMs, signal, budgetSignal => this.provider.judge(
+          { ...action, arguments: this.redactor.json(action.arguments) }, this.model, budgetSignal));
         signal.throwIfAborted();
         const checked = JudgmentSchema.parse(judgment);
         await this.trajectory.append(action.sessionId, 'policy/judgment-result', this.redactor.json({
@@ -83,7 +108,7 @@ export class PolicyService {
         await this.trajectory.append(action.sessionId, 'policy/judgment-error', { actionId: action.id,
           provider: this.provider.name, message: this.redactor.text(error instanceof Error ? error.message : 'Judgment failed'), cancelled: signal.aborted });
         signal.throwIfAborted();
-        decision = { ...base, kind: 'ask', reasons: ['The judgment provider could not establish the action’s effects'], source: this.provider.name };
+        decision = { ...base, kind: 'ask', reasons: [`The judgment provider could not establish the action’s effects: ${this.redactor.text(error instanceof Error ? error.message : 'Unknown provider failure')}`], source: this.provider.name };
       }
     }
     return this.record(action, decision);

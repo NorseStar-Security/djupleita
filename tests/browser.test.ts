@@ -16,7 +16,7 @@ import { CrawlFrontier, CrawlService } from '../packages/crawl/src/index.ts';
 import { id } from '../packages/contracts/src/index.ts';
 import { engagement, policyConfig, testJudge, scope } from './fixtures.ts';
 
-it.skipIf(process.platform !== 'darwin')('brokers a real browser, isolates A/B credentials and rejects cross-scope requests', async () => {
+it.skipIf(!['darwin', 'linux'].includes(process.platform))('brokers a real browser, isolates A/B credentials and rejects cross-scope requests', async () => {
   const observed: string[] = [];
   const server = http.createServer((req, res) => {
     observed.push(`${req.url}:${req.headers.authorization ?? 'anonymous'}`);

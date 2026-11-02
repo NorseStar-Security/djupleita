@@ -20,8 +20,8 @@ async function fixture() {
   const archive = await readFile(join(root, 'fixture/release.tar.gz'));
   const sha256 = createHash('sha256').update(archive).digest('hex');
   const lock = { schemaVersion: 1, version: '2.3.0', checksums: 'https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_checksums.txt',
-    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64'].map(platform => [platform, {
-      url: `https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_macOS_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.tar.gz`, sha256,
+    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].map(platform => [platform, {
+      url: `https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_${platform.startsWith('darwin') ? 'macOS' : 'linux'}_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.tar.gz`, sha256,
     }])) };
   const save = () => writeFile(join(root, 'configs/ffuf.lock.json'), JSON.stringify(lock)); await save();
   const download = vi.fn(async () => new Response(archive)); vi.stubGlobal('fetch', download);

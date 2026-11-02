@@ -1,6 +1,7 @@
 /** Optional assessment and proof tools; owner assertions/review stay in authenticated desktop RPC. */
 import type { Context } from '@deepseek-ai/cordis';
 import { z } from 'zod';
+import { toolSchema } from './tool-schema.ts';
 import { canonical, PentestError } from '@dsh-pentest/contracts';
 import type { Json } from '@dsh-pentest/contracts';
 import { PlanSchema, LeadSchema } from '@dsh-pentest/assessment';
@@ -24,7 +25,7 @@ export const AssessmentTools = {
     ctx.effect(() => ctx.pentest.registerDescriptor('pentest_assessment', { plugin: 'assessment', confinement: 'brokered',
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: assessment effects');
     ctx.tools.register({ name: 'pentest_assessment', description: 'Plan and resume bounded assessments with durable coverage and leads. Inspect pages of 50 items. Readiness uses owner-installed contracts. Never mark infrastructure failures as negative security tests. Only the owner can waive cells, change assertions or resume stopped work.',
-      parameters: z.toJSONSchema(schema), output, async execute(args, exec) {
+      parameters: toolSchema(schema), output, async execute(args, exec) {
         const input = schema.parse(args), runtime = ctx.pentest, service = runtime.assessment, session = runtime.session(exec);
         if (input.operation === 'plan') {
           if (input.plan.maxRequests > runtime.engagement.snapshot().remainingRequests) throw new PentestError('ASSESSMENT_BUDGET', 'Run limit exceeds remaining engagement requests');
@@ -55,7 +56,7 @@ export const ValidationTools = {
     ctx.effect(() => ctx.pentest.registerDescriptor('pentest_validate', { plugin: 'validation', confinement: 'brokered',
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: validation effects');
     ctx.tools.register({ name: 'pentest_validate', description: 'Replay a trusted owner-installed read-only object authorization assertion. Runs owner baseline, other identity and negative control through the normal HTTP broker. The deterministic gate returns verified, rejected or inconclusive. Independent owner review is required before a finding enters a report.',
-      parameters: z.toJSONSchema(z.object({ runId, assertionId: z.string() })), output, async execute(args, exec) {
+      parameters: toolSchema(z.object({ runId, assertionId: z.string() })), output, async execute(args, exec) {
         const input = z.object({ runId, assertionId: z.string() }).parse(args);
         return ctx.pentest.redactor.json(await ctx.pentest.assessment.validate(input.runId, input.assertionId, ctx.pentest.session(exec), exec.signal));
       } });

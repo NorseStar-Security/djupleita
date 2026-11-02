@@ -1,12 +1,14 @@
 # Djupleita
 
-A macOS Electron penetration-testing distribution built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), composed from external Cordis plugins. The upstream checkout is pinned in `upstream.lock.json`. Its shared agent loop is unchanged. `patches/djupleita-branding.patch` owns the app name, welcome/menu copy and placement of installed plugin cards; `patches/djupleita-provider-trust.patch` adds captured provider endpoint metadata for the model egress plugin. `patches/djupleita-replay.patch` adds editing and replay in a new conversation, with assessment state inherited before replay starts.
+A penetration-testing distribution with a macOS Electron app and a Linux web interface built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), composed from external Cordis plugins. The upstream checkout is pinned in `upstream.lock.json`. Its shared agent loop is unchanged. `patches/djupleita-branding.patch` owns the app name, welcome/menu copy and placement of installed plugin cards; `patches/djupleita-provider-trust.patch` adds captured provider endpoint metadata for the model egress plugin. `patches/djupleita-replay.patch` adds editing and replay in a new conversation, with assessment state inherited before replay starts.
 
 The Pentest sidebar sits beside each chat and shows its trajectory, evidence graph, assessments, identities, scope/effect policy, studies, and plugin configuration. Target actions use managed adapters. Unknown DSH tools pause for an explicit operator decision that identifies their unverified destinations and effects.
 
 **Recon beside the conversation.** Open **Pentest → Graph** to explore discovered hosts and their relationships while reading the agent's results. Discovery records host candidates and the evidence linking them. These observations do not establish that a host is live, verify a vulnerability, or expand the authorized target scope.
 
 ## Run
+
+For Linux, follow the [Linux web setup guide](docs/linux.md). It covers Bubblewrap isolation, Secret Service credentials, browser dependencies and remote access through an SSH tunnel. Native Windows is unsupported. The commands below launch the macOS desktop app.
 
 Requires macOS 15+, Node 24.9+ for this workspace, pnpm, and Apple's Command Line Tools. REA has its own stricter Node requirements, described below.
 
@@ -18,7 +20,7 @@ cd djupleita
 node scripts/security/install.mjs
 node scripts/security/hooks.mjs
 pnpm bootstrap
-pnpm --dir vendor/deepseek-harness install --ignore-scripts
+npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
 node vendor/deepseek-harness/node_modules/electron/install.js
 pnpm build:harness
 pnpm install --ignore-scripts
@@ -30,9 +32,13 @@ pnpm desktop
 
 The upstream package manager may provision its declared Node/pnpm versions. The first desktop launch also prepares DSH's bundled dependency runtime. This is a development app; a signed/notarized installer is not produced by these commands.
 
-Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. Add authorized targets separately. New engagements start with empty target scope.
+Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. Add authorized targets separately. New engagements start with empty active target scope and an editable example draft. See [scope and destination allowances](docs/scope.md) and [normal modes with Pentest tools](docs/modes.md).
 
-The main **Plugins** page lists thirteen managed **Djupleita** bundles under **Installed plugins**, before the upstream settings and experimental plugins. Each card says **Included with Djupleita**, exposes an enable switch, and opens its configuration and engagement controls. **Djupleita · Engagement and identities** provides the required scope, effect-review and Keychain settings. Disabling an optional bundle removes its tools while required enforcement remains active. New bundles are added once when an existing profile upgrades; later launches preserve enable/disable choices.
+Pentest extends **Standard**, **Creator**, **PTC** and **Minimal** while preserving each mode's tools, commands and skills. The **Pentest** mode is an alias of extended Standard. Ordinary file search, reading, shell and editing tools remain available; PTC exposes both normal and Pentest tools through its generated SDK. Children inherit the selected composition and engagement policy. Profile upgrades preserve saved mode choices, provider settings and disabled plugins.
+
+In **Policy**, replace the domain in the populated target-and-exclusion draft, review its preview, then select **Apply scope and policy**. The example allows the apex and subdomains over HTTP/HTTPS on ports 80/443, with all paths, and excludes the named subtree. It stays inactive until applied. Existing scope is preserved, and the working example remains available as a reference.
+
+The main **Plugins** page lists thirteen managed **Djupleita** bundles under **Installed plugins**, before the upstream settings and experimental plugins. Each card says **Included with Djupleita**, exposes an enable switch, and opens its configuration and engagement controls. **Djupleita · Engagement and identities** provides the required scope, effect-review and secure credential settings. Disabling an optional bundle removes its tools while required enforcement remains active. New bundles are added once when an existing profile upgrades; later launches preserve enable/disable choices.
 
 The **Assessment workflow** and **Finding validation** bundles add five assessment skills, durable bounded runs, readiness checks, coverage and leads, read-only object authorization proofs, owner review and redacted report export. Start with the [assessment workflow guide](docs/assessment-workflow.md). Other finding families remain hypotheses until a dedicated validator is available; reports include only current deterministic proofs accepted by the owner.
 
@@ -52,7 +58,7 @@ Use the exact provider ID saved in the source desktop profile. The command impor
 
 `configs/distribution.json` describes the distribution's bundles. Internal `@dsh-pentest/*` service names, `pentest_*` tool names and `.pentest` data paths remain stable so existing engagement data and integrations continue to work.
 
-`pnpm web` offers a browser preview using the same plugins. Run one desktop or preview process per engagement. A second writer is refused. After an unclean shutdown, inspect `.pentest/engagements/<id>/writer.lock`, verify its PID has exited, and remove that stale lock before restarting.
+`pnpm web` runs the browser interface using the same plugins on macOS and Linux. Run one desktop or web process per engagement. A second writer is refused. After an unclean shutdown, inspect `.pentest/engagements/<id>/writer.lock`, verify its PID has exited, and remove that stale lock before restarting.
 
 The default engagement is `.pentest/engagement.json`. Set `DSH_PENTEST_ENGAGEMENT` to another JSON file to select a different engagement. Each engagement gets its own graph, identity metadata, trajectories, evidence, browser state, worker directories, studies and telemetry outbox.
 
@@ -73,17 +79,17 @@ Use `/goal <objective>` in the chat composer for work that should continue acros
 | Plugin | Implemented behavior |
 | --- | --- |
 | Engagement / scope | Host wildcards, schemes, ports, paths, exclusions, explicit private network grants, and separate target/intelligence/model/telemetry destinations. Shared request, duration, rate, concurrency, depth and byte limits. |
-| Effect policy | Selected-model judgments by default; optional TypeSafe Jev. Deletes, overwrites, unknown effects and explicit rule denials pause for an inline owner decision. Reversible active actions are allowed or warned according to judgments and operator rules. |
+| Effect policy | Trusted local reads use deterministic descriptors without a model call, subject to explicit rules and existing access permissions. Ambiguous effects use the selected model or optional TypeSafe Jev. Deletes, overwrites, unknown effects and explicit rule denials pause for an inline owner decision. |
 | Subagents / goals | Harness plugins exposed in the pentest preset: fresh/forked children, messages and interruption, child completion wake-ups, and durable `/goal` objectives with automatic rounds and pause/resume controls. Every child retains engagement enforcement. |
 | HTTP | DNS-pinned requests, checked redirects, host-bound identity delivery, bounded responses and retained redacted evidence. |
 | Passive recon | DNS A/AAAA/CNAME/MX/NS/TXT/CAA through a scoped DoH service; ProjectDiscovery associated domains, Chaos subdomains and breach-exposure statistics. |
-| ProjectDiscovery CLI | Typed adapters for subfinder, asnmap, uncover, httpx and Katana. Pinned executable hashes; private proxy; macOS process/file/network confinement. Active httpx/Katana operations are explicit. |
+| ProjectDiscovery CLI | Typed adapters for subfinder, asnmap, uncover, httpx and Katana. Pinned executable hashes; private proxy; macOS/Linux process, file and network confinement. Active httpx/Katana operations are explicit. |
 | [ffuf fuzzing](packages/plugin-ffuf/README.md) | URL path/query fuzzing, named or inline wordlists, status/size/word/line filters and identity references. Each generated request crosses the HTTP broker; matches feed the evidence graph and scoped crawl frontier. |
-| REA | Pinned `rea-agents@6.8.0` MCP server, dynamic catalog, bounded calls, offline analysis workspace, native macOS ownership helper, configurable Ghidra and JDK. |
+| REA | Pinned `rea-agents@6.8.0` MCP server, dynamic catalog, bounded calls, offline analysis workspaces on macOS/Linux, native macOS ownership helper, configurable Ghidra and JDK. |
 | Browser | Playwright headless Chromium, separate chat/identity contexts, navigate/snapshot/click/fill, brokered HTTP, blocked direct browser sockets, WebSockets and service workers. |
 | Crawl | Shared frontier fed by browser, HTTP, REA and recon observations. Identity-aware deduplication, endpoint-template limits, depth limits, coverage saturation and ranking. Discovery never adds scope. |
 | Graph | SQLite evidence graph, observed/inferred/verified relationships, bounded path queries and RAGE 0.1 NDJSON import/export. Discovery edges are not access capabilities. |
-| Identities / authz | Keychain-backed bearer, Basic, header and browser-storage identities. A/B/anonymous read replays retain separate evidence and produce authorization candidates. Trusted ownership assertions can verify findings. |
+| Identities / authz | Keychain/Secret Service bearer, Basic, header and browser-storage identities. A/B/anonymous read replays retain separate evidence and produce authorization candidates. Trusted ownership assertions can verify findings. |
 | Trajectories / export | Hash-linked, fsynced, redacted chat/session/tool/judgment events. Optional OTLP/HTTP JSON logs with stable chat trace IDs, durable destination cursors and retry outbox. |
 | Learning | Confined offline Optuna ranking studies, immutable dataset hashes, separate train/validation/test splits, SQLite trial history, owner-only promotion requiring held-out improvement. |
 
@@ -123,9 +129,13 @@ The desktop displays 100 events at a time. **Older events** opens previous pages
 
 The graph displays up to 150 nodes and 500 relationships between those nodes per page, with total engagement counts above it. Use **Previous page** and **Next page** to browse nodes. Cross-page relationships remain in the saved graph and its full export. These bounds prevent growing trajectories and recon graphs from exhausting the Electron renderer. See the [October 2026 crash investigation](docs/crash-investigation-2026-10-31.md).
 
-Configured model adapters authorize only their captured API root, scheme, host and port; this permission does not authorize pentest traffic to the provider. DNS answers remain validated and pinned, and redirects are refused. Public API names resolving to private or loopback addresses still require network review. Put auxiliary API/collector hosts under the matching `scope.services` purpose: `api.typesafe.ai` for Jev, `dns.google` for the default DoH resolver, `api.projectdiscovery.io` and `dns.projectdiscovery.io` for PDCP/Chaos, and your collector host for telemetry. Manual `scope.services.model` rules remain available for auxiliary model services and adapters that do not report their endpoints. CLI passive providers also need their intelligence destinations allowed, such as `crt.sh` for the default subfinder source.
+Configured model adapters authorize their captured API roots, including explicitly declared auxiliary roots, with exact scheme, host, port and path boundaries; this permission does not authorize pentest traffic to the provider. DNS answers remain validated and pinned, and redirects are refused. Explicitly configured API roots can resolve to private gateway addresses. Loopback access is automatic only for explicitly configured loopback endpoints; other names resolving to loopback still require network review. Put auxiliary API/collector hosts under the matching `scope.services` purpose: `api.typesafe.ai` for Jev, `dns.google` for the default DoH resolver, `api.projectdiscovery.io` and `dns.projectdiscovery.io` for PDCP/Chaos, and your collector host for telemetry. Manual `scope.services.model` rules remain available for auxiliary model services and adapters that do not report their endpoints. CLI passive providers also need their intelligence destinations allowed, such as `crt.sh` for the default subfinder source.
 
-Add credentials in **Identities** and pass only their IDs to tools. Secrets are stored by the native Keychain helper; identity JSON contains metadata and references. Host bindings are independent from engagement scope. Service keys can use a headers identity, for example `X-API-Key` for PDCP or an `Authorization` header for Chaos. Keep secrets out of chats and plugin JSON.
+For a blocked destination, **Always allow all calls to HOST** saves an allowance for that exact hostname or IP across tools, chats, subagents, paths, methods and ports in the engagement. It survives restarts and scope edits until revoked. Add entries directly under **Manage destination allowances** and revoke them under **Saved allowances**. This explicit owner override can expand network scope, including an excluded host; action-effect and filesystem decisions remain separate. **Allow once** and **Always allow** keep their narrower operation-specific meaning.
+
+Trusted local inspection, including current-directory viewing, status and trajectory reads, needs no model judgment. Review cards identify the remaining access, destination or effect restriction. Human approval waits do not consume the judge's execution timeout, and transport failures retain their actual error. Automatic descriptor decisions and owner overrides are recorded in the trajectory.
+
+Add credentials in **Identities** and pass only their IDs to tools. Secrets are stored in macOS Keychain or Linux Secret Service; identity JSON contains metadata and references. Host bindings are independent from engagement scope. Service keys can use a headers identity, for example `X-API-Key` for PDCP or an `Authorization` header for Chaos. Keep secrets out of chats and plugin JSON.
 
 Browser field entry is treated as a reversible modification and evaluated by the selected judge. Clicks request review by default because a selector alone does not establish the resulting effect. Operator policy rules can specialize this behavior; each resulting HTTP request still goes through scope and effect checks.
 
@@ -146,6 +156,8 @@ The [TypeSafe adapter](https://docs.typesafe.ai/introduction/quickstart) asks se
 
 Plugin code ships with Djupleita; executable dependencies are managed downloads. A new chat shows a setup card when recon tools, ffuf or REA are missing. Select **Install recon tools**, **Install ffuf** or **Install REA** there, or open the relevant plugin's **Tool setup** (also available in **Pentest → Plugins**). Recon setup installs and activates subfinder, asnmap, uncover, httpx and Katana without manually editing binary paths. After installation, retry the failed call. Applying configuration cancels in-flight tool requests.
 
+Install only the toolchains needed for the engagement. **Hide setup reminder** dismisses the compact card across refreshes and restarts, including after a partial installation. Full setup stays available in **Plugins**, where **Show setup reminder** restores it. A requested tool still reports its own missing prerequisites.
+
 **Install and verify dependencies from the UI.** **Install recon tools** downloads the pinned releases and checks their hashes. **Load local setup** imports an existing installation; **Check tools** refreshes readiness. A **Verified** label confirms executable and SHA-256 checks.
 
 From the project directory, after `pnpm build`, use:
@@ -160,13 +172,13 @@ pnpm setup:tools --only learning
 
 `pnpm setup:tools` installs all five groups. Installations stay under `.pentest/toolchains`; paths and executable hashes are written to `.pentest/tooling.json`. Select **Load local setup** in the UI after a terminal installation to apply it to an existing engagement. **Check tools** refreshes readiness checks. Recon and ffuf are marked Verified only after checking executable hashes. Other dependencies are marked Configured when files are present; REA's doctor checks runtime compatibility. These operations do not scan a target or use a model provider. No sudo, global binary installation, or changes to other coding clients are required.
 
-For URL fuzzing, open **Plugins → ffuf fuzzing → Tool setup → Install ffuf**. `configs/ffuf.lock.json` pins the official ffuf 2.3.0 archives and SHA-256 values for both macOS architectures. The `pentest_ffuf` tool accepts a URL such as `https://app.example.test/FUZZ`, inline `words` or a configured wordlist ID, response filters and an optional `identityId`. See the [ffuf plugin guide](packages/plugin-ffuf/README.md) for examples and supported controls. Its private gateway checks each expanded URL through the HTTP broker, including path scope, deletion review and per-request budgets. Matching uses redacted responses; redirects, vhost fuzzing, recursion and external mutator commands are not exposed.
+For URL fuzzing, open **Plugins → ffuf fuzzing → Tool setup → Install ffuf**. `configs/ffuf.lock.json` pins the official ffuf 2.3.0 archives and SHA-256 values for macOS/Linux arm64 and x64. The `pentest_ffuf` tool accepts a URL such as `https://app.example.test/FUZZ`, inline `words` or a configured wordlist ID, response filters and an optional `identityId`. See the [ffuf plugin guide](packages/plugin-ffuf/README.md) for examples and supported controls. Its private gateway checks each expanded URL through the HTTP broker, including path scope, deletion review and per-request budgets. Matching uses redacted responses; redirects, vhost fuzzing, recursion and external mutator commands are not exposed.
 
 **ffuf is installed and checked from the same interface.** Its **Verified** label confirms the local executable matches its configured SHA-256. Fuzzing requests still pass through engagement scope, budgets and inline action review.
 
-`configs/recon-tools.lock.json` pins official GitHub macOS arm64 and Intel archives: subfinder 2.17.0, asnmap 1.1.1, uncover 1.2.1, httpx 1.12.0 and Katana 1.8.0. Archive SHA-256 values are checked before extraction, license notices are retained, and every execution checks the configured binary hash. Re-running setup reuses verified installations; checksum mismatches fail closed. The recon installer activates these managed versions, replacing existing mappings for the five tools. Updating releases requires updating the lockfile and reviewing the matching official release checksums.
+`configs/recon-tools.lock.json` pins official GitHub macOS/Linux arm64 and x64 archives: subfinder 2.17.0, asnmap 1.1.1, uncover 1.2.1, httpx 1.12.0 and Katana 1.8.0. Archive SHA-256 values are checked before extraction, license notices are retained, and every execution checks the configured binary hash. Re-running setup reuses verified installations; checksum mismatches fail closed. The recon installer activates these managed versions, replacing existing mappings for the five tools. Updating releases requires updating the lockfile and reviewing the matching official release checksums.
 
-REA remains pinned to `rea-agents@6.8.0`; its installer never runs `rea setup`. **Install REA** also installs a checksum-pinned Node 24.22.1 runtime for the host's macOS architecture; `configs/rea-node.lock.json` records official sources and hashes. An explicit `--rea-node /absolute/node` override must satisfy REA's version requirements. Chromium comes from the pinned Playwright package. `--python /absolute/python3`, `--analysis-root /absolute/artifacts`, `--ghidra /absolute/ghidra` and `--java-home /absolute/jdk/Contents/Home` select local runtimes. The default Python is DSH's prepared desktop Python runtime. Ghidra and its JDK are optional manual downloads, described below and in the setup panel.
+REA remains pinned to `rea-agents@6.8.0`; its installer never runs `rea setup`. **Install REA** also installs a checksum-pinned Node 24.22.1 runtime for the host's macOS/Linux architecture; `configs/rea-node.lock.json` records official sources and hashes. An explicit `--rea-node /absolute/node` override must satisfy REA's version requirements. Chromium comes from the pinned Playwright package. `--python /absolute/python3`, `--analysis-root /absolute/artifacts`, `--ghidra /absolute/ghidra` and `--java-home /absolute/jdk/Contents/Home` select local runtimes. Linux defaults to `/usr/bin/python3`; macOS uses DSH's prepared desktop Python runtime. Ghidra and its JDK are optional manual downloads, described below and in the setup panel.
 
 `configs/plugins.example.json` documents the configuration shape. Saved engagement settings take precedence on startup, with newly installed recon tools filling missing mappings. **Load local setup** explicitly imports the current installation into an existing engagement. The model cannot install dependencies, edit owner settings or promote a study.
 
@@ -207,7 +219,9 @@ DSH_TEST_FFUF="$PWD/.pentest/toolchains/ffuf/2.3.0/darwin-arm64/ffuf" \
 pnpm test
 ```
 
-Install Chromium with `pnpm setup:tools --only browser`, then **Load local setup**. Native browser/worker tests require macOS; optional REA/Optuna/Keychain smoke tests run when their environment variables are set. Tests use local fixtures and generated credentials. They do not scan an external target.
+Install Chromium with `pnpm setup:tools --only browser`, then **Load local setup**. Browser/worker tests run on macOS and Linux with their respective sandbox backend. Optional REA/Optuna/native secure-store smoke tests run when their environment variables are set. Tests use local fixtures and generated credentials. They do not scan an external target.
+
+CI builds and tests both macOS and Linux. After building the harness and installing Playwright Chromium, `DSH_TEST_WEB_UI=1 pnpm exec vitest run tests/web-issues.test.ts` checks authenticated web scope editing, destination approvals and setup controls. Mode fixtures compare upstream catalogs, invoke native file tools and execute both normal and Pentest tools through PTC; replay fixtures check inherited assessment membership.
 
 For the real confined Ghidra decompile test, also set `DSH_TEST_GHIDRA` to its installation and `DSH_TEST_JAVA_HOME` to the selected JDK home. Adjust the managed Node architecture to `darwin-x64` on Intel. The test compiles a tiny local Mach-O fixture, imports it and checks its decompiled return value.
 
@@ -219,6 +233,7 @@ Current material limits:
 - A/B automation currently replays read methods. Mutating authorization tests use individually reviewed HTTP/browser actions; automatic scenario reset/cleanup is not implemented.
 - Authorization matches are candidates until ownership/sensitivity is established. RAGE uses open `dsh` types and preserves internal distinctions in `x-dsh` extensions; it does not implement RAGE's cloud collection corpus or derivation engine.
 - Real browser, Keychain, REA MCP/native helper, confined Ghidra 12.1.4 decompilation and Optuna workers were tested on Apple silicon. Intel Mac, ProjectDiscovery CLI combinations and authenticated PDCP/Jev/hosted-collector calls still require environment-specific validation.
+- Linux x64 workers, Chromium A/B contexts, Secret Service, REA MCP, ffuf, Optuna and owner approval were tested with local fixtures. The complete harness/distribution build and authenticated web startup also passed on native Linux arm64. Arm64 managed-tool execution and Linux Ghidra decompilation still need environment-specific validation.
 
 The code is split into `packages/*`; `packages/dsh-plugin` composes their lifetimes and registers DSH tools, and `packages/ui` contributes the sidebar and inline chat reviews. Upstream and generated dependencies are ignored. `.pentest` contains private local data and should not be committed.
 

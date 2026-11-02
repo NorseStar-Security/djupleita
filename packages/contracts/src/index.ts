@@ -98,6 +98,8 @@ export const ActionSchema = z.object({
   destinations: z.array(DestinationSchema),
   effects: z.array(EffectSchema).min(1),
   reversible: z.boolean(),
+  /** Set only by a trusted local adapter, never copied from tool arguments. */
+  trustedLocalRead: z.boolean().optional(),
   identityId: z.string().uuid().optional(),
   parentId: z.string().optional(),
 });

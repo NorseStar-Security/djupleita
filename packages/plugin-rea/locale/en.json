@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Djupleita \u00b7 REA & Ghidra",
-    "description": "Included with Djupleita. Offline reverse engineering with REA, native macOS support and configurable Ghidra/JDK runtimes."
+    "description": "Included with Djupleita. Offline reverse engineering with REA, macOS and Linux support and configurable Ghidra/JDK runtimes."
   }
 }

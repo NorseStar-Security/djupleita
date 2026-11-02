@@ -2,7 +2,7 @@
 
 Included with Djupleita. Find this bundle in **Plugins**, open its card for configuration, or disable it with its switch. Required engagement scope and effect review stay active.
 
-Select **Tool setup → Install ffuf** to download the official, checksum-pinned ffuf 2.3.0 release for Apple silicon or Intel macOS. **Check tools** verifies the executable hash. Terminal alternative, after `pnpm build`: `pnpm setup:tools --only ffuf`, then **Load local setup** in the UI. The executable and license stay under `.pentest/toolchains/ffuf`.
+Select **Tool setup → Install ffuf** to download the official, checksum-pinned ffuf 2.3.0 release for macOS or Linux on arm64/x64. **Check tools** verifies the executable hash. Terminal alternative, after `pnpm build`: `pnpm setup:tools --only ffuf`, then **Load local setup** in the UI. The executable and license stay under `.pentest/toolchains/ffuf`.
 
 The `pentest_ffuf` tool accepts a fixed HTTP(S) origin with `FUZZ` in the path or query. For example, after authorizing your target:
 

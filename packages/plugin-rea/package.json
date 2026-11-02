@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Included with Djupleita. Offline reverse engineering with REA, native macOS support and configurable Ghidra/JDK runtimes.",
+  "description": "Included with Djupleita. Offline reverse engineering with REA, macOS and Linux support and configurable Ghidra/JDK runtimes.",
   "license": "MIT",
   "exports": {
     "./package.json": "./package.json",

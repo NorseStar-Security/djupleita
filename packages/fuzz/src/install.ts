@@ -8,15 +8,16 @@ import { z } from 'zod';
 
 const execute = promisify(execFile);
 const LockSchema = z.object({ schemaVersion: z.literal(1), version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.url(),
-  assets: z.record(z.enum(['darwin-arm64', 'darwin-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
+  assets: z.partialRecord(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
 const hash = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const MAX_ARCHIVE = 64 * 1024 * 1024;
 export async function installFfuf(root: string, signal: AbortSignal): Promise<{ path: string; sha256: string }> {
   const lock = LockSchema.parse(JSON.parse(await readFile(join(root, 'configs/ffuf.lock.json'), 'utf8')));
-  if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed ffuf releases support macOS arm64 and x64.');
+  if (!['darwin', 'linux'].includes(process.platform) || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed ffuf releases support macOS and Linux arm64/x64.');
   signal.throwIfAborted();
-  const platform = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64', asset = lock.assets[platform];
-  const expected = `https://github.com/ffuf/ffuf/releases/download/v${lock.version}/ffuf_${lock.version}_macOS_${process.arch === 'arm64' ? 'arm64' : 'amd64'}.tar.gz`;
+  const platform = `${process.platform}-${process.arch}` as 'darwin-arm64' | 'darwin-x64' | 'linux-arm64' | 'linux-x64', asset = lock.assets[platform];
+  if (!asset) throw new Error(`No pinned ffuf release for ${platform}`);
+  const expected = `https://github.com/ffuf/ffuf/releases/download/v${lock.version}/ffuf_${lock.version}_${process.platform === 'darwin' ? 'macOS' : 'linux'}_${process.arch === 'arm64' ? 'arm64' : 'amd64'}.tar.gz`;
   if (asset.url !== expected) throw new Error('Invalid official ffuf release URL');
   const directory = join(root, '.pentest/toolchains/ffuf', lock.version, platform);
   await mkdir(directory, { recursive: true, mode: 0o700 });
