@@ -28,6 +28,21 @@ async function fixture() {
   return { root, lock, save, download };
 }
 
+it.each(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'])('installs the official ffuf release for %s', async platform => {
+  const [os, arch] = platform.split('-');
+  vi.stubGlobal('process', { ...process, platform: os, arch });
+  const f = await fixture(), binary = await installFfuf(f.root, AbortSignal.timeout(5000));
+  expect(binary.path).toContain(`/${platform}/ffuf`);
+  expect(f.download).toHaveBeenCalledWith(f.lock.assets[platform]!.url, expect.anything());
+});
+
+it('requires pinned ffuf releases for every supported host before downloading', async () => {
+  const f = await fixture();
+  delete f.lock.assets['linux-x64']; await f.save();
+  await expect(installFfuf(f.root, AbortSignal.timeout(5000))).rejects.toThrow('linux-x64');
+  expect(f.download).not.toHaveBeenCalled();
+});
+
 it('installs verified ffuf with a license, reuses it, and rejects local tampering', async () => {
   const f = await fixture(), binary = await installFfuf(f.root, AbortSignal.timeout(5000));
   expect(await readFile(join(binary.path, '../LICENSE.txt'), 'utf8')).toContain('fixture license');

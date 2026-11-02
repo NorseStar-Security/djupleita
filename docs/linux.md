@@ -4,26 +4,26 @@ Djupleita runs on Linux through `pnpm web`. Managed releases cover glibc Linux x
 
 ## Install
 
-Debian 12 / Ubuntu 22.04 or newer, Node 24.9+, pnpm 10.32.1 and Git are required. Install system dependencies with your distribution's package manager:
+Follow the [Linux install instructions in the README](../README.md#linux-browser-interface) for system packages, the pinned package-manager commands, build order, browser/tool installation and launch. The README also lists common startup errors and remote access through SSH. The Chromium download and managed tools stay under `.pentest/toolchains/`. Follow [SECURITY.md](../SECURITY.md) to install the scanner/hooks and privately provision confidential-reference rules before publishing changes.
+
+### Node and package managers
+
+Use a full Node 24 LTS installation (24.9+) for the Linux architecture, including npm and matching development headers. The native build finds headers relative to the actual `node` executable, so a copied standalone executable or an unrelated system `libnode-dev` package may leave it unable to build. This check prints the required header path or fails before a long build:
 
 ```sh
-sudo apt-get update
-sudo apt-get install build-essential bubblewrap curl unzip zip python3 python3-venv libsecret-tools dbus-user-session gnome-keyring
-pnpm bootstrap
-npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
-pnpm build:harness
-pnpm install --frozen-lockfile
-pnpm build
-node packages/browser/node_modules/playwright/cli.js install-deps chromium
-pnpm setup:tools --only browser
-pnpm setup:tools --only recon
-pnpm setup:tools --only ffuf
-pnpm web
+node --version
+node --input-type=module <<'NODE'
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+const header = resolve(dirname(process.execPath), '../include/node/node_api.h');
+if (!existsSync(header)) throw new Error('Missing ' + header + '; install the full matching Node distribution.');
+console.log('Node-API headers: ' + header);
+NODE
 ```
 
-Run these commands from the repository root. Playwright's `install-deps` installs distribution packages and may request sudo. The Chromium download and managed tools stay under `.pentest/toolchains/`. Linux does not need `pnpm build:keychain` or Electron installation. Follow [SECURITY.md](../SECURITY.md) to install the scanner/hooks and privately provision confidential-reference rules before publishing changes.
+The root workspace declares pnpm 10.32.1; `vendor/deepseek-harness` declares pnpm 11.28.5. Use the README's explicit `npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness ...` command for the latter. Use a user-owned Node installation if global npm installation reports `EACCES`. Registry timeouts can make first installation slow; retry the failed pinned install instead of editing lockfiles or disabling checks.
 
-The launcher prints a loopback URL. To use a remote Linux machine, choose a fixed port with `DSH_PENTEST_PORT=19876 pnpm web`, then forward it with `ssh -L 19876:127.0.0.1:19876 user@linux-host` and open the authenticated loopback URL printed at startup through that tunnel. Keep this single-user interface on loopback; it is not a public multi-user service. Configure models and targets in the same interface used on macOS. Do not run two writers against one engagement.
+Use a separate Linux checkout and install its dependencies there. Copying macOS `node_modules` or native build outputs into Linux does not produce a Linux installation. Keep runtime state and credentials local to each test installation. Stop the app with **Ctrl+C** in its launch terminal before restarting; do not run two writers against one engagement.
 
 ## Isolation
 
@@ -37,7 +37,35 @@ Check namespace support before using managed tools:
 /usr/bin/bwrap --unshare-all --ro-bind / / -- /bin/true
 ```
 
-If this fails, use your distribution's supported Bubblewrap/user-namespace configuration. Recent Ubuntu versions require an AppArmor profile permitting user namespaces for Bubblewrap; see the [Ubuntu release notes](https://documentation.ubuntu.com/release-notes/24.04/). Restricted containers and hardened hosts may prohibit namespace creation. Install/configure the supported backend instead of removing confinement flags or running the web app as root. The plugin dependency view checks that Bubblewrap exists; actual launch also verifies that the host permits its namespaces.
+If this fails, use your distribution's supported Bubblewrap/user-namespace configuration. The plugin dependency view checks that Bubblewrap exists; actual launch also verifies that the host permits its namespaces.
+
+### Bubblewrap on Ubuntu 24.04
+
+Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor. A missing Bubblewrap permission can cause `setting up uid map: Permission denied`, `loopback: Failed RTM_NEWADDR: Operation not permitted`, or namespace-creation errors. See Ubuntu's [user-namespace restrictions and application-profile example](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions).
+
+Check existing policy with your administrator first. Prefer the distribution's supported Bubblewrap profile; do not add a second profile matching `/usr/bin/bwrap` or replace an existing policy. If no matching profile exists, this application-specific example was exercised on the Ubuntu 24.04 test VM:
+
+```sh
+sudo sh -eu <<'SH'
+test ! -e /etc/apparmor.d/djupleita-bwrap
+cat > /etc/apparmor.d/djupleita-bwrap <<'PROFILE'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile djupleita-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}
+PROFILE
+apparmor_parser -a /etc/apparmor.d/djupleita-bwrap
+SH
+/usr/bin/bwrap --unshare-all --ro-bind / / -- /bin/true
+```
+
+This permits Bubblewrap to create namespaces; its filesystem, PID and network sandbox remains required. Keep AppArmor and system-wide namespace restrictions enabled. Run the final check as the regular app user.
+
+### Containers and hardened hosts
+
+Container seccomp/AppArmor policies, masked `/proc` mounts or host namespace limits can still deny Bubblewrap even when it is installed. `Can't mount proc` and `Operation not permitted` can indicate these outer restrictions. A normal Linux VM avoids an additional container sandbox for local testing. On a managed host, have its administrator provide the required namespace support; do not use privileged containers, drop confinement flags or run the app as root as an installation workaround.
 
 ## Identity credentials
 
@@ -59,6 +87,10 @@ Use the same user session for the daemon and web process. Provision the encrypte
 
 ## Optional tools
 
+Every managed tool group supports glibc Linux x64 and arm64: recon (subfinder, asnmap, uncover, httpx, Katana), ffuf, Playwright Chromium, REA and Python learning. The three install buttons use the Linux backend's architecture. Browser and learning setup use the terminal commands in the README. Release manifests require checksum pins for both Linux architectures as well as both macOS architectures.
+
+An error saying installation supports only macOS identifies an older backend. Update the source to a revision with the Linux adapters, run `pnpm install --frozen-lockfile` and `pnpm build`, stop the old `pnpm web` process, and relaunch it. Keep `.pentest/`; re-run setup and select **Load local setup** to activate the verified installation.
+
 `pnpm setup:tools --only rea` installs pinned REA and its own supported Node runtime. Archive inventory and static analysis run offline. Native decompilation needs Linux Ghidra and a matching Linux JDK:
 
 ```sh
@@ -78,6 +110,8 @@ pnpm exec vitest run tests/fuzz.test.ts tests/worker.test.ts tests/linux-platfor
 ```
 
 The Secret Service round-trip is opt-in (`DSH_TEST_SECRET_SERVICE=1`). Use a disposable session bus/keyring for that check. The default provider tests use a synthetic helper and never touch an existing keyring. Tests use local fixtures; no real model calls or target scans are required.
+
+After recon setup, `DSH_TEST_RECON_CONFIG="$PWD/.pentest/tooling.json" pnpm exec vitest run tests/toolchain-setup.test.ts` also executes the version command of every installed recon binary in an offline sandbox. CI installs and checks these binaries on Linux and macOS; installer fixtures cover all four OS/architecture combinations.
 
 See [Target scope and destination allowances](scope.md) for the editable scope example, saved host approvals, and setup reminder controls shared with macOS.
 

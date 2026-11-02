@@ -28,6 +28,22 @@ async function fixture() {
   await writeFile(join(packageRoot, 'dist/mcp-catalog-full.json'), '{}');
   return { root, lock, save, download, packageRoot };
 }
+
+it.each(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'])('installs the official REA Node runtime for %s', async platform => {
+  const [os, arch] = platform.split('-');
+  vi.stubGlobal('process', { ...process, platform: os, arch });
+  const f = await fixture(), installed = await installRea(f.root, AbortSignal.timeout(5000));
+  expect(installed.node).toContain(`/${platform}/bin/node`);
+  expect(installed.packageRoot).toBe(f.packageRoot);
+  expect(f.download).toHaveBeenCalledWith(f.lock.assets[platform]!.url, expect.anything());
+});
+
+it('requires pinned REA runtimes for every supported host before downloading', async () => {
+  const f = await fixture();
+  delete f.lock.assets['linux-arm64']; await f.save();
+  await expect(installReaNode(f.root, AbortSignal.timeout(5000))).rejects.toThrow('linux-arm64');
+  expect(f.download).not.toHaveBeenCalled();
+});
 it('installs the pinned supported runtime, retains its license and rejects a tampered executable', async () => {
   const f = await fixture(); const node = await installReaNode(f.root, new AbortController().signal);
   expect(f.download).toHaveBeenCalledTimes(1);

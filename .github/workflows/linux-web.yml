@@ -33,12 +33,14 @@ jobs:
           pnpm typecheck
           pnpm build:harness
           pnpm build
+          pnpm setup:tools --only recon
           pnpm setup:tools --only rea
           pnpm setup:tools --only ffuf
           pnpm setup:tools --only learning
       - name: Check confined adapters with local fixtures
         env:
           DSH_TEST_WEB_UI: '1'
+          DSH_TEST_RECON_CONFIG: ${{ github.workspace }}/.pentest/tooling.json
           DSH_TEST_FFUF: ${{ github.workspace }}/.pentest/toolchains/ffuf/2.3.0/linux-x64/ffuf
           DSH_TEST_OPTUNA_PYTHON: ${{ github.workspace }}/.pentest/toolchains/optuna/bin/python
           DSH_TEST_REA_ROOT: ${{ github.workspace }}/.pentest/toolchains/rea/node_modules/rea-agents
@@ -81,8 +83,10 @@ jobs:
           pnpm typecheck
           pnpm build:harness
           pnpm build
+          pnpm setup:tools --only recon
       - name: Check shared modes, approvals, replay and web controls
         env:
           DSH_TEST_WEB_UI: '1'
+          DSH_TEST_RECON_CONFIG: ${{ github.workspace }}/.pentest/tooling.json
         run: |
           pnpm exec vitest run tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/policy.test.ts tests/review.test.ts tests/replay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts tests/browser.test.ts tests/worker.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/secret-service.test.ts packages/dsh-plugin/src/integration.test.ts

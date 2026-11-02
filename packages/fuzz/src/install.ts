@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 const execute = promisify(execFile);
 const LockSchema = z.object({ schemaVersion: z.literal(1), version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.url(),
-  assets: z.partialRecord(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
+  assets: z.record(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
 const hash = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const MAX_ARCHIVE = 64 * 1024 * 1024;
 export async function installFfuf(root: string, signal: AbortSignal): Promise<{ path: string; sha256: string }> {

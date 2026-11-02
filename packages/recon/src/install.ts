@@ -12,7 +12,7 @@ const execute = promisify(execFile);
 const AssetSchema = z.object({ url: z.string().url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) });
 const LockSchema = z.object({ schemaVersion: z.literal(1), tools: z.record(ReconToolSchema,
   z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.string().url(),
-    assets: z.partialRecord(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), AssetSchema) })) });
+    assets: z.record(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), AssetSchema) })) });
 type Binary = { path: string; sha256: string };
 const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const MAX_ARCHIVE = 256 * 1024 * 1024;

@@ -8,7 +8,79 @@ The Pentest sidebar sits beside each chat and shows its trajectory, evidence gra
 
 ## Run
 
-For Linux, follow the [Linux web setup guide](docs/linux.md). It covers Bubblewrap isolation, Secret Service credentials, browser dependencies and remote access through an SSH tunnel. Native Windows is unsupported. The commands below launch the macOS desktop app.
+| Platform | Interface | Installation |
+| --- | --- | --- |
+| Linux x64 / arm64 (glibc) | Browser with a Linux backend | [Linux install](#linux-browser-interface) |
+| macOS 15+ | Electron desktop; browser also available | [macOS install](#macos-desktop) |
+
+Native Windows is unsupported.
+
+### Linux (browser interface)
+
+Use Debian 12 / Ubuntu 22.04 or newer and a regular Linux user account. Install the full **Node 24 LTS distribution (24.9+) with npm and development headers**, using the [official Node downloads](https://nodejs.org/en/download). The native build needs `<Node prefix>/include/node/node_api.h`; copying only the `node` executable is insufficient. The managed Linux tools support glibc x64 and arm64; Alpine/musl is outside this setup.
+
+First install the system packages and check that this user can create worker sandboxes:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y git ca-certificates build-essential bubblewrap curl unzip zip \
+  python3 python3-venv libsecret-tools dbus-user-session gnome-keyring
+node --version                         # Must be 24.9 or newer; Node 24 LTS is tested.
+npm install --global pnpm@10.32.1
+/usr/bin/bwrap --unshare-all --ro-bind / / -- /bin/true
+```
+
+The Bubblewrap check must exit successfully before continuing. On Ubuntu 24.04, `Permission denied` or `Operation not permitted` can mean a missing application-specific AppArmor permission: follow [Bubblewrap on Ubuntu 24.04](docs/linux.md#bubblewrap-on-ubuntu-2404). Restricted containers may also prohibit the required namespaces; a normal Linux VM is the more straightforward test environment.
+
+Clone and build on Linux, then install the browser and common tools:
+
+```sh
+git clone https://github.com/NorseStar-Security/djupleita.git
+cd djupleita
+pnpm bootstrap
+npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
+pnpm install --frozen-lockfile
+pnpm build:harness
+pnpm build
+node packages/browser/node_modules/playwright/cli.js install-deps chromium
+pnpm setup:tools --only browser
+pnpm setup:tools --only recon
+pnpm setup:tools --only ffuf
+pnpm setup:tools --only rea
+pnpm setup:tools --only learning
+DSH_PENTEST_PORT=19876 pnpm web
+```
+
+Use `sudo` for system package installation; run the build, tool setup and app as your regular user. Playwright's `install-deps` may request sudo for its system libraries. The first install downloads packages, Chromium and tool archives, so allow several gigabytes of free disk and several minutes. The distribution uses pnpm 10.32.1; its pinned harness uses pnpm 11.28.5 through the explicit `npx` command above. Keep both lockfiles intact. Linux does not need Electron installation or `pnpm build:keychain`.
+
+Open the **full authenticated URL printed at startup**, including its token. The address stays on `127.0.0.1`; opening the bare address in a new browser session can return `401`. Configure your provider/API key in the fresh profile, choose a Linux workspace, then configure authorized target scope. A new checkout has its own `.pentest/home` and does not inherit another installation's credentials. Keep `.pentest/` private. Contributors should also install the scanner/hooks and provision private reference rules as described in [SECURITY.md](SECURITY.md).
+
+For a Linux server or a Linux VM on your Mac, run the app there and open an SSH tunnel from the computer running your browser:
+
+```sh
+ssh -N -L 127.0.0.1:19876:127.0.0.1:19876 user@linux.example.test
+```
+
+Open the startup URL through that tunnel. Workspaces, tools and files are on Linux. Running `pnpm web` directly on macOS exercises the macOS adapters; use a Linux VM to test the Linux adapters. This is an authenticated, single-user interface; keep it on loopback.
+
+**Common Linux setup problems**
+
+| What you see | What to do |
+| --- | --- |
+| `Node-API headers missing`, `cc: not found`, or an unsupported Node version | Install a complete Node 24 distribution, including its matching `include/node` directory, and `build-essential`. See [Node checks](docs/linux.md#node-and-package-managers). |
+| pnpm version/lockfile errors, or npm `EACCES` | Use the two package-manager versions shown above and a user-owned Node installation. Repeat the failed install command with its lockfile preserved; do not run the app as root to work around npm permissions. |
+| Tool installation says only macOS arm64/x64 is supported | The backend predates the Linux adapters. Update the source, rebuild with `pnpm build`, and stop and restart `pnpm web` before retrying. See [tool setup](#first-run-tool-setup). |
+| Bubblewrap reports UID-map, namespace, loopback or `/proc` permission errors | Check [Ubuntu AppArmor and container restrictions](docs/linux.md#isolation). Install the scoped Bubblewrap permission where needed; keep worker isolation enabled. |
+| Chromium executable missing or shared-library errors | Run `install-deps chromium`, then `pnpm setup:tools --only browser`. After terminal setup while the app is running, select **Load local setup** in **Pentest → Plugins**. |
+| `SECRET_SERVICE_UNAVAILABLE`, a locked keyring, or no D-Bus session | Identity credentials need `secret-tool` and an unlocked encrypted keyring in the app's user session. Headless/SSH setup is [documented here](docs/linux.md#identity-credentials). The web UI and model-provider setup can run before identity storage is configured. |
+| `401` in the browser, or the remote page does not open | Use the full current startup URL; for a remote host, keep the SSH tunnel open and use matching ports. Restarting the app changes the startup token. |
+| First-run API-key prompt or **Choose workspace to start** | Configure a model provider and select a workspace on the Linux host. Browser access from your Mac does not automatically expose Mac files or import Mac credentials. |
+| **Action blocked · waiting for you**, or tools still shown as missing | New scope starts empty. Apply authorized targets in **Pentest → Policy**, review the blocked operation, and configure missing dependencies in **Plugins**. REA/Ghidra and learning need [additional setup](docs/linux.md#optional-tools). |
+| Port already in use, or engagement writer-lock error | Stop the existing app process or select a free `DSH_PENTEST_PORT`. Use one writer per engagement. Remove a stale writer lock only after confirming its recorded process has exited. |
+
+See the [Linux guide](docs/linux.md) for sandbox details, keyring sessions, optional tools and validation commands.
+
+### macOS (desktop)
 
 Requires macOS 15+, Node 24.9+ for this workspace, pnpm, and Apple's Command Line Tools. REA has its own stricter Node requirements, described below.
 
@@ -31,6 +103,8 @@ pnpm desktop
 ```
 
 The upstream package manager may provision its declared Node/pnpm versions. The first desktop launch also prepares DSH's bundled dependency runtime. This is a development app; a signed/notarized installer is not produced by these commands.
+
+### Configure the app (both platforms)
 
 Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. Add authorized targets separately. New engagements start with empty active target scope and an editable example draft. See [scope and destination allowances](docs/scope.md) and [normal modes with Pentest tools](docs/modes.md).
 
@@ -158,7 +232,9 @@ Plugin code ships with Djupleita; executable dependencies are managed downloads.
 
 Install only the toolchains needed for the engagement. **Hide setup reminder** dismisses the compact card across refreshes and restarts, including after a partial installation. Full setup stays available in **Plugins**, where **Show setup reminder** restores it. A requested tool still reports its own missing prerequisites.
 
-**Install and verify dependencies from the UI.** **Install recon tools** downloads the pinned releases and checks their hashes. **Load local setup** imports an existing installation; **Check tools** refreshes readiness. A **Verified** label confirms executable and SHA-256 checks.
+**Install and verify dependencies from the UI.** **Install recon tools** downloads the pinned releases and checks their hashes. **Install ffuf** and **Install REA** also run on Linux x64/arm64 and macOS x64/arm64. The backend chooses its own operating system and architecture, regardless of the computer running the browser. **Load local setup** imports an existing installation; **Check tools** refreshes readiness. A **Verified** label confirms executable and SHA-256 checks.
+
+If an existing Linux build says managed tools support only macOS, update to a revision containing the Linux adapters, run `pnpm install --frozen-lockfile` and `pnpm build`, then stop and restart `pnpm web`. A running backend keeps its loaded installer code until restart. Re-run the install action; existing verified downloads are reused. Keep the private `.pentest/` directory and load local setup afterwards.
 
 From the project directory, after `pnpm build`, use:
 
@@ -233,7 +309,7 @@ Current material limits:
 - A/B automation currently replays read methods. Mutating authorization tests use individually reviewed HTTP/browser actions; automatic scenario reset/cleanup is not implemented.
 - Authorization matches are candidates until ownership/sensitivity is established. RAGE uses open `dsh` types and preserves internal distinctions in `x-dsh` extensions; it does not implement RAGE's cloud collection corpus or derivation engine.
 - Real browser, Keychain, REA MCP/native helper, confined Ghidra 12.1.4 decompilation and Optuna workers were tested on Apple silicon. Intel Mac, ProjectDiscovery CLI combinations and authenticated PDCP/Jev/hosted-collector calls still require environment-specific validation.
-- Linux x64 workers, Chromium A/B contexts, Secret Service, REA MCP, ffuf, Optuna and owner approval were tested with local fixtures. The complete harness/distribution build and authenticated web startup also passed on native Linux arm64. Arm64 managed-tool execution and Linux Ghidra decompilation still need environment-specific validation.
+- Linux x64 workers, Chromium A/B contexts, Secret Service, REA MCP, ffuf, Optuna and owner approval were tested with local fixtures. On native Linux arm64, the harness/distribution build, authenticated web install buttons, all five recon binaries in offline workers, brokered ffuf/Chromium, REA MCP and Optuna passed. Linux Ghidra decompilation still needs environment-specific validation.
 
 The code is split into `packages/*`; `packages/dsh-plugin` composes their lifetimes and registers DSH tools, and `packages/ui` contributes the sidebar and inline chat reviews. Upstream and generated dependencies are ignored. `.pentest` contains private local data and should not be committed.
 

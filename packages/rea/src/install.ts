@@ -24,7 +24,7 @@ export async function checkReaNode(node: string, signal: AbortSignal): Promise<s
   return version;
 }
 const LockSchema = z.object({ schemaVersion: z.literal(1), version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.url(),
-  assets: z.partialRecord(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
+  assets: z.record(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })) });
 const hash = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 export async function installReaNode(root: string, signal: AbortSignal): Promise<string> {
   if (!['darwin', 'linux'].includes(process.platform) || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed REA runtime supports macOS and Linux arm64/x64.');
