@@ -2,7 +2,8 @@
 import { it, expect, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import http from 'node:http';
 import { once } from 'node:events';
@@ -17,7 +18,7 @@ import type { GenerateOptions, PreparedAdapterCall, StreamChunk } from '@deepsee
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { id } from '@dsh-pentest/contracts';
-import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, HarnessControlEffects, ModelEgressPlugin, modelJudge, apply } from './index.ts';
+import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, HarnessControlEffects, ModelEgressPlugin, ReaTools, AssessmentTools, modelJudge, apply } from './index.ts';
 import { PluginConfigSchema } from './runtime.ts';
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
 import { engagement, policyConfig, testJudge } from '../../../tests/fixtures.ts';
@@ -501,4 +502,41 @@ it('cancels native web_fetch while its brokered request is awaiting a response',
     expect((await pending).isError).toBe(true);
     expect(h.unbrokered).not.toHaveBeenCalled();
   } finally { controller.abort(); await h.close(); server.closeAllConnections(); server.close(); await once(server, 'close'); }
+});
+
+it('serializes REA and assessment tools through the Fireworks adapter without dangling references or lost fields', async () => {
+  const h = await harness();
+  try {
+    await h.ctx.plugin(ReaTools); await h.ctx.plugin(AssessmentTools);
+    const tools = ['pentest_rea', 'pentest_assessment'].map(name => {
+      const definition = h.ctx.tools.get(name)!;
+      return { name, description: definition.description, parameters: definition.parameters };
+    });
+    const pi = resolve('vendor/deepseek-harness/packages/llm/llm-pi-ai/node_modules/@earendil-works/pi-ai/dist');
+    const { streamSimple } = await import(pathToFileURL(join(pi, 'api/anthropic-messages.js')).href);
+    const { FIREWORKS_MODELS } = await import(pathToFileURL(join(pi, 'providers/fireworks.models.js')).href);
+    const model = FIREWORKS_MODELS['accounts/fireworks/routers/deepseek-flash-latest'];
+    const network = vi.fn(async () => { throw new Error('External model requests forbidden in this fixture'); });
+    let payload: { tools: Array<{ name: string; input_schema: Record<string, unknown> }> } | undefined;
+    const stream = streamSimple(model, { messages: [
+      { role: 'system', content: '', toolsAdded: tools, timestamp: 0 },
+      { role: 'user', content: 'Local serialization fixture', timestamp: 0 },
+    ] }, { apiKey: 'synthetic-fixture', maxTokens: 1, fetch: network, onPayload(value: typeof payload) {
+      payload = value; throw new Error('Offline capture complete');
+    } });
+    for await (const _chunk of stream) { /* Drain the local error completion. */ }
+    expect(network).not.toHaveBeenCalled();
+    expect(payload?.tools).toHaveLength(2);
+    const rea = payload!.tools.find(tool => tool.name === 'pentest_rea')!.input_schema;
+    expect(rea).toMatchObject({ type: 'object', required: ['tool', 'arguments'],
+      properties: { arguments: { type: 'object', additionalProperties: {} } } });
+    expect(JSON.stringify(payload)).not.toContain('"$ref"');
+    const assessment = payload!.tools.find(tool => tool.name === 'pentest_assessment')!.input_schema;
+    expect(assessment).toMatchObject({ type: 'object', required: ['operation'], properties: {
+      operation: { anyOf: expect.arrayContaining([{ const: 'plan' }, { const: 'inspect' }].map(value => expect.objectContaining(value))) },
+      plan: expect.any(Object), runId: expect.any(Object), cellId: expect.any(Object),
+    } });
+    // Advertising a wider argument shape cannot bypass execution-time JSON validation.
+    expect((await h.invoke('pentest_rea', { tool: 'fixture', arguments: { invalid: undefined } })).isError).toBe(true);
+  } finally { await h.close(); }
 });
