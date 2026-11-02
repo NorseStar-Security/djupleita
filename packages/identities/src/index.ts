@@ -1,4 +1,4 @@
-/** Credential references, destination-bound delivery, and a macOS Keychain provider. */
+/** Credential references, destination-bound delivery, and native secure stores. */
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import { PentestError, id } from '@dsh-pentest/contracts';
@@ -10,6 +10,60 @@ export interface SecretProvider {
   get(reference: string, signal?: AbortSignal): Promise<string | undefined>;
   set(reference: string, value: string, signal?: AbortSignal): Promise<void>;
   remove(reference: string, signal?: AbortSignal): Promise<void>;
+}
+export function nativeSecretProvider(keychainHelper: string): SecretProvider {
+  if (process.platform === 'darwin') return new MacKeychainProvider(keychainHelper);
+  if (process.platform === 'linux') return new LinuxSecretServiceProvider();
+  throw new PentestError('CREDENTIAL_PLATFORM', 'Native credential storage supports macOS and Linux');
+}
+
+/** libsecret talks to the unlocked user-session keyring. Never falls back to disk. */
+export class LinuxSecretServiceProvider implements SecretProvider {
+  constructor(private readonly executable = '/usr/bin/secret-tool') {}
+  async get(reference: string, signal?: AbortSignal): Promise<string | undefined> {
+    const result = await this.call('lookup', reference, undefined, signal);
+    if (result.code === 1 && !result.output && !result.failed) return undefined;
+    if (result.code !== 0 || result.failed) throw this.failure();
+    const encoded = result.output.trimEnd();
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded))
+      throw new PentestError('SECRET_SERVICE_OUTPUT', 'Invalid secure store response');
+    return Buffer.from(encoded, 'base64').toString('utf8');
+  }
+  async set(reference: string, value: string, signal?: AbortSignal): Promise<void> {
+    const result = await this.call('store', reference, Buffer.from(value).toString('base64'), signal);
+    if (result.code !== 0 || result.failed) throw this.failure();
+  }
+  async remove(reference: string, signal?: AbortSignal): Promise<void> {
+    const result = await this.call('clear', reference, undefined, signal);
+    if (result.failed || result.code !== 0 && result.code !== 1) throw this.failure();
+  }
+  private failure(): PentestError { return new PentestError('SECRET_SERVICE_UNAVAILABLE',
+    'Linux credentials require libsecret-tools and an unlocked Secret Service keyring in this user’s D-Bus session. See docs/linux.md.'); }
+  private async call(operation: string, reference: string, input?: string, signal?: AbortSignal): Promise<{ code: number | null; output: string; failed: boolean }> {
+    signal?.throwIfAborted();
+    const args = [operation, ...(operation === 'store' ? ['--label=Djupleita engagement identity'] : []), 'application', 'djupleita', 'reference', reference];
+    const child = spawn(this.executable, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    return new Promise((resolve, reject) => {
+      let output = '', size = 0, failed = false, settled = false;
+      const finish = (error?: Error, code: number | null = null) => {
+        if (settled) return; settled = true; clearTimeout(timer); signal?.removeEventListener('abort', aborted);
+        if (error) reject(error); else resolve({ code, output, failed });
+      };
+      const aborted = () => { child.kill('SIGKILL'); finish(new PentestError('SECRET_SERVICE_CANCELLED', 'Credential operation cancelled')); };
+      const timer = setTimeout(() => { child.kill('SIGKILL'); finish(this.failure()); }, 30000);
+      signal?.addEventListener('abort', aborted, { once: true }); if (signal?.aborted) aborted();
+      child.stdout.on('data', (bytes: Buffer) => {
+        size += bytes.length;
+        if (size > 4 * 1024 * 1024) { child.kill('SIGKILL'); finish(new PentestError('SECRET_SERVICE_OUTPUT', 'Secure store reply exceeded its size limit')); }
+        else output += bytes.toString('utf8');
+      });
+      // Error messages are never returned: a provider might echo secret material.
+      child.stderr.on('data', () => { failed = true; });
+      child.on('error', () => finish(this.failure()));
+      child.stdin.on('error', () => { child.kill('SIGKILL'); finish(this.failure()); });
+      child.on('close', code => finish(undefined, code)); child.stdin.end(input ?? '');
+    });
+  }
 }
 export const IdentitySchema = z.object({
   id: z.string().uuid(), name: z.string().min(1), role: z.string().min(1), tenant: z.string().min(1),
@@ -23,7 +77,7 @@ export class IdentityService {
   private readonly redactions = new Map<IdentityId, () => void>();
   constructor(private readonly engagementId: EngagementId, private readonly secrets: SecretProvider, private readonly redactor: Redactor) {}
 
-  /** Restore non-secret metadata independently of its Keychain record. */
+  /** Restore non-secret metadata independently of its secure-store record. */
   restore(identity: Identity): void {
     IdentitySchema.parse(identity);
     for (const host of identity.hosts) matchesHost('validation.invalid', host);

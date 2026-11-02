@@ -1,0 +1,9 @@
+{
+  "targets": [
+    { "host": "example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false },
+    { "host": "*.example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false }
+  ],
+  "exclusions": ["excluded.example.test", "*.excluded.example.test"],
+  "networks": [],
+  "services": { "intelligence": [], "model": [], "telemetry": [] }
+}

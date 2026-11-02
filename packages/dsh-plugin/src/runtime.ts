@@ -8,7 +8,7 @@ import { ScopeService } from '@dsh-pentest/scope';
 import { PolicyConfigSchema, PolicyService, JevJudge } from '@dsh-pentest/policy';
 import type { PolicyConfig } from '@dsh-pentest/policy';
 import { EvidenceStore, Redactor, TrajectoryStore, previewData } from '@dsh-pentest/trajectory';
-import { IdentityService, MacKeychainProvider, IdentitySchema } from '@dsh-pentest/identities';
+import { IdentityService, nativeSecretProvider, IdentitySchema } from '@dsh-pentest/identities';
 import type { Identity, SecretProvider } from '@dsh-pentest/identities';
 import { HttpBroker, ServiceJsonClient } from '@dsh-pentest/http';
 import { AttackGraph } from '@dsh-pentest/graph';
@@ -95,6 +95,7 @@ export class PentestRuntime {
   private closing = false;
   private toolStatus?: Promise<SetupEntry[]>;
   private installing = false;
+  private setupBannerDismissed = false;
   private readonly setupAbort = new AbortController();
   get scope(): ScopeService { return this.currentScope; }
   get frontier(): CrawlFrontier { return this.currentFrontier; }
@@ -108,7 +109,7 @@ export class PentestRuntime {
     this.currentPlugins = freeze(PluginConfigSchema.parse(config.plugins ?? {}));
     this.trajectories = new TrajectoryStore(join(this.root, 'trajectories'), config.engagement.id, this.redactor);
     this.evidence = new EvidenceStore(this.root, this.redactor);
-    this.identities = new IdentityService(config.engagement.id, config.secrets ?? new MacKeychainProvider(resolve(config.keychainHelper)), this.redactor);
+    this.identities = new IdentityService(config.engagement.id, config.secrets ?? nativeSecretProvider(resolve(config.keychainHelper)), this.redactor);
     this.graph = new AttackGraph(join(this.root, 'graph.sqlite'), config.engagement.id);
     this.assessment = new AssessmentService(join(this.root, 'assessment.sqlite'), {
       revision: () => this.assessmentRevision(), checkUrl: url => { this.scope.check({ url, purpose: 'target' }); },
@@ -151,6 +152,9 @@ export class PentestRuntime {
           binaries: { ...runtime.currentPlugins.recon.binaries, ...saved.recon.binaries } } });
       }
       catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+      try {
+        runtime.setupBannerDismissed = z.object({ setupBannerDismissed: z.boolean() }).parse(JSON.parse(await readFile(join(runtime.root, 'preferences.json'), 'utf8'))).setupBannerDismissed;
+      } catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
       await runtime.review.load();
       const metadata = z.array(IdentitySchema).parse(JSON.parse(await readFile(join(runtime.root, 'identities.json'), 'utf8')));
       for (const identity of metadata) runtime.identities.restore(identity as Identity);
@@ -183,7 +187,8 @@ export class PentestRuntime {
     const selected = this.currentPolicy.judge;
     const provider = selected?.kind === 'jev' ? new JevJudge((url, body, signal) => this.services().send(url, 'model', body,
       signal, selected.identityId as import('@dsh-pentest/contracts').IdentityId | undefined), selected.model ?? 'jev-latest', selected.fallback ? this.judge : undefined) : this.judge;
-    return new PolicyService(this.currentPolicy, this.scope, provider, this.model(session), this.trajectories, this.redactor);
+    return new PolicyService(this.currentPolicy, this.scope, provider, this.model(session), this.trajectories, this.redactor,
+      (ms, signal, operation) => this.review.judgmentBudget(ms, signal, operation));
   }
   /** One origin spans the guard and dispatch, so nested checks share only this call's grants. */
   reviewOrigin(exec: ToolExecution): ReviewOrigin {
@@ -193,7 +198,8 @@ export class PentestRuntime {
   approve: import('@dsh-pentest/policy').ApprovalAnswerer = async (action, decision, signal) =>
     this.review.request(action.plugin === 'unadapted' ? 'adapter' : 'policy',
       { plugin: action.plugin, destinations: action.destinations, effects: action.effects, reversible: action.reversible,
-        identityId: action.identityId ?? null, source: decision.source, policyVersion: decision.policyVersion }, decision.reasons.join('; '), signal);
+        identityId: action.identityId ?? null, source: decision.source, policyVersion: decision.policyVersion },
+      `${action.plugin === 'unadapted' ? 'Execution adapter' : 'Action effects'}: ${decision.reasons.join('; ')}. This decision is separate from network destination and filesystem access.`, signal);
 
   http(session: SessionId): HttpBroker {
     return new HttpBroker({ timeoutMs: 30000, maxRedirects: 5, maxRequestBytes: 4 * 1024 * 1024 },
@@ -245,6 +251,8 @@ export class PentestRuntime {
     const effects = descriptor?.describe(exec.arguments) ?? { destinations: [], effects: ['unknown'] as Effect[], reversible: false };
     return { id: id<'ActionId'>(), engagementId: this.config.engagement.id, sessionId, tool: exec.name,
       plugin: descriptor?.plugin ?? 'unadapted', arguments: this.redactor.json(exec.arguments), ...effects,
+      trustedLocalRead: descriptor?.confinement === 'local-read' && effects.destinations.length === 0
+        && effects.reversible && effects.effects.every(effect => effect === 'read'),
       parentId: String(exec.rootCallId) };
   }
   inventory(): { tool: string; plugin: string; confinement: string }[] {
@@ -305,7 +313,16 @@ export class PentestRuntime {
     const config = this.currentPlugins;
     const entries = await (this.toolStatus ??= Promise.all([this.recon().doctor(), this.fuzz().doctor()])
       .then(([recon, ffuf]) => inspectTools(config, recon, ffuf)));
-    return { installing: this.installing, installAvailable: Boolean(this.config.distributionRoot), entries };
+    return { installing: this.installing, installAvailable: Boolean(this.config.distributionRoot), entries, bannerDismissed: this.setupBannerDismissed };
+  }
+  async dismissSetupBanner(dismissed: boolean, session: SessionId): Promise<void> {
+    if (this.closing) throw new PentestError('RUNTIME_CLOSED', 'Engagement is closing');
+    const next = this.settingsQueue.then(async () => {
+      const path = join(this.root, 'preferences.json'), temporary = `${path}.${id<'WriteId'>()}.tmp`;
+      await writeFile(temporary, JSON.stringify({ setupBannerDismissed: dismissed }), { mode: 0o600 });
+      await this.trajectories.append(session, 'engagement/setup-banner', { dismissed, source: 'desktop-owner' });
+      await rename(temporary, path); this.setupBannerDismissed = dismissed;
+    }); this.settingsQueue = next.catch(() => {}); return next;
   }
   /** Owner UI only: fixed official releases, with no model-controlled paths or URLs. */
   async installRecon(session: SessionId, signal: AbortSignal): Promise<void> {

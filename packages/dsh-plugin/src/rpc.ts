@@ -23,7 +23,7 @@ export const DesktopChannel = {
     ctx.effect(() => ctx.pentest.review.connect(), 'pentest: interactive owner review');
     // Exact Connection Fetch routes require an authenticated owner Peer before
     // dispatch. Keep this surface outside the shared model-facing API gateway.
-    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'review/snapshot', 'review/decide', 'review/revoke']) connection.fetch.register({
+    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
       path: `/api/pentest/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {
       const parsed = clientRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -55,6 +55,7 @@ export const DesktopChannel = {
         if (endpoint.startsWith('setup/')) {
           const input = z.object({ sessionId: SessionSchema }).parse(payload);
           if (endpoint === 'setup/check') return reply(await ctx.pentest.toolSetup(true));
+          if (endpoint === 'setup/dismiss' || endpoint === 'setup/show') await ctx.pentest.dismissSetupBanner(endpoint === 'setup/dismiss', input.sessionId as SessionId);
           if (endpoint === 'setup/install-recon') await ctx.pentest.installRecon(input.sessionId as SessionId, signal);
           if (endpoint === 'setup/install-ffuf') await ctx.pentest.installFfuf(input.sessionId as SessionId, signal);
           if (endpoint === 'setup/install-rea') await ctx.pentest.installRea(input.sessionId as SessionId, signal);
@@ -62,7 +63,7 @@ export const DesktopChannel = {
           return reply({ applied: true });
         }
         if (endpoint === 'review/decide') {
-          const input = z.object({ requestId: z.string().uuid(), sessionId: SessionSchema, choice: z.enum(['once', 'always', 'reject']) }).parse(payload);
+          const input = z.object({ requestId: z.string().uuid(), sessionId: SessionSchema, choice: z.enum(['once', 'always', 'destination', 'reject']) }).parse(payload);
           await ctx.pentest.review.decide(input.requestId, input.sessionId as SessionId, input.choice);
           return reply({ decided: true });
         }
@@ -70,6 +71,11 @@ export const DesktopChannel = {
           const input = z.object({ grantId: z.string().uuid(), sessionId: SessionSchema }).parse(payload);
           await ctx.pentest.review.revoke(input.grantId, input.sessionId as SessionId);
           return reply({ revoked: true });
+        }
+        if (endpoint === 'review/destination') {
+          const input = z.object({ host: z.string().min(1).max(253), sessionId: SessionSchema }).parse(payload);
+          await ctx.pentest.review.addDestination(input.host, input.sessionId as SessionId);
+          return reply({ saved: true });
         }
         if (endpoint === 'identity/create') {
           const input = IdentityInput.parse(payload);

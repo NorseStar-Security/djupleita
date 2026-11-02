@@ -12,7 +12,7 @@ const execute = promisify(execFile);
 const AssetSchema = z.object({ url: z.string().url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) });
 const LockSchema = z.object({ schemaVersion: z.literal(1), tools: z.record(ReconToolSchema,
   z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), checksums: z.string().url(),
-    assets: z.record(z.enum(['darwin-arm64', 'darwin-x64']), AssetSchema) })) });
+    assets: z.record(z.enum(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']), AssetSchema) })) });
 type Binary = { path: string; sha256: string };
 const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const MAX_ARCHIVE = 256 * 1024 * 1024;
@@ -42,13 +42,14 @@ async function download(url: string, signal: AbortSignal): Promise<Buffer> {
  */
 export async function installReconTools(root: string, signal: AbortSignal): Promise<Record<ReconTool, Binary>> {
   const lock = LockSchema.parse(JSON.parse(await readFile(join(root, 'configs/recon-tools.lock.json'), 'utf8')));
-  if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed recon releases support macOS arm64 and x64. Configure a verified local binary on other platforms.');
-  const platform = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+  if (!['darwin', 'linux'].includes(process.platform) || !['arm64', 'x64'].includes(process.arch)) throw new Error('Managed recon releases support macOS and Linux arm64/x64.');
+  const platform = `${process.platform}-${process.arch}` as 'darwin-arm64' | 'darwin-x64' | 'linux-arm64' | 'linux-x64';
   const installed: Partial<Record<ReconTool, Binary>> = {};
   for (const tool of ReconToolSchema.options) {
     signal.throwIfAborted();
     const release = lock.tools[tool], asset = release.assets[platform];
-    const expected = `https://github.com/projectdiscovery/${tool}/releases/download/v${release.version}/${tool}_${release.version}_macOS_${process.arch === 'arm64' ? 'arm64' : 'amd64'}.zip`;
+    if (!asset) throw new Error(`No pinned ${tool} release for ${platform}`);
+    const expected = `https://github.com/projectdiscovery/${tool}/releases/download/v${release.version}/${tool}_${release.version}_${process.platform === 'darwin' ? 'macOS' : 'linux'}_${process.arch === 'arm64' ? 'arm64' : 'amd64'}.zip`;
     if (asset.url !== expected) throw new Error(`Invalid official release URL for ${tool}`);
     const directory = join(root, '.pentest/toolchains/projectdiscovery', tool, release.version, platform);
     await mkdir(directory, { recursive: true, mode: 0o700 });

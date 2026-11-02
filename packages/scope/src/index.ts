@@ -28,6 +28,7 @@ function hostname(value: string): string {
   }
   return normalized;
 }
+export { hostname as normalizeHostname };
 
 function pattern(value: string): string {
   const wildcard = value.startsWith('*.');
@@ -83,11 +84,12 @@ export class ScopeService {
       const loopback = host === 'localhost' || host.endsWith('.localhost')
         || (ip && ipaddr.process(host).range() === 'loopback');
       if (loopback) networks.push(...(ip ? [`${host}/${ip === 4 ? 32 : 128}`] : ['127.0.0.0/8', '::1/128']));
-      const local = loopback || host.endsWith('.local')
-        || Boolean(ip && ['private', 'uniqueLocal'].includes(ipaddr.process(host).range()));
       return { host, schemes: [url.protocol === 'https:' ? 'https' : 'http'],
         ports: [Number(url.port || (url.protocol === 'https:' ? 443 : 80))],
-        pathPrefixes: [url.pathname.replace(/\/+$/, '') || '/'], allowPrivateAddresses: Boolean(local) };
+        // A configured gateway may resolve to RFC1918/ULA without a .local suffix.
+        // This grant is confined to model traffic at this API root. Loopback and
+        // other restricted ranges still require the explicit network grants above.
+        pathPrefixes: [url.pathname.replace(/\/+$/, '') || '/'], allowPrivateAddresses: true };
     });
     return new ScopeService({ targets: [], exclusions: [], networks: [...new Set(networks)],
       services: { model: rules, intelligence: [], telemetry: [] } }, this.resolver, this.reviewer);
@@ -121,9 +123,12 @@ export class ScopeService {
     return { url, rule: selected };
   }
 
-  /** Pause before an out-of-scope operation; an override remains bound to its exact URL and purpose. */
+  /** Pause at a scope boundary; the reviewer applies exact-operation or explicit host allowances. */
   async ensure(destination: Destination, signal: AbortSignal): Promise<void> {
-    try { this.check(destination); }
+    try {
+      this.check(destination);
+      if (this.reviewer?.allows('scope', destination)) await this.reviewer.request('scope', destination, 'Saved destination allowance', signal);
+    }
     catch (error) {
       if (!(error instanceof PentestError) || error.code !== 'OUT_OF_SCOPE'
         || !await this.reviewer?.request('scope', destination, error.message, signal)) throw error;
@@ -148,7 +153,7 @@ export class ScopeService {
         && !this.scope.networks.some(network => inNetwork(entry.address, network))) {
         const details = { destination, address: entry.address, family: entry.family };
         const reason = `Destination resolves to an unapproved ${parsed.range()} address: ${entry.address}`;
-        if (!this.reviewer?.allows('network', details) && !await this.reviewer?.request('network', details, reason, signal ?? new AbortController().signal)) {
+        if (!await this.reviewer?.request('network', details, reason, signal ?? new AbortController().signal)) {
           throw new PentestError('NETWORK_DENIED', reason);
         }
       }

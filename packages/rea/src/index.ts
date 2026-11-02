@@ -1,10 +1,11 @@
-/** Managed REA MCP integration; static analysis remains offline inside macOS confinement. */
+/** Managed REA MCP integration; static analysis remains offline inside OS confinement. */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 export type { Tool as ReaTool } from '@modelcontextprotocol/sdk/types.js';
 import { mkdir, readFile, realpath, mkdtemp, rm, copyFile, chmod } from 'node:fs/promises';
 import { dirname, join, relative, isAbsolute } from 'node:path';
+import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
@@ -14,9 +15,10 @@ import type { AttackGraph } from '@dsh-pentest/graph';
 import { graphId } from '@dsh-pentest/graph';
 import type { CrawlService } from '@dsh-pentest/crawl';
 import type { EvidenceStore, Redactor, TrajectoryStore } from '@dsh-pentest/trajectory';
-import { sandboxProfile, runWorker, validateExecutable } from '@dsh-pentest/worker';
+import { prepareSandbox, workerEnvironment, runWorker, validateExecutable } from '@dsh-pentest/worker';
 import { REA_VERSION, supportedReaNode } from './install.ts';
 import { jdkNativeDependencies } from './macos.ts';
+import { jdkLinuxDependencies } from './linux.ts';
 export { REA_VERSION, supportedReaNode, checkReaNode, installReaNode, installRea } from './install.ts';
 
 export const ReaConfigSchema = z.object({ node: z.string(), packageRoot: z.string(), roots: z.array(z.string()).min(1),
@@ -91,25 +93,25 @@ export class ReaService {
 
   private env(): Record<string, string> { return { HOME: this.root, TMPDIR: this.temporary ?? this.root,
     PATH: `${join(this.temporary ?? this.root, 'bin')}:${dirname(this.config.node)}:/usr/bin:/bin:/usr/sbin:/sbin`,
-    DEVELOPER_DIR: '/Library/Developer/CommandLineTools', CLANG_MODULE_CACHE_PATH: join(this.temporary ?? this.root, 'clang-cache'),
+    ...(process.platform === 'darwin' ? { DEVELOPER_DIR: '/Library/Developer/CommandLineTools', CLANG_MODULE_CACHE_PATH: join(this.temporary ?? this.root, 'clang-cache'),
     SWIFT_MODULECACHE_PATH: join(this.temporary ?? this.root, 'swift-cache'),
     REA_DARWIN_SWIFTC_PATH: '/Library/Developer/CommandLineTools/usr/bin/swiftc',
     SDKROOT: '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk', REA_DARWIN_MODULE_CACHE_PATH: join(this.temporary ?? this.root, 'swift-cache'),
-    REA_MCP_INPUT_SCHEMA_PROFILE: 'full', REA_MCP_OUTPUT_SCHEMA_PROFILE: 'full', REA_MCP_MAX_RESPONSE_BYTES: '10485760',
+    } : {}), REA_MCP_INPUT_SCHEMA_PROFILE: 'full', REA_MCP_OUTPUT_SCHEMA_PROFILE: 'full', REA_MCP_MAX_RESPONSE_BYTES: '10485760',
     GHIDRA_HEADLESS_MAXMEM: '2G', REA_GHIDRA_DECOMPILE_TIMEOUT_SECONDS: '60',
     ...(this.ghidra ? { GHIDRA_INSTALL_DIR: this.ghidra, REA_ANALYSIS_PROVIDER: 'ghidra' } : {}),
     ...(this.javaHome ? { JAVA_HOME: this.javaHome } : {}) }; }
   private async paths(): Promise<{ node: string; entry: string; readableRoots: string[] }> {
-    if (process.platform !== 'darwin') throw new PentestError('REA_PLATFORM', 'This integration targets native macOS arm64 and x64');
+    if (!['darwin', 'linux'].includes(process.platform)) throw new PentestError('REA_PLATFORM', 'REA supports macOS and Linux hosts');
     const node = await validateExecutable(this.config.node), packageRoot = await realpath(this.config.packageRoot);
     const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as { name?: string; version?: string };
     if (manifest.name !== 'rea-agents' || manifest.version !== REA_VERSION) throw new PentestError('REA_VERSION', `Expected rea-agents ${REA_VERSION}; configure its installed package root`);
     await mkdir(this.root, { recursive: true, mode: 0o700 });
-    this.temporary ??= await mkdtemp('/private/tmp/dsh-rea-');
+    this.temporary ??= await mkdtemp(process.platform === 'darwin' ? '/private/tmp/dsh-rea-' : join(tmpdir(), 'dsh-rea-'));
     // macOS ships /bin/ps setuid; Seatbelt refuses launching a setuid image.
     // REA only needs an unprivileged process snapshot for ownership/cleanup.
     // Copy the trusted system utility privately and drop elevation on the copy.
-    await (this.ownershipHelper ??= (async () => {
+    if (process.platform === 'darwin') await (this.ownershipHelper ??= (async () => {
       const bin = join(this.temporary!, 'bin'); await mkdir(bin, { recursive: true, mode: 0o700 });
       await copyFile('/bin/ps', join(bin, 'ps')); await chmod(join(bin, 'ps'), 0o700);
       // The platform signature kills a relocated ps image. Sign only our private
@@ -122,7 +124,7 @@ export class ReaService {
     // otherwise leave Java trying to traverse an unreadable alias outside its grant.
     if (this.config.ghidra) this.ghidra = await realpath(this.config.ghidra);
     if (this.config.javaHome) this.javaHome = await realpath(this.config.javaHome);
-    const javaDependencies = this.javaHome ? await (this.javaDependencies ??= jdkNativeDependencies(this.javaHome)) : [];
+    const javaDependencies = this.javaHome ? await (this.javaDependencies ??= process.platform === 'darwin' ? jdkNativeDependencies(this.javaHome) : jdkLinuxDependencies(this.javaHome)) : [];
     return { node, entry: join(packageRoot, 'scripts/rea.mjs'), readableRoots: [dirname(dirname(node)), dirname(packageRoot), ...roots,
       ...javaDependencies,
       ...(this.ghidra ? [this.ghidra] : []), ...(this.javaHome ? [this.javaHome,
@@ -145,7 +147,7 @@ export class ReaService {
       artifactInventoryReady: supportedReaNode(version.stdout.trim()), selectedProvider: this.ghidra ? 'ghidra' : null,
       nativeProviders: Array.isArray(native) ? native.filter(item => item && typeof item === 'object' && !Array.isArray(item) && item.configured)
         .map(item => { const provider = item as Record<string, Json>; return { id: provider.id ?? null, available: provider.available ?? false, version: provider.providerVersion ?? null }; }) : [],
-      capabilities: { artifactInventory: 'Built in; DMG inventory uses a read-only macOS mount. Does not require a native decompiler.',
+      capabilities: { artifactInventory: process.platform === 'darwin' ? 'Built in; DMG inventory uses a read-only macOS mount. Does not require a native decompiler.' : 'Built-in archive inventory. DMG mounting requires macOS. Native analysis needs a Linux Ghidra/JDK.',
         nativeAnalysis: this.config.ghidra ? 'Ghidra configured; consult diagnostics for engine readiness.' : 'No native engine configured. Configure Ghidra and a host-native JDK for decompilation.' } };
   }
   async connect(signal: AbortSignal): Promise<void> {
@@ -153,9 +155,10 @@ export class ReaService {
     if (this.opening) return this.opening;
     this.opening = (async () => {
       const paths = await this.paths();
-      const transport = new StdioClientTransport({ command: '/usr/bin/sandbox-exec', args: ['-p',
-        sandboxProfile({ writableRoots: [this.root, this.temporary!], unixSocketRoots: [this.temporary!], readableRoots: paths.readableRoots }), paths.node, paths.entry, 'mcp'],
-        env: this.env(), cwd: this.root, stderr: 'pipe', maxBufferSize: 16 * 1024 * 1024 });
+      const sandbox = await prepareSandbox({ executable: paths.node, args: [paths.entry, 'mcp'], cwd: this.root },
+        { writableRoots: [this.root, this.temporary!], unixSocketRoots: [this.temporary!], readableRoots: paths.readableRoots }, signal);
+      const transport = new StdioClientTransport({ command: sandbox.executable, args: sandbox.args,
+        env: workerEnvironment({ cwd: this.root, env: this.env() }), cwd: this.root, stderr: 'pipe', maxBufferSize: 16 * 1024 * 1024 });
       let diagnostics = '';
       transport.stderr?.on('data', (chunk: Buffer) => { diagnostics = (diagnostics + chunk.toString('utf8')).slice(-16384); });
       const client = new Client({ name: 'dsh-pentest', version: '0.1.0' });
@@ -170,7 +173,7 @@ export class ReaService {
         } while (cursor);
         this.client = client;
       } catch (error) { await client.close(); this.tools.clear(); signal.throwIfAborted();
-        throw new PentestError('REA_MCP', this.redactor.text(`REA MCP could not start: ${diagnostics || (error instanceof Error ? error.message : 'Connection failed')}`)); }
+        throw new PentestError('REA_MCP', this.redactor.text(`REA MCP could not start: ${diagnostics || (error instanceof Error ? error.message : 'Connection failed')}`)); } finally { await sandbox.close(); }
     })();
     try { await this.opening; } finally { delete this.opening; }
   }

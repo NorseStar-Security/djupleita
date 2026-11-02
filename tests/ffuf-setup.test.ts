@@ -20,13 +20,28 @@ async function fixture() {
   const archive = await readFile(join(root, 'fixture/release.tar.gz'));
   const sha256 = createHash('sha256').update(archive).digest('hex');
   const lock = { schemaVersion: 1, version: '2.3.0', checksums: 'https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_checksums.txt',
-    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64'].map(platform => [platform, {
-      url: `https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_macOS_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.tar.gz`, sha256,
+    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].map(platform => [platform, {
+      url: `https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_${platform.startsWith('darwin') ? 'macOS' : 'linux'}_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.tar.gz`, sha256,
     }])) };
   const save = () => writeFile(join(root, 'configs/ffuf.lock.json'), JSON.stringify(lock)); await save();
   const download = vi.fn(async () => new Response(archive)); vi.stubGlobal('fetch', download);
   return { root, lock, save, download };
 }
+
+it.each(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'])('installs the official ffuf release for %s', async platform => {
+  const [os, arch] = platform.split('-');
+  vi.stubGlobal('process', { ...process, platform: os, arch });
+  const f = await fixture(), binary = await installFfuf(f.root, AbortSignal.timeout(5000));
+  expect(binary.path).toContain(`/${platform}/ffuf`);
+  expect(f.download).toHaveBeenCalledWith(f.lock.assets[platform]!.url, expect.anything());
+});
+
+it('requires pinned ffuf releases for every supported host before downloading', async () => {
+  const f = await fixture();
+  delete f.lock.assets['linux-x64']; await f.save();
+  await expect(installFfuf(f.root, AbortSignal.timeout(5000))).rejects.toThrow('linux-x64');
+  expect(f.download).not.toHaveBeenCalled();
+});
 
 it('installs verified ffuf with a license, reuses it, and rejects local tampering', async () => {
   const f = await fixture(), binary = await installFfuf(f.root, AbortSignal.timeout(5000));

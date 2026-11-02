@@ -16,13 +16,24 @@ import type { GenerateOptions, PreparedAdapterCall, StreamChunk } from '@deepsee
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { id } from '@dsh-pentest/contracts';
-import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, ModelEgressPlugin, apply } from './index.ts';
+import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, ModelEgressPlugin, modelJudge, apply } from './index.ts';
 import { PluginConfigSchema } from './runtime.ts';
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
 import { engagement, policyConfig, testJudge } from '../../../tests/fixtures.ts';
 import { HttpBroker } from '@dsh-pentest/http';
 import { ScopeService } from '@dsh-pentest/scope';
 import * as ManagedGraph from './entries/graph.ts';
+
+it('preserves model transport failures and reports empty judgment output clearly', async () => {
+  for (const [chunks, message] of [
+    [[{ type: 'finish', reason: { kind: 'error', failure: { message: 'Fixture provider connection refused' } } }], 'Fixture provider connection refused'],
+    [[{ type: 'finish', reason: { kind: 'stop' } }], 'returned no text'],
+  ] as const) {
+    const ctx = { llm: { async *stream() { for (const chunk of chunks) yield chunk; } } } as unknown as Context;
+    const { action } = await import('../../../tests/fixtures.ts');
+    await expect(modelJudge(ctx).judge(action(), engagement().model, AbortSignal.timeout(1000))).rejects.toThrow(message);
+  }
+});
 
 it('uses captured provider configuration across scope revisions without asking for model access', async () => {
   const paths: string[] = [];
@@ -34,12 +45,13 @@ it('uses captured provider configuration across scope revisions without asking f
   class FixtureAdapter extends LlmAdapter {
     override async prepareCall(provider: string, model: string): Promise<PreparedAdapterCall> {
       const captured = endpoint;
-      return { model: await this.resolveModel(provider, model), transport: { endpoints: [captured] },
+      return { model: await this.resolveModel(provider, model), transport: { endpoints: [captured, `${base}/auxiliary`] },
         stream: () => this.request(captured) };
     }
     stream(_options: GenerateOptions): AsyncIterable<StreamChunk> { return this.request(endpoint); }
     private async *request(url: string): AsyncIterable<StreamChunk> {
       const response = await fetch(`${url}/responses`);
+      const auxiliary = await fetch(`${base}/auxiliary/input`); await auxiliary.body?.cancel();
       yield { type: 'block-start', index: 0, blockType: 'text' };
       yield { type: 'text-delta', index: 0, text: await response.text() };
       yield { type: 'block-end', index: 0, block: { type: 'text', text: 'fixture response' } };
@@ -56,7 +68,7 @@ it('uses captured provider configuration across scope revisions without asking f
     await ctx.plugin(LlmRuntime);
     await ctx.plugin({ name: 'provider-runtime-fixture', apply(inner: Context) { inner.provide('pentest', runtime); } });
     await ctx.plugin(ModelEgressPlugin);
-    ctx.llm.registerAdapter(['openai'], new FixtureAdapter());
+    ctx.llm.registerAdapter(['openai', 'custom'], new FixtureAdapter());
     runtime.review.connect();
     const review = vi.spyOn(runtime.review, 'request');
     const config = { provider: 'openai', model: 'configured-model' };
@@ -75,7 +87,9 @@ it('uses captured provider configuration across scope revisions without asking f
     endpoint = `${base}/second`;
     await collect(prepared.stream({ ...prepared.config, messages: [], signal: AbortSignal.timeout(3000) }));
     await collect(ctx.llm.stream({ ...config, messages: [], signal: AbortSignal.timeout(3000) }));
-    expect(paths).toEqual(['/first/responses', '/first/responses', '/first/responses', '/second/responses']);
+    await collect(ctx.llm.stream({ ...config, provider: 'custom', messages: [], signal: AbortSignal.timeout(3000) }));
+    expect(paths.filter(path => path !== '/auxiliary/input')).toEqual(['/first/responses', '/first/responses', '/first/responses', '/second/responses', '/second/responses']);
+    expect(paths.filter(path => path === '/auxiliary/input')).toHaveLength(5);
     expect(review).not.toHaveBeenCalled();
     expect(runtime.review.snapshot().pending).toEqual([]);
   } finally {
@@ -110,15 +124,15 @@ async function harness(skipPolicy = false) {
   return { ctx, runtime, agent, invoke, models, async close() { await ctx.fiber.dispose(); await runtime.close(); } };
 }
 
-it('executes a real DSH tool pipeline, follows the selected model and records final results', async () => {
+it('executes trusted status through the real DSH pipeline without model judgment and records final results', async () => {
   const h = await harness();
   try {
     const result = await h.invoke('pentest_status');
     expect(result.isError).toBe(false);
     expect(result).toMatchObject({ value: { availableTools: ['pentest_status'] } });
-    expect(h.models).toEqual(['selected-by-user']);
+    expect(h.models).toEqual([]);
     const events = await h.runtime.trajectories.read(h.agent.id as unknown as import('@dsh-pentest/contracts').SessionId);
-    expect(events.map(event => event.type)).toEqual(['policy/judgment-request', 'policy/judgment-result', 'policy/decision', 'harness/tool-result']);
+    expect(events.map(event => event.type)).toEqual(['policy/decision', 'harness/tool-result']);
     expect(JSON.stringify(events)).toContain('pentest_status');
   } finally { await h.close(); }
 });
@@ -285,7 +299,7 @@ it('mounts ffuf as an optional bundle with a policy descriptor and removes its t
   } finally { await h.close(); }
 });
 
-it.skipIf(!process.env.DSH_TEST_FFUF || process.platform !== 'darwin')('carries a real ffuf request into the inline owner review before allowing a destructive URL', async () => {
+it.skipIf(!process.env.DSH_TEST_FFUF || !['darwin', 'linux'].includes(process.platform))('carries a real ffuf request into the inline owner review before allowing a destructive URL', async () => {
   const h = await harness(); h.runtime.review.connect(); let requests = 0;
   const scope = new ScopeService(h.runtime.scope.scope, async () => [{ address: '93.184.216.34', family: 4 }], h.runtime.review);
   vi.spyOn(h.runtime, 'http').mockImplementation(session => new HttpBroker({ timeoutMs: 1000, maxRedirects: 2, maxRequestBytes: 1024 },
@@ -297,7 +311,7 @@ it.skipIf(!process.env.DSH_TEST_FFUF || process.platform !== 'darwin')('carries 
       sha256: createHash('sha256').update(await readFile(binary)).digest('hex') }, timeoutMs: 4000 } }), h.runtime.session({ agent: h.agent } as ToolExecution));
     await h.ctx.plugin(FuzzTools);
     const blocked = h.invoke('pentest_ffuf', { url: 'https://app.example.test/FUZZ', words: ['delete'], concurrency: 1 });
-    await expect.poll(() => h.runtime.review.snapshot().pending.length).toBe(1);
+    await expect.poll(() => h.runtime.review.snapshot().pending.length, { timeout: 10000 }).toBe(1);
     const question = h.runtime.review.snapshot().pending[0]!;
     expect(question.tool).toBe('pentest_ffuf'); expect(JSON.stringify(question)).toContain('/delete'); expect(requests).toBe(0);
     await h.runtime.review.decide(question.id, question.sessionId, 'once');

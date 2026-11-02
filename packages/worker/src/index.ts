@@ -1,4 +1,7 @@
-/** macOS managed processes and an authenticated, DNS-pinned egress proxy. */
+/** Confined managed processes and an authenticated, DNS-pinned egress proxy. */
+import { prepareSandbox, workerEnvironment } from './platform.ts';
+export { prepareSandbox, workerEnvironment } from './platform.ts';
+export type { SandboxLaunch } from './platform.ts';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import http from 'node:http';
@@ -15,28 +18,9 @@ import { matchesHost } from '@dsh-pentest/scope';
 import type { EngagementService } from '@dsh-pentest/engagement';
 import type { TrajectoryStore, Redactor } from '@dsh-pentest/trajectory';
 
-const quote = (value: string): string => JSON.stringify(value);
-export interface SandboxOptions { writableRoots: string[]; readableRoots?: string[]; proxyPort?: number; unixSocketRoots?: string[] }
-export function sandboxProfile(options: SandboxOptions): string {
-  if (options.writableRoots.some(path => !isAbsolute(path) || path === '/')) throw new PentestError('SANDBOX_ROOT', 'Worker write roots must be absolute, bounded directories');
-  if (options.proxyPort !== undefined && (!Number.isInteger(options.proxyPort) || options.proxyPort < 1 || options.proxyPort > 65535)) throw new PentestError('SANDBOX_PORT', 'Invalid broker port');
-  return ['(version 1)', '(allow default)', '(deny network-outbound)', '(deny network-inbound)', '(deny network-bind)', '(deny file-write*)',
-    // dyld opens the root directory on current macOS. A literal grant permits that
-    // operation without permitting the contents of users' home directories.
-    ...(options.readableRoots ? ['(deny file-read*)', '(allow file-read-metadata)', '(allow file-read* (literal "/") (subpath "/System") (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "/Library") (subpath "/dev"))',
-      ...[...options.readableRoots, ...options.writableRoots].map(path => `(allow file-read* (subpath ${quote(path)}))`)] : []),
-    '(allow file-write* (literal "/dev/null") (literal "/dev/tty"))',
-    ...options.writableRoots.map(path => `(allow file-write* (subpath ${quote(path)}))`),
-    ...(options.unixSocketRoots ?? []).flatMap(path => [
-      // Explicit operation names are required: the network* wildcard loses to
-      // the specific deny rules above, even for a matching private socket path.
-      `(allow network-bind network-inbound (local unix-socket (subpath ${quote(path)})))`,
-      `(allow network-outbound (remote unix-socket (subpath ${quote(path)})))`,
-    ]),
-    // Only this private proxy can open Internet sockets on a worker's behalf.
-    ...(options.proxyPort ? [`(allow network-outbound (remote ip "localhost:${options.proxyPort}"))`] : []),
-  ].join('\n');
-}
+export { sandboxProfile } from './seatbelt.ts';
+export type { SandboxOptions } from './seatbelt.ts';
+import type { SandboxOptions } from './seatbelt.ts';
 export interface WorkerCommand { executable: string; args: string[]; cwd: string; env?: Record<string, string>; timeoutMs: number; maxOutputBytes: number }
 export interface WorkerResult { stdout: string; stderr: string; exitCode: number }
 export async function validateExecutable(path: string): Promise<string> {
@@ -45,38 +29,38 @@ export async function validateExecutable(path: string): Promise<string> {
 }
 /** No shell, no inherited credentials, bounded output, and process-group cancellation. */
 export async function runWorker(command: WorkerCommand, options: SandboxOptions, signal: AbortSignal): Promise<WorkerResult> {
-  if (process.platform !== 'darwin') throw new PentestError('SANDBOX_PLATFORM', 'Managed workers require the macOS Seatbelt backend');
   if (command.timeoutMs < 1 || command.maxOutputBytes < 1) throw new PentestError('WORKER_LIMITS', 'Worker limits must be positive');
   signal.throwIfAborted();
   await validateExecutable(command.executable);
   // Python determines its virtual environment from the invoked symlink path.
   // Keep that absolute operator-selected path after validating its target.
-  const executable = command.executable;
-  const child = spawn('/usr/bin/sandbox-exec', ['-p', sandboxProfile(options), executable, ...command.args], {
-    cwd: command.cwd, env: { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: command.cwd, TMPDIR: command.cwd,
-      LANG: 'en_US.UTF-8', ...command.env }, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  return new Promise((resolve, reject) => {
-    let stdout = '', stderr = '', size = 0, failure: Error | undefined;
-    const kill = (error: Error) => {
-      failure ??= error;
-      if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }
-    };
-    const aborted = () => kill(new PentestError('WORKER_CANCELLED', 'Managed worker was cancelled'));
-    const timer = setTimeout(() => kill(new PentestError('WORKER_TIMEOUT', 'Managed worker exceeded its deadline')), command.timeoutMs);
-    signal.addEventListener('abort', aborted, { once: true });
-    if (signal.aborted) aborted();
-    const collect = (stream: 'stdout' | 'stderr', chunk: Buffer) => {
-      size += chunk.length;
-      if (size > command.maxOutputBytes) return kill(new PentestError('WORKER_OUTPUT', 'Managed worker exceeded its output limit'));
-      if (stream === 'stdout') stdout += chunk.toString('utf8'); else stderr += chunk.toString('utf8');
-    };
-    child.stdout.on('data', (chunk: Buffer) => collect('stdout', chunk));
-    child.stderr.on('data', (chunk: Buffer) => collect('stderr', chunk));
-    const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', aborted); };
-    child.once('error', error => { cleanup(); reject(error); });
-    child.once('close', code => { cleanup(); if (failure) reject(failure); else resolve({ stdout, stderr, exitCode: code ?? -1 }); });
-  });
+  const launch = await prepareSandbox(command, options, signal);
+  try {
+    const child = spawn(launch.executable, launch.args, {
+      cwd: command.cwd, env: workerEnvironment(command), detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return await new Promise<WorkerResult>((resolve, reject) => {
+      let stdout = '', stderr = '', size = 0, failure: Error | undefined;
+      const kill = (error: Error) => {
+        failure ??= error;
+        if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }
+      };
+      const aborted = () => kill(new PentestError('WORKER_CANCELLED', 'Managed worker was cancelled'));
+      const timer = setTimeout(() => kill(new PentestError('WORKER_TIMEOUT', 'Managed worker exceeded its deadline')), command.timeoutMs);
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) aborted();
+      const collect = (stream: 'stdout' | 'stderr', chunk: Buffer) => {
+        size += chunk.length;
+        if (size > command.maxOutputBytes) return kill(new PentestError('WORKER_OUTPUT', 'Managed worker exceeded its output limit'));
+        if (stream === 'stdout') stdout += chunk.toString('utf8'); else stderr += chunk.toString('utf8');
+      };
+      child.stdout.on('data', (chunk: Buffer) => collect('stdout', chunk));
+      child.stderr.on('data', (chunk: Buffer) => collect('stderr', chunk));
+      const cleanup = () => { clearTimeout(timer); signal.removeEventListener('abort', aborted); };
+      child.once('error', error => { cleanup(); reject(error); });
+      child.once('close', code => { cleanup(); if (failure) reject(failure); else resolve({ stdout, stderr, exitCode: code ?? -1 }); });
+    });
+  } finally { await launch.close(); }
 }
 
 /** A private worker proxy. CONNECT grants require whole-host scope because TLS paths are opaque. */

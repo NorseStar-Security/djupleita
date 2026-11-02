@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Context } from '@deepseek-ai/cordis';
 import type { SkillCandidate } from '@deepseek-ai/dsh-skill';
 import { z } from 'zod';
+import { toolSchema } from './tool-schema.ts';
 import { PentestError } from '@dsh-pentest/contracts';
 import type {} from './index.ts';
 
@@ -37,7 +38,7 @@ export const AssessmentSkills = {
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: native skill effects');
     const schema = z.object({ name: z.enum(names) });
     ctx.tools.register({ name: 'pentest_skill', description: 'Load a bundled Djupleita assessment skill. This reads trusted workflow instructions; it grants no target access or tool approvals.',
-      parameters: z.toJSONSchema(schema), output: { schema: { type: 'object', additionalProperties: true },
+      parameters: toolSchema(schema), output: { schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => [{ type: 'text', text: (value as { content: string }).content }] },
       async execute(args) { const name = schema.parse(args).name; return { name, content: entries.find(entry => entry.candidate.name === name)!.content }; } });
   },

@@ -11,6 +11,24 @@ function document(source) {
   return doc;
 }
 
+/** Fill introduced capabilities recursively, retaining saved mode choices and plugin settings. */
+function introduce(existing, generated) {
+  if (isMap(existing) && isMap(generated)) {
+    for (const pair of generated.items) {
+      const key = pair.key.value;
+      if (!existing.has(key)) existing.set(key, pair.value.clone());
+      else if (key !== 'prefix') introduce(existing.get(key), pair.value);
+    }
+  } else if (isSeq(existing) && isSeq(generated)) {
+    for (const row of generated.items) {
+      if (!isMap(row) || !row.has('id')) continue;
+      const current = existing.items.find(item => isMap(item) && item.get('id') === row.get('id'));
+      if (current) introduce(current, row);
+      else existing.add(row.clone());
+    }
+  }
+}
+
 export function mergeProfilePatch(source, generated) {
   const doc = document(source), managed = document(generated);
   doc.contents.flow = false;
@@ -22,7 +40,11 @@ export function mergeProfilePatch(source, generated) {
       for (const pair of patch.items) {
         const key = pair.key.value;
         if (key === 'config' && isMap(current.get(key)) && isMap(pair.value)) {
-          for (const field of pair.value.items) current.get(key).set(field.key.value, field.value);
+          for (const field of pair.value.items) {
+            // The initial distribution default must not reset a saved base mode.
+            if (patch.get('id') === 'agent-preset-registry' && field.key.value === 'default' && current.get(key).has('default')) continue;
+            current.get(key).set(field.key.value, field.value);
+          }
         } else current.set(key, pair.value);
       }
       continue;
@@ -30,15 +52,17 @@ export function mergeProfilePatch(source, generated) {
     for (const entry of patch.get('insert').items) {
       const current = doc.contents.items.flatMap(row => isMap(row) && isSeq(row.get('insert')) ? row.get('insert').items : [])
         .find(row => isMap(row) && row.get('id') === entry.get('id'));
-      if (!current) { doc.contents.add(doc.createNode({ insert: [entry.toJSON()] })); continue; }
+      if (!current) {
+        const inserted = doc.createNode({ insert: [] });
+        inserted.get('insert').add(entry.clone());
+        doc.contents.add(inserted); continue;
+      }
       for (const pair of entry.items) {
         const key = pair.key.value;
-        if (key === 'config' && entry.get('id') === 'preset-pentest' && isMap(current.get(key))) {
+        if (key === 'config' && entry.get('id').startsWith('preset-') && isMap(current.get(key))) {
           const plugins = current.get(key).get('plugins');
           if (isSeq(plugins)) {
-            for (const plugin of pair.value.get('plugins').items) {
-              if (!plugins.items.some(row => isMap(row) && row.get('id') === plugin.get('id'))) plugins.add(plugin);
-            }
+            introduce(plugins, pair.value.get('plugins'));
             continue;
           }
         }

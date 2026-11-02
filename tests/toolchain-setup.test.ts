@@ -1,10 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, writeFile, stat, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, stat, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { installReconTools, ReconToolSchema } from '../packages/recon/src/index.ts';
+import { runWorker } from '../packages/worker/src/index.ts';
 import { PentestRuntime, PluginConfigSchema } from '../packages/dsh-plugin/src/runtime.ts';
 import { id } from '../packages/contracts/src/index.ts';
 import { engagement, policyConfig, testJudge } from './fixtures.ts';
@@ -21,8 +22,8 @@ async function fixture() {
   const hash = createHash('sha256').update(archive).digest('hex');
   const tools = Object.fromEntries(ReconToolSchema.options.map(tool => [tool, { version: '1.2.3',
     checksums: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/checksums.txt`,
-    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64'].map(platform => [platform, {
-      url: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/${tool}_1.2.3_macOS_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.zip`, sha256: hash,
+    assets: Object.fromEntries(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'].map(platform => [platform, {
+      url: `https://github.com/projectdiscovery/${tool}/releases/download/v1.2.3/${tool}_1.2.3_${platform.startsWith('darwin') ? 'macOS' : 'linux'}_${platform.endsWith('arm64') ? 'arm64' : 'amd64'}.zip`, sha256: hash,
     }])),
   }]));
   const lock = { schemaVersion: 1, tools };
@@ -31,6 +32,36 @@ async function fixture() {
   const download = vi.fn(async () => new Response(archive)); vi.stubGlobal('fetch', download);
   return { root, lock, saveLock, download };
 }
+
+it.each(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'])('installs the official recon releases for %s', async platform => {
+  const [os, arch] = platform.split('-');
+  vi.stubGlobal('process', { ...process, platform: os, arch });
+  const f = await fixture(), installed = await installReconTools(f.root, AbortSignal.timeout(5000));
+  for (const tool of ReconToolSchema.options) {
+    expect(installed[tool].path).toContain(`/${platform}/${tool}`);
+    expect(f.download).toHaveBeenCalledWith(f.lock.tools[tool]!.assets[platform]!.url, expect.anything());
+  }
+});
+
+it('requires pinned recon releases for every supported host before downloading', async () => {
+  const f = await fixture();
+  delete f.lock.tools.subfinder!.assets['linux-arm64']; await f.saveLock();
+  await expect(installReconTools(f.root, AbortSignal.timeout(5000))).rejects.toThrow('linux-arm64');
+  expect(f.download).not.toHaveBeenCalled();
+});
+
+it.skipIf(!process.env.DSH_TEST_RECON_CONFIG)('executes every real managed recon binary in the offline worker sandbox', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'djupleita-recon-execution-'))); directories.push(root);
+  const config = JSON.parse(await readFile(resolve(process.env.DSH_TEST_RECON_CONFIG!), 'utf8'));
+  for (const tool of ReconToolSchema.options) {
+    const binary = config.recon.binaries[tool];
+    expect(createHash('sha256').update(await readFile(binary.path)).digest('hex')).toBe(binary.sha256);
+    const result = await runWorker({ executable: binary.path, args: ['-version'], cwd: root,
+      timeoutMs: 10000, maxOutputBytes: 65536 }, { writableRoots: [root], readableRoots: [binary.path] }, AbortSignal.timeout(15000));
+    expect(result.exitCode, `${tool}: ${result.stdout}${result.stderr}`).toBe(0);
+    expect(result.stdout + result.stderr).toMatch(/\d+\.\d+\.\d+/);
+  }
+}, 60000);
 
 it('installs all locked binaries with notices, reuses verified copies and rejects local tampering', async () => {
   const f = await fixture();
