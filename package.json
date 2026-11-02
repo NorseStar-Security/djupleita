@@ -24,7 +24,9 @@
     "test:watch": "vitest",
     "check": "pnpm typecheck && pnpm test",
     "desktop": "node scripts/desktop.mjs",
-    "web": "node scripts/web.mjs"
+    "web": "node scripts/web.mjs",
+    "release:package": "node scripts/release.mjs",
+    "release:test": "node --test scripts/release.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
