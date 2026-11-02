@@ -1,7 +1,8 @@
 import { it, expect } from 'vitest';
 import http from 'node:http';
+import net from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, realpath, readFile } from 'node:fs/promises';
+import { mkdtemp, realpath, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runWorker, WorkerProxy } from '../packages/worker/src/index.ts';
@@ -10,6 +11,30 @@ import { ScopeService } from '../packages/scope/src/index.ts';
 import { Redactor, TrajectoryStore } from '../packages/trajectory/src/index.ts';
 import { id } from '../packages/contracts/src/index.ts';
 import { engagement, scope } from './fixtures.ts';
+
+it.each([{ enabled: false, purpose: 'target', allowed: true }, { enabled: true, purpose: 'target', allowed: false },
+  { enabled: false, purpose: 'model', allowed: false }] as const)('checks target scope management $enabled for $purpose proxy tunnels', async ({ enabled, purpose, allowed }) => {
+  let hits = 0;
+  const target = net.createServer(client => { hits++; client.end('local tunnel fixture'); });
+  target.listen(0, '127.0.0.1'); await once(target, 'listening');
+  const address = target.address(); if (!address || typeof address === 'string') throw new Error('No fixture port');
+  const root = await mkdtemp(join(tmpdir(), 'djupleita-proxy-toggle-'));
+  const config = engagement({ scope: { ...scope('allowed.example.test'), enabled } });
+  const redactor = new Redactor(), trajectory = new TrajectoryStore(join(root, 'events'), config.id, redactor);
+  const session = id<'SessionId'>(), sessions = new EngagementService(config); sessions.attach(session);
+  const proxy = new WorkerProxy(new ScopeService(config.scope), sessions, trajectory, redactor, session, purpose, AbortSignal.timeout(5000));
+  try {
+    await proxy.start();
+    const endpoint = new URL(proxy.endpoint);
+    const output = await new Promise<string>((resolve, reject) => {
+      const client = net.connect({ host: endpoint.hostname, port: Number(endpoint.port) }); let text = '';
+      client.on('error', reject); client.on('data', data => { text += data; }); client.on('end', () => resolve(text));
+      client.on('connect', () => client.write(`CONNECT 127.0.0.1:${address.port} HTTP/1.1\r\nHost: 127.0.0.1:${address.port}\r\nProxy-Authorization: Basic ${Buffer.from(`${endpoint.username}:${endpoint.password}`).toString('base64')}\r\n\r\n`));
+    });
+    expect(output).toContain(allowed ? '200 Connection Established' : '403 Forbidden');
+    expect(hits).toBe(allowed ? 1 : 0);
+  } finally { await proxy.close(); await trajectory.flush(); target.close(); await once(target, 'close'); await rm(root, { recursive: true, force: true }); }
+});
 
 it.skipIf(process.platform !== 'darwin')('permits the private Unix bridge while denying outside sockets and TCP binds', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-unix-')));

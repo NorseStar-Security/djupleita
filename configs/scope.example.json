@@ -1,9 +1,11 @@
 {
+  "enabled": false,
   "targets": [
-    { "host": "example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false },
-    { "host": "*.example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false }
+    { "host": "www.prod.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+    { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+    { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
   ],
-  "exclusions": ["excluded.example.test", "*.excluded.example.test"],
+  "exclusions": [],
   "networks": [],
   "services": { "intelligence": [], "model": [], "telemetry": [] }
 }

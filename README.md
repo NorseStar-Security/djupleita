@@ -106,7 +106,7 @@ The upstream package manager may provision its declared Node/pnpm versions. The 
 
 ### Configure the app (both platforms)
 
-Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. Add authorized targets separately. New engagements start with empty active target scope and an editable example draft. See [scope and destination allowances](docs/scope.md) and [normal modes with Pentest tools](docs/modes.md).
+Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. New engagements load the course targets from issue 13 with **Scope management OFF**. Students can enable the switch in **Policy** and select **Apply scope and policy** to enforce the boundary. Existing engagements keep their saved configuration. See [scope and destination allowances](docs/scope.md) and [normal modes with Pentest tools](docs/modes.md).
 
 Pentest extends **Standard**, **Creator**, **PTC** and **Minimal** while preserving each mode's tools, commands and skills. The **Pentest** mode is an alias of extended Standard. Ordinary file search, reading, shell and editing tools remain available; PTC exposes both normal and Pentest tools through its generated SDK. Children inherit the selected composition and engagement policy. Profile upgrades preserve saved mode choices, provider settings and disabled plugins.
 

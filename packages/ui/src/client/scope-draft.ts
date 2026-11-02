@@ -6,6 +6,7 @@ export function initialScopeDraft(scope: Record<string, unknown>): string {
   if (scope.targets !== undefined && (!Array.isArray(scope.targets) || scope.targets.length > 0)) return JSON.stringify(scope, null, 2);
   const emptyBoundary = ['exclusions', 'networks'].every(key => scope[key] === undefined || Array.isArray(scope[key]) && scope[key].length === 0);
   return JSON.stringify({ ...example, ...scope, targets: example.targets,
+    enabled: scope.enabled ?? (scope.targets === undefined ? example.enabled : true),
     ...(emptyBoundary ? { exclusions: example.exclusions } : {}),
     services: { ...example.services, ...(scope.services as Record<string, unknown> | undefined) },
   }, null, 2);
@@ -13,12 +14,13 @@ export function initialScopeDraft(scope: Record<string, unknown>): string {
 export function scopePreview(draft: string): string {
   try {
     const scope = JSON.parse(draft) as typeof example;
+    if (scope.enabled !== undefined && typeof scope.enabled !== 'boolean') throw new Error('enabled must be true or false.');
     if (!Array.isArray(scope.targets) || !Array.isArray(scope.exclusions) || !Array.isArray(scope.networks) || !scope.services) throw new Error('Use targets, exclusions, networks and services from the example.');
     const targets = scope.targets.map(rule => {
       if (typeof rule.host !== 'string' || !Array.isArray(rule.schemes) || !Array.isArray(rule.ports) || !Array.isArray(rule.pathPrefixes)) throw new Error('Each target needs a host-rule object with host, schemes, ports and pathPrefixes; a hostname string alone is invalid.');
       return `${rule.host}: ${rule.schemes.join('/')} · ports ${rule.ports.join(', ')} · paths ${rule.pathPrefixes.join(', ')}`;
     });
-    return [...targets, `Excluded: ${scope.exclusions.join(', ') || 'none'}`, `Network grants: ${scope.networks.join(', ') || 'none'}`,
+    return [`Scope management: ${scope.enabled === false ? 'OFF · target boundaries are not enforced' : 'ON · unlisted targets are out of scope'}`, ...targets, `Excluded: ${scope.exclusions.join(', ') || 'none'}`, `Network grants: ${scope.networks.join(', ') || 'none'}`,
       'Exclusions take precedence. This draft becomes active only after Apply.'].join('\n');
   } catch (error) { return `Scope draft needs attention: ${error instanceof Error ? error.message : 'Invalid JSON'}`; }
 }

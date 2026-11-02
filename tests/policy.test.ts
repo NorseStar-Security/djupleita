@@ -32,6 +32,12 @@ it('requires a fresh approval for each deletion and fails closed without an answ
   expect(approve).toHaveBeenCalledTimes(2);
   expect(sink.events.filter(event => event.type === 'policy/approval')).toHaveLength(3);
 });
+it('retains destructive-effect review when target scope management is off', async () => {
+  const policy = new PolicyService(policyConfig, new ScopeService({ ...scope(), enabled: false }), testJudge,
+    { provider: 'fixture', model: 'fixture' }, new MemorySink(), new Redactor());
+  await expect(policy.authorize({ action: action({ destinations: [{ url: 'http://outside.example.test:8123/', purpose: 'target' }],
+    effects: ['delete'], reversible: false }), signal: AbortSignal.timeout(1000) })).rejects.toThrow('one-shot');
+});
 it('detects action substitution while approval is pending', async () => {
   const { policy } = service(); const deletion = action({ effects: ['delete'], reversible: false });
   await expect(policy.authorize({ action: deletion, signal: AbortSignal.timeout(1000) }, async () => {

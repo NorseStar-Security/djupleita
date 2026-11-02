@@ -54,6 +54,8 @@ export const HostRuleSchema = z.object({
 });
 export type HostRule = z.infer<typeof HostRuleSchema>;
 export const ScopeSchema = z.object({
+  /** Omitted in existing engagements: retain enforcement. Fresh course profiles explicitly disable it. */
+  enabled: z.boolean().optional(),
   targets: z.array(HostRuleSchema),
   exclusions: z.array(z.string()).default([]),
   networks: z.array(z.string()).default([]),

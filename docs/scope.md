@@ -1,26 +1,28 @@
 # Target scope and destination allowances
 
-In **Pentest → Policy**, empty targets open with this editable draft, including when model or other service endpoints are already configured. Replace `example.test` throughout with your authorized domain and choose the host or subtree to exclude. Nothing in the draft is authorized until **Apply scope and policy** succeeds.
+Fresh macOS desktop and Linux web engagements load the course scope from [issue 13](https://github.com/NorseStar-Security/djupleita/issues/13). **Scope management starts OFF** so students can enable it during the course and compare behavior. Open **Plugins → Djupleita · Engagement and identities → Policy**, turn on **Scope management**, then select **Apply scope and policy**. The switch edits the draft; the status above it shows the applied setting. Applying a change cancels existing requests and resets the crawl frontier.
 
 ```json
 {
+  "enabled": false,
   "targets": [
-    { "host": "example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false },
-    { "host": "*.example.test", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": false }
+    { "host": "www.prod.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+    { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+    { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
   ],
-  "exclusions": ["excluded.example.test", "*.excluded.example.test"],
+  "exclusions": [],
   "networks": [],
   "services": { "intelligence": [], "model": [], "telemetry": [] }
 }
 ```
 
-`example.test` covers the apex. `*.example.test` covers subdomains and does not include the apex. The two exclusion entries together exclude `excluded.example.test` and every descendant; exclusions take precedence over matching target rules. A target must be a complete host-rule object, not a hostname string.
+When enabled, the only production target is `www.prod.norsestar.internal`. Dev and test subdomains are also in scope; wildcards cover nested subdomains but not their apex. Every other production host and every destination outside these three rules is out of scope, even if reachable through an allowed system. Do not add a `*.prod.norsestar.internal` exclusion: exclusions take precedence, so that would block the allowed website too. The narrow target allowlist denies other production systems without an exclusion.
 
-This first template covers HTTP and HTTPS on ports 80 and 443 and all URL paths. Other ports must currently be listed explicitly. The preview explains the draft's boundary; the server validates the submitted scope before applying it. Existing targets are preserved when the editor opens or the app restarts. Prefilling empty targets retains configured service rules and custom exclusions or network grants. Example exclusions appear only when neither exclusions nor network grants are configured.
+The supplied rules permit HTTP/HTTPS on ports 80/443 and every URL path, including private IPv4 and unique-local IPv6 answers for those hosts. Other ports and protocols require explicit configuration. Loopback and other restricted networks require explicit CIDRs when enforcement is on. Direct IP targets also require a matching network grant.
 
-**Insert example targets** restores the apex and wildcard rules if you clear the editor. It retains the other settings in a valid JSON draft, or uses the saved settings when the draft is blank or invalid. The working reference remains available after configuration.
+With scope management off, target host, port, path, exclusion and network boundaries are not enforced. DNS answers are still validated and pinned to each connection. Credential host bindings, action-effect reviews, request budgets, service destination controls and worker isolation remain active. Turning enforcement off does not expand the authorized assessment: the agent receives the declared scope and the current enforcement state in its instructions.
 
-For internal targets, use complete host rules and authorize only the intended network CIDRs. `allowPrivateAddresses` permits private IPv4 and unique-local IPv6 DNS answers for that host. `networks` can authorize other restricted ranges and is required for direct IP targets. For example, a target rule for `192.0.2.10` needs `192.0.2.10/32` in `networks`. A hostname rule, private-address permission and a CIDR perform distinct checks.
+The enabled setting and target rules persist across restarts. Existing engagements retain saved targets, service rules and enforcement; older scopes without an `enabled` field remain enforced. Only newly created profiles start off. **Insert course targets** restores the three target rules in the editor while retaining other valid draft settings, including the switch, service endpoints and custom network grants. Empty targets prefill the same course draft. Draft edits take effect only after Apply succeeds.
 
 Configured model API roots are authorized automatically for model traffic, including explicitly declared auxiliary roots and private gateways. They do not become assessment targets. Loopback providers must be explicitly configured as loopback endpoints; public names resolving to loopback still require review.
 

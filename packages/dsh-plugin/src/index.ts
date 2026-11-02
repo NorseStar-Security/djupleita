@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-user-approval';
 import type { ReviewOrigin } from './review.ts';
 import type {} from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-api-session-controller';
+import type {} from '@deepseek-ai/dsh-system-prompt';
 import type { JudgmentProvider, Json, IdentityId } from '@dsh-pentest/contracts';
 import { canonical, digest, PentestError } from '@dsh-pentest/contracts';
 import { SelectedModelJudge } from '@dsh-pentest/policy';
@@ -392,6 +393,10 @@ export async function applyCore(ctx: Context, config: RuntimeConfig, internals: 
   const runtime = await PentestRuntime.open(config, internals.judge ?? modelJudge(ctx));
   ctx.effect(() => () => runtime.close(), 'pentest: durable stores');
   ctx.provide('pentest', runtime);
+  ctx.inject(['systemPrompt'], inner => {
+    inner.systemPrompt.context({ name: 'djupleita-target-scope', order: 790, required: true, interpolate: false,
+      text: () => runtime.scope.instructions() });
+  });
   // A provided service becomes available after this parent activates. Its children
   // must mount through Cordis dependency scheduling, rather than being awaited here.
   ctx.plugin(ToolPolicy);

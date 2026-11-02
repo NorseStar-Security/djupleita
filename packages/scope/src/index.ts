@@ -58,6 +58,7 @@ function inNetwork(address: string, network: string): boolean {
 export class ScopeService {
   readonly version: string;
   readonly scope: Readonly<Scope>;
+  get enabled(): boolean { return this.scope.enabled !== false; }
   constructor(scope: Scope, private readonly resolver: Resolver = host => lookup(host, { all: true, verbatim: true }), private readonly reviewer?: ScopeReviewer) {
     const parsed = ScopeSchema.parse(scope);
     for (const rule of [...parsed.targets, ...Object.values(parsed.services).flat()]) rule.host = pattern(rule.host);
@@ -102,13 +103,15 @@ export class ScopeService {
     catch (cause) { throw new PentestError('INVALID_DESTINATION', 'Invalid destination URL', { cause }); }
     if (url.username || url.password) throw new PentestError('URL_CREDENTIALS', 'Credentials must use identity references');
     const host = hostname(url.hostname);
+    const scheme = url.protocol.slice(0, -1);
+    if (!['http', 'https', 'tcp', 'tls'].includes(scheme)) throw new PentestError('INVALID_DESTINATION', 'Destination protocol is not supported');
+    const port = url.port ? Number(url.port) : scheme === 'https' || scheme === 'tls' ? 443 : scheme === 'http' ? 80 : 0;
+    if (!this.enabled && destination.purpose === 'target') return { url,
+      rule: { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: ['/'], allowPrivateAddresses: true } };
     const override = this.reviewer?.allows('scope', destination) ?? false;
     if (!override && this.scope.exclusions.some(rule => matchesHost(host, rule))) {
       throw new PentestError('OUT_OF_SCOPE', `Excluded destination: ${host}`);
     }
-    const scheme = url.protocol.slice(0, -1);
-    if (!['http', 'https', 'tcp', 'tls'].includes(scheme)) throw new PentestError('INVALID_DESTINATION', 'Destination protocol is not supported');
-    const port = url.port ? Number(url.port) : scheme === 'https' || scheme === 'tls' ? 443 : scheme === 'http' ? 80 : 0;
     const rules = destination.purpose === 'target' ? this.scope.targets : this.scope.services[destination.purpose];
     const rule = rules.find(candidate => matchesHost(host, candidate.host)
       && candidate.schemes.some(allowed => allowed === scheme)
@@ -127,6 +130,7 @@ export class ScopeService {
   async ensure(destination: Destination, signal: AbortSignal): Promise<void> {
     try {
       this.check(destination);
+      if (!this.enabled && destination.purpose === 'target') return;
       if (this.reviewer?.allows('scope', destination)) await this.reviewer.request('scope', destination, 'Saved destination allowance', signal);
     }
     catch (error) {
@@ -148,6 +152,7 @@ export class ScopeService {
     for (const entry of addresses) {
       const parsed = ipaddr.process(entry.address);
       if (entry.family !== isIP(entry.address)) throw new PentestError('DNS_INVALID', 'DNS address family mismatch');
+      if (!this.enabled && destination.purpose === 'target') continue;
       const allowedPrivate = rule.allowPrivateAddresses && ['private', 'uniqueLocal'].includes(parsed.range());
       if (parsed.range() !== 'unicast' && !allowedPrivate
         && !this.scope.networks.some(network => inNetwork(entry.address, network))) {
@@ -159,5 +164,13 @@ export class ScopeService {
       }
     }
     return Object.freeze({ url, rule, addresses: Object.freeze(addresses.map(entry => Object.freeze({ ...entry }))), scopeVersion: this.version });
+  }
+
+  instructions(): string {
+    return [`Target scope management is ${this.enabled ? 'ON: target boundaries are enforced.' : 'OFF: target host, port, path and network boundaries are not enforced.'}`,
+      'Follow the declared engagement scope even when enforcement is off. An available route or credential does not authorize another target. Only the operator can change scope management in Plugins → Djupleita → Policy.',
+      'Only the listed target rules are authorized; every unlisted destination is out of scope. Wildcards cover subdomains, not the apex. Exclusions take precedence. Service destinations are separate from targets. Action review, credential host bindings and request budgets remain active.',
+      JSON.stringify({ targets: this.scope.targets, exclusions: this.scope.exclusions, networks: this.scope.networks }),
+    ].join('\n');
   }
 }

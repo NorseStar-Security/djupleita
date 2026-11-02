@@ -17,6 +17,12 @@ const profile = join(process.env.DSH_HOME, 'profiles/pentest');
 const require = createRequire(resolve('vendor/deepseek-harness/packages/boot/config-editor/package.json'));
 let ctx;
 try {
+  const courseScope = JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8'));
+  const suffix = courseScope.targets[0].host.split('.').slice(-2).join('.');
+  const example = JSON.parse(JSON.stringify(courseScope).replaceAll(suffix, 'example.test'));
+  const template = JSON.parse(await readFile(resolve('configs/engagement.example.json'), 'utf8'));
+  template.scope = example;
+  await writeFile(process.env.DSH_PENTEST_ENGAGEMENT, JSON.stringify(template));
   await prepareProfile(profile);
   const path = join(profile, 'cordis.patch.yml');
   // Preserve executable platform expressions through a document edit.
@@ -38,6 +44,8 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const anonymous = await page.request.get(ctx.webServer.getOrigin());
+    assert.equal(anonymous.status(), 401, 'Web startup must require authentication');
     await page.goto(ctx.connection.authenticatedUrl(ctx.webServer.getOrigin()));
     const poll = async predicate => {
       for (let i = 0; i < 100; i++) { if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
@@ -55,21 +63,39 @@ try {
     };
     await policy();
     const editor = page.locator('textarea[name="scope"]');
-    const example = JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8'));
-    assert.deepEqual(JSON.parse(await editor.inputValue()), example);
-    assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Draft must remain inactive');
+    const readScope = async () => JSON.parse((await editor.inputValue()).replaceAll(suffix, 'example.test'));
+    assert.deepEqual(await readScope(), example);
+    const toggle = page.getByRole('switch', { name: 'Scope management', exact: true });
+    assert.equal(await toggle.isChecked(), false);
+    assert.equal(ctx.pentest.scope.enabled, false, 'Fresh course scope management starts off');
+    assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://mail.prod.example.test/', purpose: 'target' }));
+    await toggle.check();
+    assert.equal(ctx.pentest.scope.enabled, false, 'Switch changes remain a draft until Apply');
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => ctx.pentest.scope.enabled);
+    assert.throws(() => ctx.pentest.scope.check({ url: 'https://mail.prod.example.test/', purpose: 'target' }), /outside/);
+    for (const host of ['www.prod.example.test', 'app.dev.example.test', 'app.test.example.test']) {
+      assert.doesNotThrow(() => ctx.pentest.scope.check({ url: `https://${host}/`, purpose: 'target' }));
+    }
+    await page.reload(); await policy();
+    assert.equal(await toggle.isChecked(), true, 'Enabled setting survives browser reload');
+    await toggle.uncheck();
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => !ctx.pentest.scope.enabled);
+    await page.reload(); await policy();
+    assert.equal(await toggle.isChecked(), false);
     const services = { ...example.services, model: [{ host: 'model.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/v1'], allowPrivateAddresses: false }] };
-    await ctx.pentest.updateSettings({ targets: [], exclusions: [], networks: [], services }, (await ctx.pentest.snapshot()).policy, 'web-fixture');
+    await ctx.pentest.updateSettings({ enabled: false, targets: [], exclusions: [], networks: [], services }, (await ctx.pentest.snapshot()).policy, 'web-fixture');
     await page.reload(); await policy();
     const configuredDraft = { ...example, services };
-    assert.deepEqual(JSON.parse(await editor.inputValue()), configuredDraft, 'Configured model services must not suppress example targets');
+    assert.deepEqual(await readScope(), configuredDraft, 'Configured model services must not suppress example targets');
     await editor.fill('');
-    await page.getByRole('button', { name: 'Insert example targets', exact: true }).click();
-    assert.deepEqual(JSON.parse(await editor.inputValue()), configuredDraft, 'A blank editor can restore the example with its saved services');
+    await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
+    assert.deepEqual(await readScope(), configuredDraft, 'A blank editor can restore the example with its saved services');
     const customDraft = { ...configuredDraft, targets: [], exclusions: ['custom.example.test'], networks: ['192.0.2.0/24'] };
     await editor.fill(JSON.stringify(customDraft));
-    await page.getByRole('button', { name: 'Insert example targets', exact: true }).click();
-    assert.deepEqual(JSON.parse(await editor.inputValue()), { ...customDraft, targets: example.targets }, 'Inserting targets preserves other draft settings');
+    await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
+    assert.deepEqual(await readScope(), { ...customDraft, targets: example.targets }, 'Inserting targets preserves other draft settings');
     assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Prefill and restore must remain inactive');
     if (process.env.DSH_TEST_SCOPE_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_SCOPE_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).click();
@@ -99,10 +125,10 @@ try {
     saved.services.telemetry = [{ host: 'logs.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/otlp'], allowPrivateAddresses: false }];
     await editor.fill(JSON.stringify(saved, null, 2));
     await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
-    await poll(() => ctx.pentest.scope.scope.targets[0]?.host === 'accepted.example.test');
+    await poll(() => ctx.pentest.scope.scope.targets[0]?.host === 'www.prod.accepted.example.test');
     await page.reload(); await policy();
     assert.deepEqual(JSON.parse(await editor.inputValue()), saved);
-    assert(await page.getByText('Working target and exclusion example', { exact: true }).count());
+    assert(await page.getByText('Default course scope', { exact: true }).count());
     await plugins();
     await page.getByText('Djupleita · REA & Ghidra', { exact: true }).click();
     await page.getByRole('button', { name: 'Show setup reminder', exact: true }).click();
@@ -110,6 +136,6 @@ try {
     await policy();
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).waitFor();
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
-    console.log(JSON.stringify({ authenticatedWeb: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }

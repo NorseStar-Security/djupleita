@@ -235,6 +235,13 @@ it('activates the complete parent/child plugin tree and exposes the owner-only d
     expect(response.status).toBe(200);
     expect((await response.json() as { result: { ok: boolean } }).result.ok).toBe(true);
     const sessionId = id<'SessionId'>();
+    const scopeInstructions = async () => (await ctx.systemPrompt.assemble()).contexts.find(item => item.name === 'djupleita-target-scope')?.text;
+    expect(await scopeInstructions()).toContain('ON: target boundaries are enforced');
+    expect(await scopeInstructions()).toContain('*.example.test');
+    const scopeSession = id<'SessionId'>();
+    await ctx.pentest.updateSettings({ ...ctx.pentest.scope.scope, enabled: false }, policyConfig, scopeSession);
+    expect(await scopeInstructions()).toContain('OFF: target host, port, path and network boundaries are not enforced');
+    await ctx.pentest.updateSettings({ ...ctx.pentest.scope.scope, enabled: true }, policyConfig, scopeSession);
     await ctx.pentest.trajectories.append(sessionId, 'fixture/first', { value: 1 });
     await ctx.pentest.trajectories.append(sessionId, 'fixture/second', { value: 2 });
     await ctx.pentest.trajectories.append(sessionId, 'fixture/large', { body: 'x'.repeat(20000) });

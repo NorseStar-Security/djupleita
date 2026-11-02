@@ -2,6 +2,8 @@ import { expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 import { id, digest, ScopeSchema } from '../packages/contracts/src/index.ts';
 import type { SessionId } from '../packages/contracts/src/index.ts';
 import { PolicyService } from '../packages/policy/src/index.ts';
@@ -105,23 +107,24 @@ it('keeps setup dismissal through restart and refresh without changing tool conf
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-it('prefills empty target scope with a schema-valid wildcard and ports and enforces exclusions', () => {
-  const empty = { targets: [], exclusions: [], networks: [], services: { model: [], intelligence: [], telemetry: [] } };
-  const shown = initialScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown)), scopes = new ScopeService(parsed);
+it('prefills course targets, keeps legacy enforcement on, and preserves existing settings', () => {
+  const empty = { enabled: false, targets: [], exclusions: [], networks: [], services: { model: [], intelligence: [], telemetry: [] } };
+  const shown = initialScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown));
   expect(JSON.parse(shown)).toEqual(scopeExample);
-  for (const url of ['https://example.test/', 'https://app.example.test/any/path']) expect(() => scopes.check({ url, purpose: 'target' })).not.toThrow();
-  for (const url of ['https://excluded.example.test/', 'https://nested.excluded.example.test/', 'https://other.test/']) expect(() => scopes.check({ url, purpose: 'target' })).toThrow();
+  expect(JSON.parse(initialScopeDraft({ ...empty, enabled: undefined })).enabled).toBe(true);
   expect(JSON.parse(initialScopeDraft(scope()))).toEqual(scope());
   expect(JSON.parse(initialScopeDraft({}))).toEqual(scopeExample);
   for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443]);
   expect(scopePreview(shown)).toContain('ports 80, 443');
+  expect(scopePreview(shown)).toContain('OFF');
+  expect(scopePreview(JSON.stringify({ ...parsed, enabled: true }))).toContain('ON');
   expect(scopePreview('{')).toContain('needs attention');
   expect(scopePreview(JSON.stringify({ ...empty, targets: ['*.example.test'] }))).toContain('host-rule object');
 });
 
 it('prefills targets even after model/service setup and preserves custom boundaries and saved targets', () => {
   const services = { model: scope().targets, intelligence: scope().targets, telemetry: scope().targets };
-  const empty = { targets: [], exclusions: [], networks: [], services };
+  const empty = { enabled: false, targets: [], exclusions: [], networks: [], services };
   const initial = ScopeSchema.parse(JSON.parse(initialScopeDraft(empty)));
   expect(initial).toEqual({ ...scopeExample, services });
   expect(empty.targets).toEqual([]);
@@ -130,4 +133,47 @@ it('prefills targets even after model/service setup and preserves custom boundar
   }
   const saved = { ...scope(), services };
   expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
+});
+
+it('retains the target enforcement switch across restarts and cancels work when it changes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'djupleita-scope-switch-'));
+  const config = { root, engagement: engagement({ scope: { ...scope('allowed.example.test'), enabled: false } }), policy: policyConfig,
+    keychainHelper: '/unused', secrets: { async get() { return undefined; }, async set() {}, async remove() {} } };
+  let runtime = await PentestRuntime.open(config, testJudge);
+  const destination = { url: 'http://outside.example.test:8123/', purpose: 'target' as const }, session = id<'SessionId'>();
+  try {
+    expect(() => runtime.scope.check(destination)).not.toThrow();
+    expect(runtime.scope.instructions()).toContain('OFF');
+    const signal = runtime.signal(new AbortController().signal), version = runtime.scope.version;
+    await runtime.updateSettings({ ...runtime.scope.scope, enabled: true }, policyConfig, session);
+    expect(signal.aborted).toBe(true); expect(runtime.scope.version).not.toBe(version);
+    expect(() => runtime.scope.check(destination)).toThrow('outside');
+    expect(runtime.scope.instructions()).toContain('ON');
+    await runtime.close(); runtime = await PentestRuntime.open(config, testJudge);
+    expect(runtime.scope.enabled).toBe(true); expect(() => runtime.scope.check(destination)).toThrow('outside');
+    await runtime.updateSettings({ ...runtime.scope.scope, enabled: false }, policyConfig, session);
+    await runtime.close(); runtime = await PentestRuntime.open(config, testJudge);
+    expect(runtime.scope.enabled).toBe(false); expect(() => runtime.scope.check(destination)).not.toThrow();
+    const events = await runtime.trajectories.page(session);
+    expect(events.events.filter(event => event.type === 'engagement/settings')).toHaveLength(2);
+  } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+it('lets a local target request through when off and blocks it before the socket when enabled', async () => {
+  let hits = 0;
+  const server = createServer((_request, response) => { hits++; response.end('local scope fixture'); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('No fixture port');
+  const root = await mkdtemp(join(tmpdir(), 'djupleita-scope-http-'));
+  const config = { root, engagement: engagement({ scope: { ...scope('allowed.example.test'), enabled: false } }), policy: policyConfig,
+    keychainHelper: '/unused', secrets: { async get() { return undefined; }, async set() {}, async remove() {} } };
+  const runtime = await PentestRuntime.open(config, testJudge), session = id<'SessionId'>(); runtime.attach(session);
+  try {
+    const request = { url: `http://127.0.0.1:${address.port}/fixture`, method: 'GET' as const, headers: {} };
+    expect((await runtime.http(session).request(request, session, AbortSignal.timeout(5000))).status).toBe(200);
+    expect(hits).toBe(1);
+    await runtime.updateSettings({ ...runtime.scope.scope, enabled: true }, policyConfig, session);
+    await expect(runtime.http(session).request(request, session, AbortSignal.timeout(5000))).rejects.toThrow('outside');
+    expect(hits).toBe(1);
+  } finally { await runtime.close(); server.close(); await once(server, 'close'); await rm(root, { recursive: true, force: true }); }
 });

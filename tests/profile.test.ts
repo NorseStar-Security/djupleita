@@ -17,6 +17,10 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'existing-profile',
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } } }));
     prepare();
+    const engagementPath = join(directory, 'engagement.json');
+    const freshEngagement = await readFile(engagementPath, 'utf8');
+    expect(JSON.parse(freshEngagement).scope).toEqual(JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8')));
+    expect(JSON.parse(freshEngagement).scope.enabled).toBe(false);
     const path = join(directory, 'package.json');
     const manifest = JSON.parse(await readFile(path, 'utf8'));
     expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-rea');
@@ -84,6 +88,7 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     ]));
     prepare();
     expect(await readFile(patchPath, 'utf8')).toBe(patch);
+    expect(await readFile(engagementPath, 'utf8')).toBe(freshEngagement);
     const upgraded = JSON.parse(await readFile(path, 'utf8'));
     upgraded.dsh.profile.bundles = upgraded.dsh.profile.bundles.filter((name: string) => name !== '@djupleita/plugin-ffuf');
     await writeFile(path, JSON.stringify(upgraded)); prepare();
