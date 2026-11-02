@@ -159,21 +159,25 @@ it('retains the target enforcement switch across restarts and cancels work when 
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-it('lets a local target request through when off and blocks it before the socket when enabled', async () => {
+it('lets excluded local reads and writes through when off and blocks them before the socket when enabled', async () => {
   let hits = 0;
   const server = createServer((_request, response) => { hits++; response.end('local scope fixture'); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('No fixture port');
   const root = await mkdtemp(join(tmpdir(), 'djupleita-scope-http-'));
-  const config = { root, engagement: engagement({ scope: { ...scope('allowed.example.test'), enabled: false } }), policy: policyConfig,
+  const config = { root, engagement: engagement({ scope: { ...scope('allowed.example.test'), enabled: false, exclusions: ['127.0.0.1'] } }), policy: policyConfig,
     keychainHelper: '/unused', secrets: { async get() { return undefined; }, async set() {}, async remove() {} } };
   const runtime = await PentestRuntime.open(config, testJudge), session = id<'SessionId'>(); runtime.attach(session);
   try {
-    const request = { url: `http://127.0.0.1:${address.port}/fixture`, method: 'GET' as const, headers: {} };
-    expect((await runtime.http(session).request(request, session, AbortSignal.timeout(5000))).status).toBe(200);
-    expect(hits).toBe(1);
+    const request = { url: `http://127.0.0.1:${address.port}/fixture`, headers: {} };
+    for (const method of ['GET', 'POST'] as const) {
+      expect((await runtime.http(session).request({ ...request, method }, session, AbortSignal.timeout(5000))).status).toBe(200);
+    }
+    expect(hits).toBe(2);
     await runtime.updateSettings({ ...runtime.scope.scope, enabled: true }, policyConfig, session);
-    await expect(runtime.http(session).request(request, session, AbortSignal.timeout(5000))).rejects.toThrow('outside');
-    expect(hits).toBe(1);
+    for (const method of ['GET', 'POST'] as const) {
+      await expect(runtime.http(session).request({ ...request, method }, session, AbortSignal.timeout(5000))).rejects.toThrow('Excluded');
+    }
+    expect(hits).toBe(2);
   } finally { await runtime.close(); server.close(); await once(server, 'close'); await rm(root, { recursive: true, force: true }); }
 });

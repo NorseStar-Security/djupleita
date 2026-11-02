@@ -21,6 +21,6 @@ export function scopePreview(draft: string): string {
       return `${rule.host}: ${rule.schemes.join('/')} · ports ${rule.ports.join(', ')} · paths ${rule.pathPrefixes.join(', ')}`;
     });
     return [`Scope management: ${scope.enabled === false ? 'OFF · target boundaries are not enforced' : 'ON · active testing requires target authorization'}`, ...targets, `Excluded: ${scope.exclusions.join(', ') || 'none'}`, `Network grants: ${scope.networks.join(', ') || 'none'}`,
-      'Ordinary web reads and passive research may use unlisted sites. Exclusions block reads and active testing even when scope management is off. This draft becomes active only after Apply.'].join('\n');
+      'Ordinary web reads and passive research may use unlisted sites. Target rules, exclusions and target network boundaries apply only when scope management is on. This draft becomes active only after Apply.'].join('\n');
   } catch (error) { return `Scope draft needs attention: ${error instanceof Error ? error.message : 'Invalid JSON'}`; }
 }

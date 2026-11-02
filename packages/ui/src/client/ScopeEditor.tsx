@@ -22,7 +22,7 @@ export function ScopeEditor({ scope, title }: { scope: Record<string, unknown>; 
     <label>{title}<textarea className={css.editor} name="scope" value={draft} onChange={event => setDraft(event.target.value)} required spellCheck={false} /></label>
     <button type="button" className={css.button} onClick={insertExampleTargets}>Insert course targets</button>
     <p>The course permits active testing of {scopeExample.targets[0]!.host}, {scopeExample.targets[1]!.host} and {scopeExample.targets[2]!.host}. The website is the only production system authorized for active testing. Ordinary web reads and passive research may use unlisted sites, such as CVE databases and exploit blogs.</p>
-    <p>Exclusions block both research and active testing, including when scope management is off, unless you explicitly approve an override. These target rules cover HTTP and HTTPS on ports 80/443 and every path, including private internal addresses. Wildcards cover subdomains only. Reachability does not authorize scans or writes; private-network checks, credential bindings and action reviews still apply.</p>
+    <p>When scope management is on, exclusions block both research and active testing unless you explicitly approve an override. When off, target rules, exclusions and target network boundaries are inactive. These target rules cover HTTP and HTTPS on ports 80/443 and every path, including private internal addresses. Wildcards cover subdomains only. Credential bindings, action reviews and budgets remain active.</p>
     <details><summary>Default course scope</summary><pre>{JSON.stringify(scopeExample, null, 2)}</pre></details>
     <details open><summary>Draft scope preview</summary><pre aria-live="polite">{scopePreview(draft)}</pre></details>
   </>;

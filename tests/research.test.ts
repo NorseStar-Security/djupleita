@@ -24,14 +24,28 @@ it('allows unlisted web research while preserving active target, service and exc
     expect(() => service.check({ ...read, purpose })).toThrow('outside');
   }
   for (const host of ['blocked.example.test', 'a.excluded.example.test']) {
-    for (const enabled of [true, false]) {
-      const excluded = new ScopeService({ ...config, enabled }, resolver);
-      await expect(excluded.authorize({ ...read, url: `https://${host}/` })).rejects.toThrow('Excluded');
-      expect(() => excluded.check({ url: `https://${host}/`, purpose: 'target' })).toThrow('Excluded');
-    }
+    await expect(service.authorize({ ...read, url: `https://${host}/` })).rejects.toThrow('Excluded');
+    expect(() => service.check({ url: `https://${host}/`, purpose: 'target' })).toThrow('Excluded');
   }
   expect(() => service.check({ ...read, url: 'tcp://research.example.test:443/' })).toThrow('outside');
   expect(resolver).toHaveBeenCalledTimes(1);
+});
+
+it('disables target exclusions and network boundaries for reads and active calls without asking for scope review', async () => {
+  const config = { ...scope('target.example.test'), enabled: false, exclusions: ['excluded.example.test'] };
+  const reviewer = { allows: vi.fn(() => false), request: vi.fn(async () => false) };
+  const resolver = async () => [{ address: '127.0.0.1', family: 4 }];
+  const off = new ScopeService(config, resolver, reviewer);
+  for (const access of ['read', 'active'] as const) {
+    await expect(off.authorize({ url: 'http://excluded.example.test:8123/private', purpose: 'target', access })).resolves.toBeTruthy();
+  }
+  expect(reviewer.allows).not.toHaveBeenCalled(); expect(reviewer.request).not.toHaveBeenCalled();
+  expect(off.instructions()).toContain('Saved target rules and exclusions are inactive');
+  expect(off.instructions()).not.toContain('Exclusions block reads');
+  const on = new ScopeService({ ...config, enabled: true }, resolver, reviewer);
+  for (const access of ['read', 'active'] as const) {
+    expect(() => on.check({ url: 'http://excluded.example.test:8123/private', purpose: 'target', access })).toThrow('Excluded');
+  }
 });
 
 it('retains DNS pinning, rebinding checks and explicit private-network grants for unlisted reads', async () => {
