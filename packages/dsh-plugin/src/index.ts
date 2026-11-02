@@ -19,6 +19,7 @@ import { PentestRuntime } from './runtime.ts';
 import type { EffectDescriptor, RuntimeConfig } from './runtime.ts';
 import { DesktopChannel } from './rpc.ts';
 import { inspectTrajectory, TrajectoryInputSchema } from './inspection.ts';
+import { webFetch } from './web-fetch.ts';
 import { BrowserInputSchema } from '@dsh-pentest/browser';
 import { ReconInputSchema, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
 import { FuzzInputSchema } from '@dsh-pentest/fuzz';
@@ -98,7 +99,9 @@ export const ToolPolicy = {
     });
     ctx.on('tools/execute', async (exec, next) => {
       const binding = accepted.get(exec.token);
-      return binding ? ctx.pentest.review.run(binding.origin, () => next()) : next();
+      return binding ? ctx.pentest.review.run(binding.origin, async () => exec.name === 'web_fetch'
+        ? { isError: false as const, value: await webFetch(ctx.pentest, exec), content: [] }
+        : next()) : next();
     });
     // Other harness plugins (sandbox, files, shell) use the same owner review surface.
     ctx.on('approval/request', async (request, next) => {

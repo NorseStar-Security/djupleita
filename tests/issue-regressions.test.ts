@@ -178,6 +178,8 @@ it('lets excluded local reads and writes through when off and blocks them before
     for (const method of ['GET', 'POST'] as const) {
       await expect(runtime.http(session).request({ ...request, method }, session, AbortSignal.timeout(5000))).rejects.toThrow('Excluded');
     }
+    await runtime.updateSettings({ ...runtime.scope.scope, exclusions: [] }, policyConfig, session);
+    await expect(runtime.http(session).request({ ...request, method: 'GET' }, session, AbortSignal.timeout(5000), undefined, 'active')).rejects.toThrow('outside');
     expect(hits).toBe(2);
   } finally { await runtime.close(); server.close(); await once(server, 'close'); await rm(root, { recursive: true, force: true }); }
 });
