@@ -1,0 +1,21 @@
+{
+  "name": "@djupleita/plugin-validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Owner-defined object authorization proofs, negative controls, independent review and redacted reports.",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@dsh-pentest/dsh-plugin": "workspace:*"
+  }
+}

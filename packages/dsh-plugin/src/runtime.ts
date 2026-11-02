@@ -14,6 +14,7 @@ import { HttpBroker, ServiceJsonClient } from '@dsh-pentest/http';
 import { AttackGraph } from '@dsh-pentest/graph';
 import { CrawlFrontier, CrawlService } from '@dsh-pentest/crawl';
 import { AuthzService } from '@dsh-pentest/authz';
+import { AssessmentService } from '@dsh-pentest/assessment';
 import { BrowserService } from '@dsh-pentest/browser';
 import { ReconService, ReconConfigSchema, PassiveConfigSchema, PassiveReconService, installReconTools } from '@dsh-pentest/recon';
 import { FuzzService, FuzzConfigSchema, installFfuf as installFfufTool } from '@dsh-pentest/fuzz';
@@ -80,6 +81,7 @@ export class PentestRuntime {
   private revision = new AbortController();
   readonly trajectories: TrajectoryStore;
   readonly evidence: EvidenceStore;
+  readonly assessment: AssessmentService;
   readonly identities: IdentityService;
   readonly graph: AttackGraph;
   private currentFrontier: CrawlFrontier;
@@ -100,7 +102,6 @@ export class PentestRuntime {
   private constructor(readonly config: RuntimeConfig, private readonly judge: JudgmentProvider) {
     EngagementSchema.parse(config.engagement); PolicyConfigSchema.parse(config.policy);
     this.root = resolve(config.root, config.engagement.id);
-    this.engagement = new EngagementService(config.engagement);
     this.review = new ReviewService(this.root, () => digest({ scope: this.scope.version, policy: this.currentPolicy, plugins: this.currentPlugins }), { append: (session, type, data) => this.trajectories.append(session, type, data) }, value => this.redactor.json(value));
     this.currentScope = new ScopeService(config.engagement.scope, undefined, this.review);
     this.currentPolicy = freeze(PolicyConfigSchema.parse(config.policy));
@@ -109,6 +110,15 @@ export class PentestRuntime {
     this.evidence = new EvidenceStore(this.root, this.redactor);
     this.identities = new IdentityService(config.engagement.id, config.secrets ?? new MacKeychainProvider(resolve(config.keychainHelper)), this.redactor);
     this.graph = new AttackGraph(join(this.root, 'graph.sqlite'), config.engagement.id);
+    this.assessment = new AssessmentService(join(this.root, 'assessment.sqlite'), {
+      revision: () => this.assessmentRevision(), checkUrl: url => { this.scope.check({ url, purpose: 'target' }); },
+      hasIdentity: identity => this.identities.list().some(item => item.id === identity),
+      http: session => this.http(session), evidence: this.evidence, redactor: this.redactor,
+    });
+    const initial = this.assessment.budgetState();
+    this.engagement = new EngagementService(config.engagement, Date.now, {
+      ...(initial ? { initial } : {}), save: value => this.assessment.saveBudget(value),
+    });
     this.currentFrontier = new CrawlFrontier({ maxPages: Math.min(500, config.engagement.budget.requests),
       maxDepth: config.engagement.budget.maxDepth, maxQueued: 10000, maxPerTemplate: 3, stalePageLimit: 25 }, this.scope);
   }
@@ -145,18 +155,21 @@ export class PentestRuntime {
       const metadata = z.array(IdentitySchema).parse(JSON.parse(await readFile(join(runtime.root, 'identities.json'), 'utf8')));
       for (const identity of metadata) runtime.identities.restore(identity as Identity);
     } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) { runtime.graph.close(); await runtime.releaseWriter(); throw error; }
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) { runtime.graph.close(); runtime.assessment.close(); await runtime.releaseWriter(); throw error; }
     }
     return runtime;
   }
 
-  attach(sessionId: SessionId, model?: Readonly<ModelSelection>): void {
+  attach(sessionId: SessionId, model?: Readonly<ModelSelection>, parent?: SessionId): void {
     this.engagement.attach(sessionId);
+    if (parent) this.assessment.inherit(sessionId, parent);
     if (model) this.selectedModels.set(sessionId, { provider: model.provider, model: model.model });
   }
   session(exec: ToolExecution): SessionId {
     if (!exec.agent) throw new PentestError('SESSION_UNBOUND', 'Pentest tools require a DSH chat');
     const sessionId = exec.agent.id as unknown as SessionId;
+    const parent = exec.agent.session?.header.parentSession;
+    if (parent) this.assessment.inherit(sessionId, parent as unknown as SessionId);
     this.engagement.attach(sessionId);
     if (!this.selectedModels.has(sessionId)) {
       const model = exec.agent.model?.current();
@@ -184,8 +197,10 @@ export class PentestRuntime {
 
   http(session: SessionId): HttpBroker {
     return new HttpBroker({ timeoutMs: 30000, maxRedirects: 5, maxRequestBytes: 4 * 1024 * 1024 },
-      this.engagement, this.scope, this.policy(session), this.identities, this.trajectories, this.evidence, this.redactor, undefined, this.revision.signal, this.approve);
+      this.engagement, this.scope, this.policy(session), this.identities, this.trajectories, this.evidence, this.redactor, undefined, this.revision.signal, this.approve, this.assessment);
   }
+  assessmentRevision(): string { return digest({ scope: this.scope.version, policy: this.currentPolicy, plugins: this.currentPlugins,
+    identities: this.identities.list(), budget: this.config.engagement.budget }); }
   crawl(session: SessionId): CrawlService { return new CrawlService(this.frontier, this.http(session), this.graph); }
   authz(session: SessionId): AuthzService { return new AuthzService(this.http(session), this.identities, this.graph, this.trajectories); }
   services(): ServiceJsonClient { return new ServiceJsonClient(this.scope, this.identities, this.redactor); }
@@ -342,6 +357,7 @@ export class PentestRuntime {
       engagement: { id: this.engagement.engagement.id, name: this.engagement.engagement.name,
         objectives: this.engagement.engagement.objectives, scope: this.scope.scope },
       budget: this.engagement.snapshot(), policyVersion: this.policy(session).version,
+      assessment: this.assessment.current(session) ? this.assessment.scorecard(this.assessment.current(session)!.id) : null,
       identities: { total: identities.length, items: identities.slice(0, 20) },
       graph,
       frontier: { queued: frontier.queued.length, visited: frontier.visited, discovered: frontier.discovered },
@@ -372,6 +388,6 @@ export class PentestRuntime {
     for (const dispose of this.unsubscriptions) dispose();
     await this.metadataQueue; await this.settingsQueue;
     await this.review.close(); this.revision.abort(); await this.browserService?.close(); await this.reaService?.close();
-    try { await this.trajectories.flush(); } finally { this.graph.close(); await this.releaseWriter?.(); }
+    try { await this.trajectories.flush(); } finally { this.graph.close(); this.assessment.close(); await this.releaseWriter?.(); }
   }
 }

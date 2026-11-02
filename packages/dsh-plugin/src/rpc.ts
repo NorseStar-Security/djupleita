@@ -10,6 +10,7 @@ import { ScopeSchema } from '@dsh-pentest/contracts';
 import { PolicyConfigSchema } from '@dsh-pentest/policy';
 import { PluginConfigSchema } from './runtime.ts';
 import type {} from './index.ts';
+import { assessmentEndpoints, assessmentRequest } from './assessment-rpc.ts';
 
 const SessionSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const RequestSchema = z.object({ sessionId: SessionSchema.optional() });
@@ -22,7 +23,7 @@ export const DesktopChannel = {
     ctx.effect(() => ctx.pentest.review.connect(), 'pentest: interactive owner review');
     // Exact Connection Fetch routes require an authenticated owner Peer before
     // dispatch. Keep this surface outside the shared model-facing API gateway.
-    for (const endpoint of ['snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'review/snapshot', 'review/decide', 'review/revoke']) connection.fetch.register({
+    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'review/snapshot', 'review/decide', 'review/revoke']) connection.fetch.register({
       path: `/api/pentest/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {
       const parsed = clientRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -31,6 +32,7 @@ export const DesktopChannel = {
       const reply = (value: unknown): Response => Response.json({ type: 'server-response', rpcId, result: { ok: true, value } });
       try {
         signal.throwIfAborted();
+        if (endpoint.startsWith('assessment/')) return reply(await assessmentRequest(ctx.pentest, endpoint, payload));
         if (endpoint === 'review/snapshot') {
           return reply(ctx.pentest.redactor.json({ ...ctx.pentest.review.snapshot(), setup: { ...await ctx.pentest.toolSetup() } }));
         }

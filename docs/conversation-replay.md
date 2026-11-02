@@ -1,0 +1,13 @@
+# Conversation replay
+
+Djupleita implements [issue #2](https://github.com/NorseStar-Security/djupleita/issues/2) with **Edit and replay** on original human messages. Open the action, revise the text, then select **Replay in new chat**. The new conversation retains history before that message and submits the replacement with the original attachments. The selected request, its response and later conversation events are excluded. The original chat stays available. **Cancel** discards the edit; submission failures keep the edited text visible.
+
+The existing completed-turn branch action still continues from after a response. Both actions use the native session fork engine. The Host validates the selected message and obtains attachment references from its stored content; the browser supplies only its sequence number and revised text. Injected context, compaction checkpoints and nonexistent events cannot be replayed as human requests. Revised text must contain non-whitespace content and fit within 1 MiB.
+
+Before admitting replay, the awaited `api-session/forked` hook records the source conversation and cut in Djupleita's durable assessment storage and trajectory. The child joins the same run, retaining coverage, unresolved leads, findings, readiness rules, paused state and remaining request limits. This also applies to ordinary chat forks. Restart does not reset membership or budgets. Existing independent review and reporting requirements still apply.
+
+A conversation branch does not restore files, browser sessions or the target application's state. It shares the engagement's current configuration and evidence. Earlier external actions remain real; replaying a request can perform new actions under the normal authorization and policy checks. Cancellation before replay admission leaves any created branch idle; cancellation after admission does not undo an accepted request. If a connection fails during submission, check the chat list before submitting again.
+
+The native changes are persisted in `patches/djupleita-replay.patch`, applied after the branding and provider-trust overlays by bootstrap and the harness build. No manual vendor edit is needed on a fresh checkout. Restart the desktop/web process after rebuilding the harness and distribution.
+
+Verification covers first and later requests, retained attachments, invalid anchors and empty edits, cold session reads, cancellation and failed inheritance, unchanged source history, editor errors and cancellation, durable assessment membership, shared reserves and actual admission through the shipped pentest preset. Tests use a local model fixture and make no target requests.

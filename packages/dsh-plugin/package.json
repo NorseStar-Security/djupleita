@@ -69,6 +69,16 @@
       "types": "./src/entries/ffuf.ts",
       "development": "./src/entries/ffuf.ts",
       "default": "./lib/entries/ffuf.js"
+    },
+    "./assessment": {
+      "types": "./src/entries/assessment.ts",
+      "development": "./src/entries/assessment.ts",
+      "default": "./lib/entries/assessment.js"
+    },
+    "./validation": {
+      "types": "./src/entries/validation.ts",
+      "development": "./src/entries/validation.ts",
+      "default": "./lib/entries/validation.js"
     }
   },
   "dependencies": {
@@ -90,6 +100,7 @@
     "@deepseek-ai/cordis": "link:../../vendor/deepseek-harness/vendor/cordis",
     "@deepseek-ai/dsh-tools": "link:../../vendor/deepseek-harness/packages/core/tools",
     "@deepseek-ai/dsh-agent": "link:../../vendor/deepseek-harness/packages/core/agent",
+    "@deepseek-ai/dsh-api-session-controller": "link:../../vendor/deepseek-harness/packages/api/session-controller",
     "@deepseek-ai/dsh-session": "link:../../vendor/deepseek-harness/packages/core/session",
     "@deepseek-ai/dsh-llm": "link:../../vendor/deepseek-harness/packages/llm/llm",
     "@deepseek-ai/dsh-user-approval": "link:../../vendor/deepseek-harness/packages/interaction/user-approval",
@@ -97,6 +108,8 @@
     "@deepseek-ai/dsh-tool-executor-native": "link:../../vendor/deepseek-harness/packages/core/tool-executor-native",
     "@deepseek-ai/dsh-client-connection": "link:../../vendor/deepseek-harness/packages/client/connection",
     "zod": "^4.1.12",
-    "@dsh-pentest/fuzz": "workspace:*"
+    "@dsh-pentest/fuzz": "workspace:*",
+    "@dsh-pentest/assessment": "workspace:*",
+    "@deepseek-ai/dsh-skill": "link:../../vendor/deepseek-harness/packages/skill/skill"
   }
 }

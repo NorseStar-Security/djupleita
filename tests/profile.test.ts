@@ -22,6 +22,8 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-rea');
     expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-recon');
     expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-ffuf');
+    expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-assessment');
+    expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-validation');
     expect(manifest.dependencies['@djupleita/plugin-rea']).toBe(`link:${resolve('packages/plugin-rea')}`);
     manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((name: string) => name !== '@djupleita/plugin-rea');
     // Simulate a profile from before ffuf and bundle introduction tracking existed.

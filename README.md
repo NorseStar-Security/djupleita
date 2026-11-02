@@ -1,8 +1,8 @@
 # Djupleita
 
-A macOS Electron penetration-testing distribution built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), composed from external Cordis plugins. The upstream checkout is pinned in `upstream.lock.json`. Its shared agent loop is unchanged. `patches/djupleita-branding.patch` owns the app name, welcome/menu copy and placement of installed plugin cards; `patches/djupleita-provider-trust.patch` adds captured provider endpoint metadata for the model egress plugin.
+A macOS Electron penetration-testing distribution built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), composed from external Cordis plugins. The upstream checkout is pinned in `upstream.lock.json`. Its shared agent loop is unchanged. `patches/djupleita-branding.patch` owns the app name, welcome/menu copy and placement of installed plugin cards; `patches/djupleita-provider-trust.patch` adds captured provider endpoint metadata for the model egress plugin. `patches/djupleita-replay.patch` adds editing and replay in a new conversation, with assessment state inherited before replay starts.
 
-The Pentest sidebar sits beside each chat and shows its trajectory, evidence graph, identities, scope/effect policy, studies, and plugin configuration. Target actions use managed adapters. Unknown DSH tools pause for an explicit operator decision that identifies their unverified destinations and effects.
+The Pentest sidebar sits beside each chat and shows its trajectory, evidence graph, assessments, identities, scope/effect policy, studies, and plugin configuration. Target actions use managed adapters. Unknown DSH tools pause for an explicit operator decision that identifies their unverified destinations and effects.
 
 **Recon beside the conversation.** Open **Pentest → Graph** to explore discovered hosts and their relationships while reading the agent's results. Discovery records host candidates and the evidence linking them. These observations do not establish that a host is live, verify a vulnerability, or expand the authorized target scope.
 
@@ -10,7 +10,7 @@ The Pentest sidebar sits beside each chat and shows its trajectory, evidence gra
 
 Requires macOS 15+, Node 24.9+ for this workspace, pnpm, and Apple's Command Line Tools. REA has its own stricter Node requirements, described below.
 
-Clone [NorseStar-Security/djupleita](https://github.com/NorseStar-Security/djupleita) and run these commands from its root. The repository now contains this distribution; `upstream.lock.json` and the two reviewed patches reproduce its underlying harness.
+Clone [NorseStar-Security/djupleita](https://github.com/NorseStar-Security/djupleita) and run these commands from its root. The repository now contains this distribution; `upstream.lock.json` and the three reviewed patches reproduce its underlying harness.
 
 ```sh
 git clone https://github.com/NorseStar-Security/djupleita.git
@@ -32,7 +32,11 @@ The upstream package manager may provision its declared Node/pnpm versions. The 
 
 Open the right sidebar and select **Pentest**. Configure a model and its credential through **Models** settings. Its effective API endpoint is allowed automatically, including custom and local providers. Changing engagement scope does not require another provider approval. Add authorized targets separately. New engagements start with empty target scope.
 
-The main **Plugins** page lists eleven managed **Djupleita** bundles under **Installed plugins**, before the upstream settings and experimental plugins. Each card says **Included with Djupleita**, exposes an enable switch, and opens its configuration and engagement controls. **Djupleita · Engagement and identities** provides the required scope, effect-review and Keychain settings. Disabling an optional bundle removes its tools while required enforcement remains active. New bundles are added once when an existing profile upgrades; later launches preserve enable/disable choices.
+The main **Plugins** page lists thirteen managed **Djupleita** bundles under **Installed plugins**, before the upstream settings and experimental plugins. Each card says **Included with Djupleita**, exposes an enable switch, and opens its configuration and engagement controls. **Djupleita · Engagement and identities** provides the required scope, effect-review and Keychain settings. Disabling an optional bundle removes its tools while required enforcement remains active. New bundles are added once when an existing profile upgrades; later launches preserve enable/disable choices.
+
+The **Assessment workflow** and **Finding validation** bundles add five assessment skills, durable bounded runs, readiness checks, coverage and leads, read-only object authorization proofs, owner review and redacted report export. Start with the [assessment workflow guide](docs/assessment-workflow.md). Other finding families remain hypotheses until a dedicated validator is available; reports include only current deterministic proofs accepted by the owner.
+
+User messages offer **Edit and replay** to retry revised instructions in a new chat from that point. Original attachments are retained. Both branches share the engagement and assessment limits; see [Conversation replay](docs/conversation-replay.md).
 
 Startup refreshes distribution-owned profile rows while retaining provider settings, custom rows, comments and Cordis expressions saved by DSH. Before changing the profile patch, it saves a private `cordis.patch.yml.pre-launch.bak`; malformed YAML stops preparation without replacing the file.
 

@@ -19,10 +19,11 @@ import type { ReviewQuestion, ReviewGrant } from '../../../dsh-plugin/src/review
 import type { ToolSetup } from '../../../dsh-plugin/src/setup.ts';
 import { pollingSource } from './polling.ts';
 import { reviewLoader } from './reviews.ts';
+import { AssessmentPanel } from './AssessmentPanel.tsx';
 import type { ReviewSnapshot } from './reviews.ts';
 
 const en = {
-  title: 'Pentest', description: 'Trajectories, evidence and test controls', trajectory: 'Trajectory', graph: 'Graph',
+  title: 'Pentest', description: 'Trajectories, evidence and test controls', trajectory: 'Trajectory', graph: 'Graph', assessment: 'Assessment',
   identities: 'Identities', policy: 'Policy', plugins: 'Plugins', loading: 'Loading engagement…', refresh: 'Refresh',
   requests: 'requests', nodes: 'nodes', edges: 'relationships', noEvents: 'Tool activity will appear here as this chat runs.',
   addIdentity: 'Add identity', name: 'Name', role: 'Role', tenant: 'Tenant', hosts: 'Hosts, separated by commas',
@@ -55,6 +56,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const zh: Record<Key, string> = {
+  assessment: '评估',
   title: '渗透测试', description: '轨迹、证据与测试控制', trajectory: '轨迹', graph: '关系图', identities: '身份', policy: '策略', plugins: '插件',
   loading: '正在加载测试…', refresh: '刷新', requests: '请求', nodes: '节点', edges: '关系', noEvents: '聊天运行时，工具活动会显示在此处。',
   addIdentity: '添加身份', name: '名称', role: '角色', tenant: '租户', hosts: '主机（用逗号分隔）', secret: '凭据', kind: '凭据类型',
@@ -117,8 +119,8 @@ interface PanelInjected {
 type Props = PropsLocale<'pentest'> & InjectFace<PanelInjected> & Pick<GlobalStandardProps, 'useSessions'> & {
   initialTab?: Tab; visibleTabs?: readonly Tab[]; configKeys?: readonly string[]; included?: boolean;
 };
-type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins';
-const TABS: Tab[] = ['trajectory', 'graph', 'identities', 'policy', 'studies', 'plugins'];
+type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins' | 'assessment';
+const TABS: Tab[] = ['trajectory', 'graph', 'assessment', 'identities', 'policy', 'studies', 'plugins'];
 function stringify(value: unknown): string { return JSON.stringify(value, null, 2); }
 function label(row: Row, key: string): string { return String(row[key] ?? ''); }
 
@@ -280,6 +282,7 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
     {state.error && <div className={css.error} role="alert">{state.error}</div>}
     {notice && (tab === 'trajectory' || tab === 'graph') && <div className={css.error} role="alert">{notice}</div>}
     {data && <div className={css.body}>
+      {tab === 'assessment' && <AssessmentPanel key={sessionId} inspect={inspect} sessionId={sessionId} identities={data.identities} />}
       {tab === 'trajectory' && events && <div className={css.timeline}>
         <div className={css.setupActions}><span>{events.total} {t('savedEvents')}</span>
           <button className={css.button} disabled={reading || events.nextBefore === null} onClick={() => { void read(async () => { setHistory(await inspect<EventPage>('trajectory/page', { before: events.nextBefore })); setExpanded(undefined); setDetail(undefined); }); }}>{t('olderEvents')}</button>
