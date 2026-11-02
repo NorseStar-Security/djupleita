@@ -116,7 +116,17 @@ async function socketMasks(roots: string[], allowed: string[], signal: AbortSign
 async function linuxProfile(options: SandboxOptions, executable: string, signal: AbortSignal): Promise<string[]> {
   const args = ['--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/dev/shm'];
   const mounted: { source: string; destination: string; writable: boolean }[] = [];
-  const optional = ['/usr/bin', '/usr/sbin', '/usr/lib', '/usr/lib64', '/usr/libexec', '/bin', '/sbin', '/lib', '/lib64',
+  const triplet = process.arch === 'x64' ? 'x86_64-linux-gnu' : process.arch === 'arm64' ? 'aarch64-linux-gnu' : undefined;
+  const multiarch = triplet && await access(`/usr/lib/${triplet}`).then(() => true, () => false);
+  const libraries = multiarch ? [`/usr/lib/${triplet}`, `/lib/${triplet}`, '/usr/lib/locale', '/usr/lib/ssl', '/usr/lib/file',
+    '/lib/ld-linux-aarch64.so.1', '/usr/lib/ld-linux-aarch64.so.1'] : ['/usr/lib', '/lib'];
+  if (multiarch) {
+    for (const base of ['/usr/lib', '/lib']) {
+      const names = await readdir(base);
+      libraries.push(...names.filter(name => /^python3(?:\.\d+)?$/.test(name)).map(name => join(base, name)));
+    }
+  }
+  const optional = ['/usr/bin', '/usr/sbin', ...libraries, '/usr/lib64', '/usr/libexec', '/bin', '/sbin', '/lib64',
     '/usr/share/ca-certificates', '/usr/share/fonts', '/usr/share/fontconfig', '/usr/share/glib-2.0', '/usr/share/X11',
     '/usr/share/zoneinfo', '/usr/share/file', '/usr/share/misc', '/etc/fonts', '/etc/ld.so.cache', '/etc/ssl', '/etc/pki',
     '/etc/alternatives', '/etc/nsswitch.conf', '/etc/passwd', '/etc/group', '/etc/localtime'];
