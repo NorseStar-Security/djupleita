@@ -80,8 +80,10 @@ async function brokerBridge(port: number): Promise<{ socket: string; program: st
 // Symlinks are not traversed; their destinations must have a separate mount grant.
 async function socketMasks(roots: string[], allowed: string[], signal: AbortSignal): Promise<{ sockets: string[]; privateDirectories: string[] }> {
   const sockets = new Set<string>(), privateDirectories = new Set<string>(), visited = new Set<string>(); let entries = 0;
+  type Input = { path: string; info?: { isSocket(): boolean; isDirectory(): boolean } };
+  const pending: Input[] = roots.map(path => ({ path }));
   const permitted = (path: string) => allowed.some(root => { const tail = relative(root, path); return tail === '' || !tail.startsWith('..') && !isAbsolute(tail); });
-  const walk = async (path: string, info?: { isSocket(): boolean; isDirectory(): boolean }): Promise<void> => {
+  const inspect = async ({ path, info }: Input): Promise<void> => {
     signal.throwIfAborted(); if (visited.has(path) || permitted(path)) return; visited.add(path);
     info ??= await lstat(path);
     if (info.isSocket()) sockets.add(path);
@@ -93,10 +95,16 @@ async function socketMasks(roots: string[], allowed: string[], signal: AbortSign
       });
       entries += children.length;
       if (entries > 1000000) throw new PentestError('SANDBOX_INPUTS', 'Sandbox input tree exceeds its entry limit; select narrower roots');
-      for (const child of children) if (child.isDirectory() || child.isSocket()) await walk(join(path, child.name), child);
+      for (const child of children) if (child.isDirectory() || child.isSocket()) pending.push({ path: join(path, child.name), info: child });
     }
   };
-  for (const root of roots) await walk(root);
+  // Large host /usr trees must not delay every worker behind serial readdir calls.
+  // Bound concurrent I/O while retaining the complete socket inventory and entry limit.
+  for (let next = 0; next < pending.length;) {
+    signal.throwIfAborted();
+    const batch = pending.slice(next, next + 32); next += batch.length;
+    await Promise.all(batch.map(inspect));
+  }
   return { sockets: [...sockets], privateDirectories: [...privateDirectories] };
 }
 

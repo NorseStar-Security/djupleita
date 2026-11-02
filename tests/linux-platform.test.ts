@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, realpath, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -54,13 +54,14 @@ it.skipIf(process.platform !== 'linux')('kills sandbox descendants on cancellati
 });
 
 it.skipIf(process.platform !== 'linux')('masks existing host Unix sockets through input aliases unless private IPC is explicitly granted', async () => {
-  const root = await directory(), input = await directory(), alias = `${root}/selected-inputs`, socket = join(input, 'host.sock');
+  const root = await directory(), input = await directory(), alias = `${root}/selected-inputs`, nested = 'nested/inputs/private', socket = join(input, nested, 'host.sock');
+  await mkdir(join(input, nested), { recursive: true });
   await symlink(input, alias); let hits = 0;
   const server = createServer(client => { hits++; client.end('private fixture'); });
   server.listen(socket); await once(server, 'listening');
   const command = { executable: process.execPath, cwd: root, args: ['-e', `
     const net = require('node:net');
-    Promise.all(${JSON.stringify([socket, join(alias, 'host.sock')])}.map(path => new Promise(resolve => {
+    Promise.all(${JSON.stringify([socket, join(alias, nested, 'host.sock')])}.map(path => new Promise(resolve => {
       const client = net.connect(path); let output = '';
       client.on('data', data => output += data); client.on('error', () => resolve('blocked'));
       client.on('end', () => resolve(output));
