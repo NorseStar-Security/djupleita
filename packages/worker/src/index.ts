@@ -98,7 +98,7 @@ export class WorkerProxy {
       if (!/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\]):[0-9]+$/i.test(authority)) throw new PentestError('PROXY_AUTHORITY', 'Invalid CONNECT authority');
       const grant = await this.scope.authorize({ url: `https://${authority}/`, purpose: this.purpose }, this.signal);
       const rules = this.purpose === 'target' ? this.scope.scope.targets : this.scope.scope.services[this.purpose];
-      if (!rules.some(rule => rule.pathPrefixes.includes('/') && matchesHost(grant.url.hostname, rule.host)
+      if ((this.scope.enabled || this.purpose !== 'target') && !rules.some(rule => rule.pathPrefixes.includes('/') && matchesHost(grant.url.hostname, rule.host)
         && rule.schemes.includes('https') && rule.ports.includes(Number(grant.url.port || 443)))) {
         throw new PentestError('PROXY_PATH', 'TLS tunnels require whole-host path scope');
       }

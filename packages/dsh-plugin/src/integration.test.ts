@@ -1,7 +1,9 @@
+/// <reference path="../../../vendor/deepseek-harness/packages/web/tool-web/src/turndown-plugin-gfm.d.ts" />
 import { it, expect, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import http from 'node:http';
 import { once } from 'node:events';
@@ -16,7 +18,7 @@ import type { GenerateOptions, PreparedAdapterCall, StreamChunk } from '@deepsee
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { id } from '@dsh-pentest/contracts';
-import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, ModelEgressPlugin, modelJudge, apply } from './index.ts';
+import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, HarnessControlEffects, ModelEgressPlugin, ReaTools, AssessmentTools, modelJudge, apply } from './index.ts';
 import { PluginConfigSchema } from './runtime.ts';
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
 import { engagement, policyConfig, testJudge } from '../../../tests/fixtures.ts';
@@ -235,6 +237,13 @@ it('activates the complete parent/child plugin tree and exposes the owner-only d
     expect(response.status).toBe(200);
     expect((await response.json() as { result: { ok: boolean } }).result.ok).toBe(true);
     const sessionId = id<'SessionId'>();
+    const scopeInstructions = async () => (await ctx.systemPrompt.assemble()).contexts.find(item => item.name === 'djupleita-target-scope')?.text;
+    expect(await scopeInstructions()).toContain('Target scope management is ON:');
+    expect(await scopeInstructions()).toContain('*.example.test');
+    const scopeSession = id<'SessionId'>();
+    await ctx.pentest.updateSettings({ ...ctx.pentest.scope.scope, enabled: false }, policyConfig, scopeSession);
+    expect(await scopeInstructions()).toContain('Target scope management is OFF:');
+    await ctx.pentest.updateSettings({ ...ctx.pentest.scope.scope, enabled: true }, policyConfig, scopeSession);
     await ctx.pentest.trajectories.append(sessionId, 'fixture/first', { value: 1 });
     await ctx.pentest.trajectories.append(sessionId, 'fixture/second', { value: 2 });
     await ctx.pentest.trajectories.append(sessionId, 'fixture/large', { body: 'x'.repeat(20000) });
@@ -375,5 +384,159 @@ it('carries one HTTP approval through nested policy checks without executing the
     await h.runtime.review.decide(question.id, question.sessionId, 'once');
     expect((await blocked).isError).toBe(false); expect(requests).toBe(1);
     expect(h.runtime.review.snapshot().pending).toHaveLength(0);
+  } finally { await h.close(); }
+});
+
+it('allows research through the real tool pipeline without granting external mutations or exclusions', async () => {
+  const h = await harness(); let requests = 0;
+  try {
+    const session = h.runtime.session({ agent: h.agent } as ToolExecution);
+    await h.runtime.updateSettings({ ...h.runtime.scope.scope,
+      targets: [{ host: 'target.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/'], allowPrivateAddresses: false }],
+      exclusions: ['excluded.example.test'] }, policyConfig, session);
+    const scopes = new ScopeService(h.runtime.scope.scope, async () => [{ address: '93.184.216.34', family: 4 }], h.runtime.review);
+    vi.spyOn(h.runtime, 'http').mockImplementation(chat => new HttpBroker({ timeoutMs: 1000, maxRedirects: 2, maxRequestBytes: 1024 },
+      h.runtime.engagement, scopes, h.runtime.policy(chat), h.runtime.identities, h.runtime.trajectories, h.runtime.evidence, h.runtime.redactor,
+      async () => { requests++; return { status: 200, headers: {}, body: 'Synthetic CVE research' }; }, undefined, h.runtime.approve));
+    await h.ctx.plugin(HttpTools);
+    for (const method of ['GET', 'HEAD', 'OPTIONS']) {
+      expect((await h.invoke('pentest_http', { url: 'https://research.example.test/blog', method })).isError).toBe(false);
+    }
+    for (const args of [{ url: 'https://research.example.test/blog', method: 'POST' },
+      { url: 'https://research.example.test/items?action=delete', method: 'GET' },
+      { url: 'https://excluded.example.test/blog', method: 'GET' }]) {
+      expect((await h.invoke('pentest_http', args)).isError).toBe(true);
+    }
+    expect(requests).toBe(3);
+    expect(h.runtime.review.snapshot().pending).toHaveLength(0);
+  } finally { await h.close(); }
+});
+
+async function nativeWebHarness() {
+  const WebRuntime = (await import('../../../vendor/deepseek-harness/packages/web/web/src/index.ts')).default;
+  const { HttpFetchProvider } = await import('../../../vendor/deepseek-harness/packages/web/web-fetch-http/src/provider.ts');
+  const ToolWeb = await import('../../../vendor/deepseek-harness/packages/web/tool-web/src/index.ts');
+  const h = await harness();
+  await h.ctx.plugin(HarnessControlEffects);
+  await h.ctx.plugin(WebRuntime, { fetchProvider: 'http' });
+  const provider = new HttpFetchProvider({ maxResponseBytes: 5_000_000, maxBodyChars: 100_000,
+    timeoutMs: 5000, maxRedirects: 5, userAgent: 'local-native-fetch-fixture' });
+  h.ctx.web.registerFetchProvider(provider);
+  const unbrokered = vi.spyOn(provider, 'fetch');
+  await h.ctx.plugin(ToolWeb, { search: false });
+  return { ...h, unbrokered, async fetch(url: string, signal = AbortSignal.timeout(5000)) {
+    const pipeline = new ToolExecutionPipeline(h.ctx);
+    const toolSet = await h.ctx.tools.resolve({ agent: h.agent,
+      modelSelection: { provider: 'fixture', model: 'selected-by-user' }, signal });
+    try {
+      const prepared = await pipeline.prepare({ name: 'web_fetch', arguments: { url },
+        callId: ToolCallId(id<'CallId'>()), agent: h.agent, toolSet, signal });
+      const outcome = prepared.kind === 'dispatch' ? await pipeline.dispatch(prepared.exec) : prepared;
+      const result = await pipeline.complete(prepared.exec, outcome);
+      await h.runtime.trajectories.flush();
+      return result;
+    } finally { toolSet.dispose(); }
+  } };
+}
+
+it('brokers native web_fetch redirects, network checks, budgets and output through the real tool pipeline', async () => {
+  const paths: string[] = [];
+  const server = http.createServer((request, response) => {
+    paths.push(request.url!);
+    const redirects: Record<string, string> = { '/redirect': '/article', '/end-session': '/logout',
+      '/mutation-redirect': '/items?action=delete', '/excluded': 'http://excluded.example.test/', '/private': 'http://127.0.0.2/' };
+    if (redirects[request.url!]) { response.writeHead(302, { location: redirects[request.url!] }); response.end(); return; }
+    if (request.url === '/binary') { response.setHeader('content-type', 'application/octet-stream'); response.end('binary fixture'); return; }
+    if (request.url === '/oversize') { response.setHeader('content-type', 'text/plain'); response.end('x'.repeat(1024 * 1024 + 1)); return; }
+    if (request.url === '/large') { response.setHeader('content-type', 'text/plain'); response.end('x'.repeat(100_001)); return; }
+    if (request.url === '/boundary') { response.setHeader('content-type', 'text/plain'); response.end('x'.repeat(99_990) + 'native-fixture-secret'); return; }
+    response.setHeader('content-type', 'text/html; charset=windows-1252');
+    response.end(Buffer.from('<h1>Caf\xe9</h1><p>native-fixture-secret</p>', 'latin1'));
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('No fixture port');
+  const base = `http://127.0.0.1:${address.port}`, h = await nativeWebHarness();
+  try {
+    const session = h.runtime.session({ agent: h.agent } as ToolExecution);
+    await h.runtime.updateSettings({ ...h.runtime.scope.scope, enabled: true, targets: [],
+      networks: ['127.0.0.1/32'], exclusions: ['excluded.example.test'] }, policyConfig, session);
+    h.runtime.redactor.register('native-fixture-secret');
+    const result = await h.fetch(`${base}/redirect`);
+    expect(result.isError).toBe(false);
+    expect(result).toMatchObject({ value: { url: `${base}/article`, statusCode: 200,
+      body: { kind: 'html', content: expect.stringContaining('Café') }, truncated: false } });
+    expect(JSON.stringify(result)).not.toContain('native-fixture-secret');
+    expect(result.content).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('Café') })]));
+    expect(result.meta).toBeDefined();
+    expect(h.runtime.engagement.snapshot().requests).toBe(2);
+    for (const path of ['/end-session', '/mutation-redirect', '/excluded', '/private']) {
+      expect((await h.fetch(`${base}${path}`)).isError).toBe(true);
+    }
+    expect(paths).toEqual(['/redirect', '/article', '/end-session', '/mutation-redirect', '/excluded', '/private']);
+    expect(h.runtime.engagement.snapshot().requests).toBe(6);
+    const large = await h.fetch(`${base}/large`);
+    expect(large).toMatchObject({ isError: false, value: { truncated: true, body: { content: 'x'.repeat(100_000) } } });
+    const boundary = await h.fetch(`${base}/boundary`);
+    expect(boundary.isError).toBe(false); expect(JSON.stringify(boundary)).not.toContain('native-fi');
+    expect((await h.fetch(`${base}/binary`)).isError).toBe(true);
+    expect((await h.fetch(`${base}/oversize`)).isError).toBe(true);
+    await h.runtime.updateSettings({ ...h.runtime.scope.scope, enabled: false }, policyConfig, session);
+    expect((await h.fetch(`${base}/end-session`)).isError).toBe(true);
+    expect(paths).not.toContain('/logout'); expect(paths).not.toContain('/items?action=delete');
+    expect(h.unbrokered).not.toHaveBeenCalled();
+  } finally { await h.close(); server.closeAllConnections(); server.close(); await once(server, 'close'); }
+});
+
+it('cancels native web_fetch while its brokered request is awaiting a response', async () => {
+  let started!: () => void;
+  const receiving = new Promise<void>(resolve => { started = resolve; });
+  const server = http.createServer(() => { started(); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('No fixture port');
+  const h = await nativeWebHarness(), controller = new AbortController();
+  try {
+    const session = h.runtime.session({ agent: h.agent } as ToolExecution);
+    await h.runtime.updateSettings({ ...h.runtime.scope.scope, enabled: true, targets: [], networks: ['127.0.0.1/32'] }, policyConfig, session);
+    const pending = h.fetch(`http://127.0.0.1:${address.port}/slow`, controller.signal);
+    await receiving; controller.abort();
+    expect((await pending).isError).toBe(true);
+    expect(h.unbrokered).not.toHaveBeenCalled();
+  } finally { controller.abort(); await h.close(); server.closeAllConnections(); server.close(); await once(server, 'close'); }
+});
+
+it('serializes REA and assessment tools through the Fireworks adapter without dangling references or lost fields', async () => {
+  const h = await harness();
+  try {
+    await h.ctx.plugin(ReaTools); await h.ctx.plugin(AssessmentTools);
+    const tools = ['pentest_rea', 'pentest_assessment'].map(name => {
+      const definition = h.ctx.tools.get(name)!;
+      return { name, description: definition.description, parameters: definition.parameters };
+    });
+    const pi = resolve('vendor/deepseek-harness/packages/llm/llm-pi-ai/node_modules/@earendil-works/pi-ai/dist');
+    const { streamSimple } = await import(pathToFileURL(join(pi, 'api/anthropic-messages.js')).href);
+    const { FIREWORKS_MODELS } = await import(pathToFileURL(join(pi, 'providers/fireworks.models.js')).href);
+    const model = FIREWORKS_MODELS['accounts/fireworks/routers/deepseek-flash-latest'];
+    const network = vi.fn(async () => { throw new Error('External model requests forbidden in this fixture'); });
+    let payload: { tools: Array<{ name: string; input_schema: Record<string, unknown> }> } | undefined;
+    const stream = streamSimple(model, { messages: [
+      { role: 'system', content: '', toolsAdded: tools, timestamp: 0 },
+      { role: 'user', content: 'Local serialization fixture', timestamp: 0 },
+    ] }, { apiKey: 'synthetic-fixture', maxTokens: 1, fetch: network, onPayload(value: typeof payload) {
+      payload = value; throw new Error('Offline capture complete');
+    } });
+    for await (const _chunk of stream) { /* Drain the local error completion. */ }
+    expect(network).not.toHaveBeenCalled();
+    expect(payload?.tools).toHaveLength(2);
+    const rea = payload!.tools.find(tool => tool.name === 'pentest_rea')!.input_schema;
+    expect(rea).toMatchObject({ type: 'object', required: ['tool', 'arguments'],
+      properties: { arguments: { type: 'object', additionalProperties: {} } } });
+    expect(JSON.stringify(payload)).not.toContain('"$ref"');
+    const assessment = payload!.tools.find(tool => tool.name === 'pentest_assessment')!.input_schema;
+    expect(assessment).toMatchObject({ type: 'object', required: ['operation'], properties: {
+      operation: { anyOf: expect.arrayContaining([{ const: 'plan' }, { const: 'inspect' }].map(value => expect.objectContaining(value))) },
+      plan: expect.any(Object), runId: expect.any(Object), cellId: expect.any(Object),
+    } });
+    // Advertising a wider argument shape cannot bypass execution-time JSON validation.
+    expect((await h.invoke('pentest_rea', { tool: 'fixture', arguments: { invalid: undefined } })).isError).toBe(true);
   } finally { await h.close(); }
 });

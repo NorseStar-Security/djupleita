@@ -58,6 +58,7 @@ function inNetwork(address: string, network: string): boolean {
 export class ScopeService {
   readonly version: string;
   readonly scope: Readonly<Scope>;
+  get enabled(): boolean { return this.scope.enabled !== false; }
   constructor(scope: Scope, private readonly resolver: Resolver = host => lookup(host, { all: true, verbatim: true }), private readonly reviewer?: ScopeReviewer) {
     const parsed = ScopeSchema.parse(scope);
     for (const rule of [...parsed.targets, ...Object.values(parsed.services).flat()]) rule.host = pattern(rule.host);
@@ -102,22 +103,25 @@ export class ScopeService {
     catch (cause) { throw new PentestError('INVALID_DESTINATION', 'Invalid destination URL', { cause }); }
     if (url.username || url.password) throw new PentestError('URL_CREDENTIALS', 'Credentials must use identity references');
     const host = hostname(url.hostname);
+    const scheme = url.protocol.slice(0, -1);
+    if (!['http', 'https', 'tcp', 'tls'].includes(scheme)) throw new PentestError('INVALID_DESTINATION', 'Destination protocol is not supported');
+    const port = url.port ? Number(url.port) : scheme === 'https' || scheme === 'tls' ? 443 : scheme === 'http' ? 80 : 0;
+    if (!this.enabled && destination.purpose === 'target') return { url,
+      rule: { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: ['/'], allowPrivateAddresses: true } };
     const override = this.reviewer?.allows('scope', destination) ?? false;
     if (!override && this.scope.exclusions.some(rule => matchesHost(host, rule))) {
       throw new PentestError('OUT_OF_SCOPE', `Excluded destination: ${host}`);
     }
-    const scheme = url.protocol.slice(0, -1);
-    if (!['http', 'https', 'tcp', 'tls'].includes(scheme)) throw new PentestError('INVALID_DESTINATION', 'Destination protocol is not supported');
-    const port = url.port ? Number(url.port) : scheme === 'https' || scheme === 'tls' ? 443 : scheme === 'http' ? 80 : 0;
+    const read = destination.purpose === 'target' && destination.access === 'read' && ['http', 'https'].includes(scheme);
     const rules = destination.purpose === 'target' ? this.scope.targets : this.scope.services[destination.purpose];
     const rule = rules.find(candidate => matchesHost(host, candidate.host)
       && candidate.schemes.some(allowed => allowed === scheme)
       && candidate.ports.includes(port)
       && candidate.pathPrefixes.some(prefix => url.pathname === prefix
         || url.pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)));
-    const selected = rule ?? (override ? { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: [url.pathname], allowPrivateAddresses: false } : undefined);
+    const selected = rule ?? (override || read ? { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: [url.pathname], allowPrivateAddresses: false } : undefined);
     if (!selected) throw new PentestError('OUT_OF_SCOPE', `Destination is outside ${destination.purpose} scope: ${host}:${port}`);
-    if (!override && destination.purpose === 'target' && isIP(host) && !this.scope.networks.some(network => inNetwork(host, network))) {
+    if (!override && !read && destination.purpose === 'target' && isIP(host) && !this.scope.networks.some(network => inNetwork(host, network))) {
       throw new PentestError('OUT_OF_SCOPE', 'Direct IP access requires an explicit scope network');
     }
     return { url, rule: selected };
@@ -127,6 +131,7 @@ export class ScopeService {
   async ensure(destination: Destination, signal: AbortSignal): Promise<void> {
     try {
       this.check(destination);
+      if (!this.enabled && destination.purpose === 'target') return;
       if (this.reviewer?.allows('scope', destination)) await this.reviewer.request('scope', destination, 'Saved destination allowance', signal);
     }
     catch (error) {
@@ -148,6 +153,7 @@ export class ScopeService {
     for (const entry of addresses) {
       const parsed = ipaddr.process(entry.address);
       if (entry.family !== isIP(entry.address)) throw new PentestError('DNS_INVALID', 'DNS address family mismatch');
+      if (!this.enabled && destination.purpose === 'target') continue;
       const allowedPrivate = rule.allowPrivateAddresses && ['private', 'uniqueLocal'].includes(parsed.range());
       if (parsed.range() !== 'unicast' && !allowedPrivate
         && !this.scope.networks.some(network => inNetwork(entry.address, network))) {
@@ -159,5 +165,15 @@ export class ScopeService {
       }
     }
     return Object.freeze({ url, rule, addresses: Object.freeze(addresses.map(entry => Object.freeze({ ...entry }))), scopeVersion: this.version });
+  }
+
+  instructions(): string {
+    return [`Target scope management is ${this.enabled ? 'ON: target boundaries and exclusions are enforced.' : 'OFF: target host, port, path, exclusion and network boundaries are not enforced. Saved target rules and exclusions are inactive until scope management is enabled.'}`,
+      'Only the operator can change scope management in Plugins → Djupleita → Policy.',
+      ...(this.enabled ? ['Listed targets authorize active testing, scanning, fuzzing, credential replay and writes, subject to action-effect review. Bounded HTTP(S) reads, ordinary browsing and passive research may use unlisted, non-excluded sites to look up CVEs, documentation and exploit writeups. Reachability and discovery never grant active testing permission.',
+        'Exclusions block reads and active testing unless the owner explicitly grants an override. Wildcards cover subdomains, not the apex. DNS and private-network checks apply.'] : []),
+      'URL validation, DNS pinning, service destination controls, action-effect review, credential host bindings and request budgets remain active.',
+      JSON.stringify({ targets: this.scope.targets, exclusions: this.scope.exclusions, networks: this.scope.networks }),
+    ].join('\n');
   }
 }

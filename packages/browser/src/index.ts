@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { PentestError, id } from '@dsh-pentest/contracts';
 import type { IdentityId, Json, SessionId } from '@dsh-pentest/contracts';
 import type { HttpBroker, HttpInput } from '@dsh-pentest/http';
+import { httpDestination } from '@dsh-pentest/http';
 import type { IdentityService } from '@dsh-pentest/identities';
 import type { ScopeService } from '@dsh-pentest/scope';
 import { matchesHost } from '@dsh-pentest/scope';
@@ -61,7 +62,7 @@ export class BrowserService {
     const cancel = () => { this.handles.delete(key); void handle.context.close(); };
     merged.addEventListener('abort', cancel, { once: true });
     try {
-      if (input.operation === 'navigate') { this.scope.check({ url: input.url, purpose: 'target' }); await handle.page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
+      if (input.operation === 'navigate') { this.scope.check(httpDestination({ url: input.url, method: 'GET', headers: {} })); await handle.page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
       if (input.operation === 'click') await handle.page.locator(input.selector).click({ timeout: 5000 });
       if (input.operation === 'fill') {
         this.redactor.register(input.value);

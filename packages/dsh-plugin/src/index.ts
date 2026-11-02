@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt';
 import type { JudgmentProvider, Json, IdentityId } from '@dsh-pentest/contracts';
 import { canonical, digest, id as idForLearning, PentestError } from '@dsh-pentest/contracts';
 import { SelectedModelJudge } from '@dsh-pentest/policy';
-import { HttpInputSchema, classifyHttp, ModelFetchBroker } from '@dsh-pentest/http';
+import { HttpInputSchema, classifyHttp, httpDestination, ModelFetchBroker } from '@dsh-pentest/http';
 import type { HttpInput } from '@dsh-pentest/http';
 import { z } from 'zod';
 import { toolSchema } from './tool-schema.ts';
@@ -19,6 +19,7 @@ import { PentestRuntime } from './runtime.ts';
 import type { EffectDescriptor, RuntimeConfig } from './runtime.ts';
 import { DesktopChannel } from './rpc.ts';
 import { inspectTrajectory, TrajectoryInputSchema } from './inspection.ts';
+import { webFetch } from './web-fetch.ts';
 import { BrowserInputSchema } from '@dsh-pentest/browser';
 import { ReconInputSchema, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
 import { FuzzInputSchema } from '@dsh-pentest/fuzz';
@@ -26,6 +27,7 @@ import { RunInputSchema, studyReceipt } from '@dsh-pentest/learning';
 import { reaEffects, ReaCatalogInputSchema } from '@dsh-pentest/rea';
 import { AssessmentTools, ValidationTools } from './assessment.ts';
 import { AssessmentSkills } from './skills.ts';
+import pentestPreset from '../../../configs/pentest-preset.json' with { type: 'json' };
 export { AssessmentTools, ValidationTools } from './assessment.ts';
 export { AssessmentSkills } from './skills.ts';
 export { PentestRuntime } from './runtime.ts';
@@ -99,7 +101,9 @@ export const ToolPolicy = {
     });
     ctx.on('tools/execute', async (exec, next) => {
       const binding = accepted.get(exec.token);
-      return binding ? ctx.pentest.review.run(binding.origin, () => next()) : next();
+      return binding ? ctx.pentest.review.run(binding.origin, async () => exec.name === 'web_fetch'
+        ? { isError: false as const, value: await webFetch(ctx.pentest, exec), content: [] }
+        : next()) : next();
     });
     // Other harness plugins (sandbox, files, shell) use the same owner review surface.
     ctx.on('approval/request', async (request, next) => {
@@ -177,7 +181,7 @@ export const HarnessControlEffects = {
       describe: () => ({ destinations: [], effects: ['delete'], reversible: false }) }), 'pentest: schedule delete effects');
     ctx.effect(() => ctx.pentest.registerDescriptor('web_fetch', { plugin: 'harness-web', confinement: 'transport',
       describe(args) { const input = z.object({ url: z.url() }).passthrough().parse(args);
-        return { destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp({ url: input.url, method: 'GET', headers: {} }) }; }
+        return { destinations: [httpDestination({ url: input.url, method: 'GET', headers: {} })], ...classifyHttp({ url: input.url, method: 'GET', headers: {} }) }; }
     }), 'pentest: web fetch effects');
     for (const tool of ['create_goal', 'update_goal', 'subagent', 'subagent_fork', 'send_message', 'interrupt_agent']) {
       ctx.effect(() => ctx.pentest.registerDescriptor(tool, { plugin: 'harness-control', confinement: 'transport',
@@ -188,7 +192,7 @@ export const HarnessControlEffects = {
 
 export const HttpTools = {
   name: 'pentest-http', inject: ['tools', 'pentest'], apply(ctx: Context): void {
-    register(ctx, { name: 'pentest_http', description: 'Send an in-scope HTTP request. Use identityId for credentials. Redirects and every connection are checked.',
+    register(ctx, { name: 'pentest_http', description: 'Send a bounded HTTP request. Ordinary reads may research unlisted, non-excluded sites; writes and destructive requests require target scope. Use identityId for credentials. Every redirect and connection is checked.',
       parameters: toolSchema(HttpInputSchema), output,
       async execute(args, exec) {
         const input = HttpInputSchema.parse(args) as HttpInput;
@@ -197,7 +201,7 @@ export const HttpTools = {
           ctx.pentest.approve));
       } }, { plugin: 'http', confinement: 'brokered', describe(args) {
         const input = HttpInputSchema.parse(args) as HttpInput;
-        return { destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp(input), ...(input.identityId ? { identityId: input.identityId } : {}) };
+        return { destinations: [httpDestination(input)], ...classifyHttp(input), ...(input.identityId ? { identityId: input.identityId } : {}) };
       } });
   },
 };
@@ -263,7 +267,7 @@ export const BrowserTools = {
       } }, { plugin: 'browser', confinement: 'brokered', describe(args) {
         const { action } = schema.parse(args);
         if (action.operation === 'fill' && action.value) ctx.pentest.redactor.register(action.value);
-        return { destinations: action.operation === 'navigate' ? [{ url: action.url, purpose: 'target' }] : [],
+        return { destinations: action.operation === 'navigate' ? [httpDestination({ url: action.url, method: 'GET', headers: {} })] : [],
           effects: action.operation === 'navigate' || action.operation === 'snapshot' ? ['read']
             : action.operation === 'fill' ? ['modify'] : ['unknown'],
           reversible: action.operation !== 'click' };
@@ -316,7 +320,10 @@ export const ReaTools = {
       parameters: toolSchema(ReaCatalogInputSchema), output, async execute(args, exec) { return ctx.pentest.rea().discover(args, ctx.pentest.signal(exec.signal)); } }, readDescriptor('rea'));
     const schema = z.object({ tool: z.string().min(1), arguments: z.record(z.string(), z.json()) });
     register(ctx, { name: 'pentest_rea', description: 'Invoke an advertised REA tool inside the offline analysis workspace. Local analysis URLs become scope-checked crawl hints. Unknown/destructive operations require review.',
-      parameters: toolSchema(schema), output, async execute(args, exec) {
+      // JSON transport already bounds these values to JSON. Publish an open
+      // argument object without recursive definitions that provider adapters drop.
+      // The original schema still validates every call before execution.
+      parameters: toolSchema(z.object({ tool: schema.shape.tool, arguments: z.record(z.string(), z.unknown()) })), output, async execute(args, exec) {
         const input = schema.parse(args); return ctx.pentest.rea().call(input.tool, input.arguments, ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'rea', confinement: 'transport', describe(args) { return { destinations: [], ...reaEffects(schema.parse(args).tool) }; } });
   },
@@ -398,6 +405,13 @@ export async function applyCore(ctx: Context, config: RuntimeConfig, internals: 
   const runtime = await PentestRuntime.open(config, internals.judge ?? modelJudge(ctx));
   ctx.effect(() => () => runtime.close(), 'pentest: durable stores');
   ctx.provide('pentest', runtime);
+  ctx.inject(['systemPrompt'], inner => {
+    const persona = pentestPreset.plugins.find(plugin => plugin.id === 'persona')?.config;
+    inner.systemPrompt.context({ name: 'djupleita-persona', order: 780, required: true, interpolate: false,
+      text: persona && 'prefix' in persona ? persona.prefix : '' });
+    inner.systemPrompt.context({ name: 'djupleita-target-scope', order: 790, required: true, interpolate: false,
+      text: () => runtime.scope.instructions() });
+  });
   ctx.inject(['agents'], inner => { runtime.setLearningSelection(session => inner.agents.get(session as unknown as import('@deepseek-ai/dsh-session').SessionId)?.model.current() ?? runtime.model(session)); });
   runtime.setLearningModel(async (session, request, signal, route) => {
     const assembler = new BlockAssembler();

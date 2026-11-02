@@ -151,7 +151,7 @@ export class CrawlService {
       if (!candidate) break;
       try {
         const response = await this.http.request({ url: candidate.url, method: 'GET', headers: {},
-          ...(candidate.identityId ? { identityId: candidate.identityId } : {}) }, sessionId, signal);
+          ...(candidate.identityId ? { identityId: candidate.identityId } : {}) }, sessionId, signal, undefined, 'active');
         this.record(response, candidate);
         report.visited++;
         const urls = /html|xhtml/i.test(response.headers['content-type'] ?? '') ? linksFromHtml(response.body, response.url) : [];

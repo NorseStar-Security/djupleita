@@ -42,8 +42,10 @@ export function freeze<T>(value: T): Readonly<T> {
 
 export const PurposeSchema = z.enum(['target', 'intelligence', 'model', 'telemetry']);
 export type Purpose = z.infer<typeof PurposeSchema>;
-export const DestinationSchema = z.object({ url: z.url(), purpose: PurposeSchema });
-export type Destination = z.infer<typeof DestinationSchema>;
+export const DestinationSchema = z.object({ url: z.url(), purpose: PurposeSchema,
+  /** Trusted adapters may permit bounded web reads; omitted destinations require target authorization. */
+  access: z.enum(['read', 'active']).optional() });
+export type Destination = Omit<z.infer<typeof DestinationSchema>, 'access'> & { access?: 'read' | 'active' };
 
 export const HostRuleSchema = z.object({
   host: z.string().min(1),
@@ -54,6 +56,8 @@ export const HostRuleSchema = z.object({
 });
 export type HostRule = z.infer<typeof HostRuleSchema>;
 export const ScopeSchema = z.object({
+  /** Omitted in existing engagements: retain enforcement. Fresh course profiles explicitly disable it. */
+  enabled: z.boolean().optional(),
   targets: z.array(HostRuleSchema),
   exclusions: z.array(z.string()).default([]),
   networks: z.array(z.string()).default([]),
@@ -103,11 +107,12 @@ export const ActionSchema = z.object({
   identityId: z.string().uuid().optional(),
   parentId: z.string().optional(),
 });
-export type Action = Omit<z.infer<typeof ActionSchema>, 'id' | 'engagementId' | 'sessionId' | 'identityId'> & {
+export type Action = Omit<z.infer<typeof ActionSchema>, 'id' | 'engagementId' | 'sessionId' | 'identityId' | 'destinations'> & {
   id: ActionId;
   engagementId: EngagementId;
   sessionId: SessionId;
   identityId?: IdentityId;
+  destinations: Destination[];
 };
 export type DecisionKind = 'allow' | 'warn' | 'ask' | 'deny';
 export interface Decision {

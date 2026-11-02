@@ -52,6 +52,12 @@ function matchesTool(name: string, glob: string): boolean {
   return new RegExp(`^${escaped}$`).test(name);
 }
 
+/** Read access is supplied by trusted adapters and never relaxes a mutation or unknown operation. */
+function destinations(action: Action) {
+  const read = action.plugin !== 'unadapted' && action.reversible && action.effects.every(effect => effect === 'read');
+  return action.destinations.map(destination => read ? destination : { ...destination, access: 'active' as const });
+}
+
 export class PolicyService {
   readonly version: string;
   readonly config: PolicyConfig;
@@ -68,7 +74,7 @@ export class PolicyService {
     signal.throwIfAborted();
     const base = { policyVersion: this.version, actionHash: digest(action) };
     let decision: Decision;
-    try { for (const destination of action.destinations) this.scope.check(destination); }
+    try { for (const destination of destinations(action)) this.scope.check(destination); }
     catch (error) {
       if (!(error instanceof PentestError)) throw error;
       decision = { ...base, kind: 'deny', reasons: [error.message], source: 'scope' };
@@ -117,7 +123,7 @@ export class PolicyService {
   /** Owner decisions may unblock asks and rule denials; scope requires its own exact destination grant. */
   async authorize(request: PolicyRequest, approve?: ApprovalAnswerer): Promise<Decision> {
     const binding = digest(request.action);
-    try { for (const destination of request.action.destinations) await this.scope.ensure(destination, request.signal); }
+    try { for (const destination of destinations(request.action)) await this.scope.ensure(destination, request.signal); }
     catch (error) { await this.evaluate(request); throw error; }
     const decision = await this.evaluate(request);
     if (decision.kind === 'deny' || decision.kind === 'ask') {
@@ -128,7 +134,7 @@ export class PolicyService {
       if (!allowed) throw new PentestError('APPROVAL_REQUIRED', `${decision.reasons.join('; ')}. The action did not receive one-shot approval or a saved allowance`);
     }
     if (binding !== digest(request.action)) throw new PentestError('ACTION_CHANGED', 'The action changed during authorization');
-    for (const destination of request.action.destinations) this.scope.check(destination);
+    for (const destination of destinations(request.action)) this.scope.check(destination);
     return decision;
   }
 

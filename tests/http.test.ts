@@ -18,10 +18,10 @@ it('pins a scoped hostname to the approved local socket and keeps identities sep
     expect(recorded).not.toContain('alice-token'); expect(recorded).not.toContain('bob-token');
   } finally { await fixture.close(); }
 });
-it('blocks an out-of-scope redirect and a deletion before their target receives a request', async () => {
+it('blocks an excluded redirect and a deletion before their target receives a request', async () => {
   const fixture = await lab();
   try {
-    await expect(fixture.broker.request({ url: `${fixture.url}/redirect`, method: 'GET', headers: {} }, fixture.sessionId, AbortSignal.timeout(5000))).rejects.toThrow(/outside/);
+    await expect(fixture.broker.request({ url: `${fixture.url}/redirect`, method: 'GET', headers: {} }, fixture.sessionId, AbortSignal.timeout(5000))).rejects.toThrow(/Excluded/);
     await expect(fixture.broker.request({ url: `${fixture.url}/objects/1`, method: 'DELETE', headers: {} }, fixture.sessionId, AbortSignal.timeout(5000))).rejects.toThrow(/one-shot/);
     expect(fixture.observed).toHaveLength(1);
     expect((await fixture.trajectories.read(fixture.sessionId)).filter(event => event.type === 'policy/decision')).toHaveLength(3);

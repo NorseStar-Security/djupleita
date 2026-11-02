@@ -1,0 +1,5 @@
+.gate { height: 100%; overflow: auto; }
+.controls { margin: 12px; padding: 16px; border: 1px solid #475268; border-radius: 10px; background: #1a2230; color: #dce3ef; font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+.controls h3 { margin: 0 0 8px; font-size: 14px; }
+.controls p { margin: 8px 0; }
+.content > section { height: auto; overflow: visible; }

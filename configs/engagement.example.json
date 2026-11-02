@@ -3,7 +3,14 @@
   "name": "New pentest engagement",
   "objectives": ["Map authorized attack surface and verify authorization boundaries with evidence"],
   "scope": {
-    "targets": [], "exclusions": [], "networks": [],
+    "enabled": false,
+    "targets": [
+      { "host": "www.prod.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+      { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+      { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
+    ],
+    "exclusions": [],
+    "networks": [],
     "services": { "intelligence": [], "model": [], "telemetry": [] }
   },
   "budget": { "requests": 1000, "durationMs": 7200000, "concurrency": 4, "requestsPerSecond": 5, "maxDepth": 5, "maxResponseBytes": 2097152 },

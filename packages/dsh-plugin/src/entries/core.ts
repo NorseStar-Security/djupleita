@@ -1,2 +1,2 @@
-/** Required Djupleita engagement and policy services. */
-export { name, inject, applyCore as apply } from '../index.ts';
+/** Persistent owner controls remain available when the engagement layer is off. */
+export { name, inject, apply } from '../mode.ts';

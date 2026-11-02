@@ -17,6 +17,10 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'existing-profile',
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } } }));
     prepare();
+    const engagementPath = join(directory, 'engagement.json');
+    const freshEngagement = await readFile(engagementPath, 'utf8');
+    expect(JSON.parse(freshEngagement).scope).toEqual(JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8')));
+    expect(JSON.parse(freshEngagement).scope.enabled).toBe(false);
     const path = join(directory, 'package.json');
     const manifest = JSON.parse(await readFile(path, 'utf8'));
     expect(manifest.dsh.profile.bundles).toContain('@djupleita/plugin-rea');
@@ -33,13 +37,18 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     await writeFile(path, JSON.stringify(manifest));
     const patchPath = join(directory, 'cordis.patch.yml');
     const original = yaml.parseDocument(await readFile(patchPath, 'utf8'));
+    const retiredPersona = JSON.parse(await readFile(resolve('configs/pentest-preset.json'), 'utf8')).plugins.find((plugin: { id: string }) => plugin.id === 'persona').config.prefix;
     original.contents.items.find((row: { get(key: string): string }) => row.get('id') === 'agent-preset-registry').get('config').set('default', 'ptc');
     for (const row of original.contents.items) {
       for (const entry of row.get('insert')?.items ?? []) {
+        if (entry.get('id').startsWith('preset-')) {
+          const persona = entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config');
+          persona.set('prefix', `${persona.get('prefix')}\n\n${retiredPersona}`);
+        }
         if (entry.get('id') === 'preset-standard') {
           const bash = entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'tool-bash');
           bash.delete('disabled'); bash.set('disabled', true);
-          entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config').set('prefix', 'User-authored coding instructions');
+          entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config').set('prefix', `User-authored coding instructions\n\n${retiredPersona}`);
         }
         if (entry.get('id') === 'preset-pentest') {
           const plugins = entry.get('config').get('plugins');
@@ -58,6 +67,7 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     expect(patch).toContain('@dsh-pentest/dsh-plugin/core');
     expect(patch).toContain('# Saved model settings must survive startup');
     expect(patch).toContain('!!js');
+    expect(patch).not.toContain(retiredPersona);
     const rows = yaml.parseDocument(patch, { customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: (value: string) => value }] }).toJS();
     expect(rows.find((row: { id: string }) => row.id === 'agent-preset-registry').config.default).toBe('ptc');
     const standard = rows.flatMap((row: { insert?: unknown[] }) => row.insert ?? []).find((row: { id: string }) => row.id === 'preset-standard').config;
@@ -84,9 +94,41 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     ]));
     prepare();
     expect(await readFile(patchPath, 'utf8')).toBe(patch);
+    expect(await readFile(engagementPath, 'utf8')).toBe(freshEngagement);
     const upgraded = JSON.parse(await readFile(path, 'utf8'));
     upgraded.dsh.profile.bundles = upgraded.dsh.profile.bundles.filter((name: string) => name !== '@djupleita/plugin-ffuf');
     await writeFile(path, JSON.stringify(upgraded)); prepare();
     expect(JSON.parse(await readFile(path, 'utf8')).dsh.profile.bundles).not.toContain('@djupleita/plugin-ffuf');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+it('saves course defaults for legacy empty boundaries once and preserves explicit scope choices', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'djupleita-scope-defaults-'));
+  const path = join(directory, 'engagement.json');
+  const defaults = JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8'));
+  const template = JSON.parse(await readFile(resolve('configs/engagement.example.json'), 'utf8'));
+  const services = { ...defaults.services, model: [{ host: 'model.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/v1'], allowPrivateAddresses: false }] };
+  const legacy = { targets: [], exclusions: [], networks: [], services };
+  const prepare = () => execFileSync(process.execPath, ['--input-type=module', '-e',
+    "import { prepareProfile } from './scripts/profile.mjs'; await prepareProfile(process.argv[1]);", directory],
+  { cwd: resolve('.'), env: { ...process.env, DSH_PENTEST_ENGAGEMENT: path } });
+  try {
+    const original = JSON.stringify({ ...template, scope: legacy });
+    await writeFile(path, original);
+    // Recover safely if a previous launch stopped after creating the backup.
+    await writeFile(`${path}.pre-scope-defaults.bak`, original, { mode: 0o600 });
+    prepare();
+    const migrated = await readFile(path, 'utf8');
+    expect(JSON.parse(migrated)).toEqual({ ...template, scope: { ...defaults, services } });
+    expect(await readFile(`${path}.pre-scope-defaults.bak`, 'utf8')).toBe(original);
+    prepare();
+    expect(await readFile(path, 'utf8')).toBe(migrated);
+    for (const scope of [{ ...legacy, enabled: false }, { ...legacy, enabled: true },
+      { ...legacy, targets: [{ host: 'saved.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/'], allowPrivateAddresses: false }] },
+      { ...legacy, exclusions: ['saved.example.test'] }, { ...legacy, networks: ['192.0.2.0/24'] }]) {
+      const saved = JSON.stringify({ ...template, scope });
+      await writeFile(path, saved); prepare();
+      expect(await readFile(path, 'utf8')).toBe(saved);
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

@@ -45,6 +45,12 @@ export function classifyHttp(input: HttpInput): { effects: Effect[]; reversible:
   return { effects: ['modify'], reversible: true };
 }
 
+/** Method/effect metadata comes from the adapter, never from a caller's research label. */
+export function httpDestination(input: HttpInput, access: 'read' | 'active' = 'read') {
+  const read = access === 'read' && input.body === undefined && classifyHttp(input).effects.every(effect => effect === 'read');
+  return { url: input.url, purpose: 'target' as const, access: read ? 'read' as const : 'active' as const };
+}
+
 /** Applies to routed page scripts too; a GET can revoke a session. */
 export function endsSession(input: HttpInput): boolean {
   const url = new URL(input.url);
@@ -108,13 +114,13 @@ export class HttpBroker {
     }
   }
 
-  async request(raw: HttpInput, sessionId: SessionId, callerSignal: AbortSignal, approve?: ApprovalAnswerer): Promise<HttpResult> {
-    return (await this.deliver(raw, sessionId, callerSignal, approve)).result;
+  async request(raw: HttpInput, sessionId: SessionId, callerSignal: AbortSignal, approve?: ApprovalAnswerer, access: 'read' | 'active' = 'read'): Promise<HttpResult> {
+    return (await this.deliver(raw, sessionId, callerSignal, approve, {}, true, access)).result;
   }
 
   /** Trusted adapter surface: raw bytes go only to a confined browser, never the model or an exporter. */
   async deliver(raw: HttpInput, sessionId: SessionId, callerSignal: AbortSignal, approve?: ApprovalAnswerer,
-    credentialHeaders: Record<string, string> = {}, followRedirects = true): Promise<DeliveredResponse> {
+    credentialHeaders: Record<string, string> = {}, followRedirects = true, access: 'read' | 'active' = 'read'): Promise<DeliveredResponse> {
     if (followRedirects && Object.keys(credentialHeaders).length) throw new PentestError('CREDENTIAL_REDIRECT', 'Adapter credentials require individual redirect handling');
     HttpInputSchema.parse(raw);
     if (!this.engagement.hasSession(sessionId)) throw new PentestError('SESSION_UNBOUND', 'Session is not attached to this engagement');
@@ -130,7 +136,7 @@ export class HttpBroker {
       const action: Action = {
         id: id<'ActionId'>(), engagementId: this.engagement.engagement.id, sessionId,
         tool: 'http_request', plugin: 'http', arguments: this.redactor.json(input),
-        destinations: [{ url: input.url, purpose: 'target' }], ...classifyHttp(input),
+        destinations: [httpDestination(input, access)], ...classifyHttp(input),
         ...(input.identityId ? { identityId: input.identityId } : {}), ...(parentId ? { parentId } : {}),
       };
       signal = lifetime;
@@ -144,7 +150,7 @@ export class HttpBroker {
         if (!allowed)
           throw new PentestError('SESSION_END_REVIEW', 'Session-ending requests require explicit owner review');
       }
-      const grant = await this.scope.authorize({ url: input.url, purpose: 'target' }, signal);
+      const grant = await this.scope.authorize(httpDestination(input, access), signal);
       signal = AbortSignal.any([lifetime, AbortSignal.timeout(this.config.timeoutMs)]);
       const credentials = input.identityId ? await this.identities.headers(input.identityId, grant.url, signal) : {};
       const reservation = await this.engagement.acquire(signal);

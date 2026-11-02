@@ -7,5 +7,5 @@ it.skipIf(process.env.DSH_TEST_WEB_UI !== '1')('uses the authenticated web UI to
     cwd: resolve('.'), encoding: 'utf8', timeout: 90000,
   });
   expect(JSON.parse(output.trim().split('\n').at(-1)!)).toEqual({ authenticatedWeb: true,
-    scopeDraftAndPersistence: true, scopePrefillWithServices: true, destinationManagement: true, setupHideAndRestore: true });
+    courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true });
 }, 100000);
