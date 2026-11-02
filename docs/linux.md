@@ -101,14 +101,14 @@ pnpm setup:tools --only rea --ghidra /absolute/ghidra --java-home /absolute/jdk 
 
 Use **Load local setup** in Pentest → Plugins after terminal installation, then run `pentest_rea_doctor`. macOS DMG mounting and Apple-specific analysis utilities remain platform-specific. Linux Ghidra must include its `linux_x86_64` or `linux_arm_64` decompiler.
 
-`pnpm setup:tools --only learning` uses `/usr/bin/python3` and `python3-venv` on Linux; `--python /absolute/python3` overrides it. Python workers receive neither provider credentials nor direct network access.
+`pnpm setup:tools --only learning` uses `/usr/bin/python3` and `python3-venv` on Linux; `--python /absolute/python3` overrides it. Model-assisted GEPA continues to use the host model bridge. Python workers receive neither provider credentials nor direct network access.
 
 ## Validation
 
 Run `pnpm typecheck`, `pnpm build`, and the focused tests below as a normal Linux user with Bubblewrap and Chromium installed:
 
 ```sh
-pnpm exec vitest run tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/replay.test.ts packages/dsh-plugin/src/integration.test.ts
+pnpm exec vitest run tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/learning-gepa.test.ts tests/learning-web.test.ts packages/dsh-plugin/src/learning-integration.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/replay.test.ts packages/dsh-plugin/src/integration.test.ts
 ```
 
 The Secret Service round-trip is opt-in (`DSH_TEST_SECRET_SERVICE=1`). Use a disposable session bus/keyring for that check. The default provider tests use a synthetic helper and never touch an existing keyring. Tests use local fixtures; no real model calls or target scans are required.
@@ -118,3 +118,5 @@ After recon setup, `DSH_TEST_RECON_CONFIG="$PWD/.pentest/tooling.json" pnpm exec
 See [Target scope and destination allowances](scope.md) for the editable scope example, saved host approvals, and setup reminder controls shared with macOS.
 
 Run `DSH_TEST_WEB_UI=1 pnpm exec vitest run tests/web-issues.test.ts` after building the harness and installing Playwright Chromium to exercise the authenticated scope, approval and setup controls. CI runs these checks on Linux and macOS.
+
+The combined Linux/GEPA checks also execute native Bash, write and edit tools through the shipped profile, and run a real GEPA study with a scripted model through the authenticated Studies interface. Set `DSH_TEST_OPTUNA_PYTHON` to the learning environment’s `bin/python` and `DSH_TEST_WEB_UI=1` to exercise those optional checks. No provider credentials or paid calls are required.

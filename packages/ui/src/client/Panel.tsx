@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import css from './Panel.module.css';
 import { ScopeEditor } from './ScopeEditor.tsx';
+import { LearningStudies } from './Learning.tsx';
 import distribution from '../../../../configs/distribution.json' with { type: 'json' };
 import { registerBrand } from './brand.tsx';
 import type { ReviewQuestion, ReviewGrant } from '../../../dsh-plugin/src/review.ts';
@@ -103,6 +104,7 @@ interface Snapshot {
   graph: GraphPage; events: Row[]; trajectory: Omit<EventPage, 'events'>; plugins: Row[]; policy: Row;
   review: { pending: ReviewQuestion[]; grants: ReviewGrant[] };
   pluginConfig: Row; telemetry: Row; learning: { active: boolean; datasets: Row[]; reports: Row[] } | null; ranking: Row;
+  procedure?: { runId: string; text: string; datasetHash: string } | null;
   setup?: ToolSetup;
 }
 interface PanelState { snapshot?: Snapshot; error?: string; loading: boolean }
@@ -357,18 +359,7 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
           <label>{t('policy')}<textarea className={css.editor} name="policy" defaultValue={stringify(data.policy)} required spellCheck={false} /></label>
           <button className={css.button} disabled={saving}>{t('saveSettings')}</button><p role="status">{notice}</p>
         </form></div>}
-      {tab === 'studies' && <div>{!data.learning ? <p className={css.empty}>{t('noStudies')}</p> : <>
-        <form className={css.form} onSubmit={event => { event.preventDefault(); const values = new FormData(event.currentTarget);
-          void operate('learning/run', { datasetId: values.get('dataset'), trials: Number(values.get('trials')) }, t('studyCompleted')); }}>
-          <label>{t('dataset')}<select name="dataset" required>{data.learning.datasets.map(dataset => <option key={label(dataset, 'id')} value={label(dataset, 'id')}>{label(dataset, 'name')}</option>)}</select></label>
-          <label>{t('trials')}<input name="trials" type="number" min="2" max="1000" defaultValue="30" required /></label>
-          <button className={css.button} disabled={saving || data.learning.active || data.learning.datasets.length === 0}>{t('runStudy')}</button>
-        </form>
-        {data.learning.reports.map(report => <article className={css.card} key={label(report, 'runId')}>
-          <strong>{label(report, 'engine')}</strong><code>{label(report, 'runId')}</code><pre>{stringify({ parameters: report.parameters, scores: report.scores, trials: Array.isArray(report.trials) ? report.trials.length : 0, datasetHash: report.datasetHash })}</pre>
-          <small>{label(report, 'limitation')}</small><button className={css.button} disabled={saving} onClick={() => { void operate('learning/promote', { runId: report.runId }, t('promoted')); }}>{t('promote')}</button>
-        </article>)}
-      </>}<p role="status">{notice}</p></div>}
+      {tab === 'studies' && <LearningStudies learning={data.learning} procedure={data.procedure ?? null} busy={saving} notice={notice} operate={operate} />}
       {tab === 'plugins' && <div>
         {data.setup && <ToolSetupCard setup={data.setup} t={t} busy={saving}
           operate={(endpoint, success) => { void operate(endpoint, {}, success); }} />}

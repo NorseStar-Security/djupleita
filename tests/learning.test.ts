@@ -22,7 +22,7 @@ it.skipIf(!process.env.DSH_TEST_OPTUNA_PYTHON)('runs a real confined Optuna stud
   const service = new LearningService({ python: process.env.DSH_TEST_OPTUNA_PYTHON!, script: resolve('packages/learning/python/optimize.py'), datasets: resolve('configs/datasets') }, join(root, 'runs'), store, redactor);
   const report = await service.run('lab-ranking', 12, session, AbortSignal.timeout(60000)) as Record<string, unknown>;
   expect(String(report.engine)).toMatch(/^optuna\//); expect(report.trials).toHaveLength(12);
-  const ranking = await service.promotion(String(report.runId), session); expect(ranking.object).toBeGreaterThan(ranking.auth);
+  const ranking = await service.promotion(String(report.runId), session); expect('object' in ranking && ranking.object).toBeGreaterThan('auth' in ranking ? ranking.auth : Infinity);
   expect((await store.read(session)).map(event => event.type)).toContain('learning/promotion-request');
   const reportPath = join(root, 'runs', String(report.runId), 'report.json');
   const changed = JSON.parse(await readFile(reportPath, 'utf8')); changed.scores.test.candidate = -1;

@@ -47,7 +47,7 @@ export async function inspectTools(config: PluginConfig, recon: Json, ffuf: Json
     reason: `Needed for native decompilation, not archive/DMG inventory. Ghidra 12.1.4 uses JDK 21; 12.2 uses JDK 25. Include the ${native} decompiler. Run pentest_rea_doctor after configuring both paths.`,
     command: `pnpm setup:tools --only rea --rea-node /absolute/path/to/node --ghidra /absolute/ghidra --java-home /absolute/jdk${process.platform === 'darwin' ? '/Contents/Home' : ''}` });
   const learning = config.learning && await exists(config.learning.python, true) && await exists(config.learning.script);
-  entries.push({ id: 'Optuna', group: 'learning', status: learning ? 'configured' : 'optional',
-    reason: learning ? 'Python and study runner found; studies run offline.' : 'Optional Python environment for offline learning studies.', command: 'pnpm setup:tools --only learning' });
+  entries.push({ id: 'Optuna / GEPA', group: 'learning', status: learning ? 'configured' : 'optional',
+    reason: learning ? config.learning?.gepaScript && await exists(config.learning.gepaScript) ? 'Ranking and procedure runners found. GEPA uses the selected model; no target requests.' : 'Optuna configured. Re-run learning setup to add GEPA.' : 'Optional Python environment for offline learning studies.', command: 'pnpm setup:tools --only learning' });
   return entries;
 }

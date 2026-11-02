@@ -63,7 +63,7 @@ if (['all', 'learning'].includes(values.only)) {
   await run(python, ['-m', 'venv', environment]);
   const pythonEnv = join(environment, 'bin/python');
   await run(pythonEnv, ['-m', 'pip', 'install', '--disable-pip-version-check', '--requirement', join(root, 'packages/learning/python/requirements.txt')]);
-  config.learning = { python: pythonEnv, script: join(root, 'packages/learning/python/optimize.py'), datasets: join(root, 'configs/datasets') };
-  await save(); console.log('Optuna configured for confined offline studies.');
+  config.learning = { python: pythonEnv, script: join(root, 'packages/learning/python/optimize.py'), gepaScript: join(root, 'packages/learning/python/gepa_optimize.py'), datasets: join(root, 'configs/datasets') };
+  await save(); console.log('Optuna and GEPA configured. Ranking is offline; GEPA uses the selected model for recorded-case task evaluation and reflection.');
 }
 console.log(`Plugin configuration: ${configPath}. Select Load local setup in Pentest → Plugins to use it in this engagement without restarting.`);

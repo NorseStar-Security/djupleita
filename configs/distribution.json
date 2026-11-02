@@ -7,7 +7,7 @@
       "name": "@djupleita/plugin-rea",
       "row": "djupleita-rea",
       "title": "REA & Ghidra",
-      "description": "Offline reverse engineering with REA, native macOS support and configurable Ghidra/JDK runtimes.",
+      "description": "Offline reverse engineering with REA, macOS and Linux support and configurable Ghidra/JDK runtimes.",
       "configKeys": [
         "rea"
       ],
@@ -110,7 +110,7 @@
       "name": "@djupleita/plugin-learning",
       "row": "djupleita-learning",
       "title": "Optuna learning",
-      "description": "Offline ranking studies with held-out evaluation and operator-controlled promotion.",
+      "description": "Optuna crawl ranking and GEPA authz procedures with held-out evaluation, trajectories and operator-controlled promotion.",
       "configKeys": [
         "learning"
       ],
