@@ -75,6 +75,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
       - name: Prepare pinned source and dependencies
         run: |
           npm install --global pnpm@10.32.1
@@ -88,7 +91,7 @@ jobs:
           pnpm typecheck
           pnpm build
           pnpm setup:tools --only recon
-          pnpm setup:tools --only learning
+          pnpm setup:tools --only learning --python "$(command -v python)"
       - name: Check shared modes, approvals, replay and web controls
         env:
           DSH_TEST_OPTUNA_PYTHON: ${{ github.workspace }}/.pentest/toolchains/optuna/bin/python
