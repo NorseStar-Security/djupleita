@@ -37,13 +37,18 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     await writeFile(path, JSON.stringify(manifest));
     const patchPath = join(directory, 'cordis.patch.yml');
     const original = yaml.parseDocument(await readFile(patchPath, 'utf8'));
+    const retiredPersona = JSON.parse(await readFile(resolve('configs/pentest-preset.json'), 'utf8')).plugins.find((plugin: { id: string }) => plugin.id === 'persona').config.prefix;
     original.contents.items.find((row: { get(key: string): string }) => row.get('id') === 'agent-preset-registry').get('config').set('default', 'ptc');
     for (const row of original.contents.items) {
       for (const entry of row.get('insert')?.items ?? []) {
+        if (entry.get('id').startsWith('preset-')) {
+          const persona = entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config');
+          persona.set('prefix', `${persona.get('prefix')}\n\n${retiredPersona}`);
+        }
         if (entry.get('id') === 'preset-standard') {
           const bash = entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'tool-bash');
           bash.delete('disabled'); bash.set('disabled', true);
-          entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config').set('prefix', 'User-authored coding instructions');
+          entry.get('config').get('plugins').items.find((plugin: { get(key: string): string }) => plugin.get('id') === 'persona').get('config').set('prefix', `User-authored coding instructions\n\n${retiredPersona}`);
         }
         if (entry.get('id') === 'preset-pentest') {
           const plugins = entry.get('config').get('plugins');
@@ -62,6 +67,7 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     expect(patch).toContain('@dsh-pentest/dsh-plugin/core');
     expect(patch).toContain('# Saved model settings must survive startup');
     expect(patch).toContain('!!js');
+    expect(patch).not.toContain(retiredPersona);
     const rows = yaml.parseDocument(patch, { customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: (value: string) => value }] }).toJS();
     expect(rows.find((row: { id: string }) => row.id === 'agent-preset-registry').config.default).toBe('ptc');
     const standard = rows.flatMap((row: { insert?: unknown[] }) => row.insert ?? []).find((row: { id: string }) => row.id === 'preset-standard').config;

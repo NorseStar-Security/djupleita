@@ -164,7 +164,40 @@ try {
     await poll(async () => !(await ctx.pentest.toolSetup()).bannerDismissed);
     await policy();
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).waitFor();
+    const savedScope = structuredClone(ctx.pentest.scope.scope);
+    const savedBudget = ctx.pentest.engagement.snapshot();
+    await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).click();
+    await poll(() => ctx.get('pentest') === undefined);
+    await page.getByText('OFF · Basic DSH behavior.', { exact: false }).waitFor();
+    assert.equal(ctx.pentestMode.enabled, false);
+    assert(!ctx.tools.definitions().some(tool => tool.name.startsWith('pentest_')));
+    await page.reload();
+    await plugins();
+    await page.getByText('Djupleita · Engagement and identities', { exact: true }).click();
+    await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).waitFor();
+    assert.equal(await page.locator('textarea[name="scope"]').count(), 0);
+    const { SessionId } = await import('../../vendor/deepseek-harness/packages/core/session/lib/index.js');
+    const { ToolCallId } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
+    const { executeModelToolFixture } = await import('../../vendor/deepseek-harness/packages/test-support/tool-testkit/lib/index.js');
+    await writeFile(join(root, 'basic-dsh.txt'), 'Basic DSH native read fixture');
+    const agent = (await ctx.agents.create({ sessionId: SessionId('basic-mode-fixture'), meta: { cwd: root, agentPreset: 'standard' },
+      setup: async inner => { await ctx.agentPresets.mount(inner, 'standard'); } })).agent;
+    const prompt = await ctx.systemPrompt.assemble({ scope: agent });
+    assert(!JSON.stringify(prompt).includes('authorized penetration testing assistant'));
+    assert(!JSON.stringify(prompt).includes('Target scope management is'));
+    const result = await executeModelToolFixture(ctx, { agent, name: 'read', arguments: { file_path: join(root, 'basic-dsh.txt') },
+      callId: ToolCallId('basic-mode-read'), signal: AbortSignal.timeout(5000) });
+    assert(!result.isError);
+    assert(JSON.stringify(result).includes('Basic DSH native read fixture'));
+    await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).click();
+    await poll(() => ctx.get('pentest') !== undefined && ctx.tools.get('pentest_http') !== undefined);
+    await editor.waitFor();
+    assert.deepEqual(ctx.pentest.scope.scope, savedScope);
+    assert.equal(ctx.pentest.engagement.snapshot().requests, savedBudget.requests);
+    assert.deepEqual(JSON.parse(await editor.inputValue()), savedScope);
+    await page.reload(); await policy();
+    await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).waitFor();
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
-    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }

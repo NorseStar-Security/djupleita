@@ -87,7 +87,7 @@ export async function prepareProfile(destination = profile) {
   ].join('\n');
   const patchPath = join(destination, 'cordis.patch.yml');
   const savedPatch = await readFile(patchPath, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return '[]\n'; });
-  const mergedPatch = mergeProfilePatch(savedPatch, `${patch}\n`);
+  const mergedPatch = mergeProfilePatch(savedPatch, `${patch}\n`, preset.plugins.find(plugin => plugin.id === 'persona')?.config.prefix);
   if (savedPatch !== mergedPatch) {
     await writeFile(`${patchPath}.pre-launch.bak`, savedPatch, { mode: 0o600 });
     const pendingPatch = `${patchPath}.${randomUUID()}.tmp`;

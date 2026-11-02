@@ -39,6 +39,8 @@ jobs:
           pnpm setup:tools --only learning
       - name: Check sandbox preparation on the host image
         run: node scripts/check-sandbox.mjs
+      - name: Check engagement layer activation
+        run: pnpm exec vitest run packages/dsh-plugin/src/mode.test.ts
       - name: Check confined adapters with local fixtures
         env:
           DSH_TEST_WEB_UI: '1'
@@ -91,4 +93,5 @@ jobs:
           DSH_TEST_WEB_UI: '1'
           DSH_TEST_RECON_CONFIG: ${{ github.workspace }}/.pentest/tooling.json
         run: |
+          pnpm exec vitest run packages/dsh-plugin/src/mode.test.ts
           pnpm exec vitest run tests/research.test.ts tests/http.test.ts tests/passive.test.ts tests/crawl-authz.test.ts tests/fuzz.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/tool-schema.test.ts tests/policy.test.ts tests/review.test.ts tests/replay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts tests/browser.test.ts tests/worker.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/secret-service.test.ts packages/dsh-plugin/src/integration.test.ts

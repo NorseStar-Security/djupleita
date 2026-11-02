@@ -26,6 +26,7 @@ import { FuzzInputSchema } from '@dsh-pentest/fuzz';
 import { reaEffects, ReaCatalogInputSchema } from '@dsh-pentest/rea';
 import { AssessmentTools, ValidationTools } from './assessment.ts';
 import { AssessmentSkills } from './skills.ts';
+import pentestPreset from '../../../configs/pentest-preset.json' with { type: 'json' };
 export { AssessmentTools, ValidationTools } from './assessment.ts';
 export { AssessmentSkills } from './skills.ts';
 export { PentestRuntime } from './runtime.ts';
@@ -400,6 +401,9 @@ export async function applyCore(ctx: Context, config: RuntimeConfig, internals: 
   ctx.effect(() => () => runtime.close(), 'pentest: durable stores');
   ctx.provide('pentest', runtime);
   ctx.inject(['systemPrompt'], inner => {
+    const persona = pentestPreset.plugins.find(plugin => plugin.id === 'persona')?.config;
+    inner.systemPrompt.context({ name: 'djupleita-persona', order: 780, required: true, interpolate: false,
+      text: persona && 'prefix' in persona ? persona.prefix : '' });
     inner.systemPrompt.context({ name: 'djupleita-target-scope', order: 790, required: true, interpolate: false,
       text: () => runtime.scope.instructions() });
   });

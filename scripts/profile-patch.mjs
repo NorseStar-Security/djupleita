@@ -12,24 +12,29 @@ function document(source) {
 }
 
 /** Fill introduced capabilities recursively, retaining saved mode choices and plugin settings. */
-function introduce(existing, generated) {
+function introduce(existing, generated, retiredPersona) {
   if (isMap(existing) && isMap(generated)) {
     for (const pair of generated.items) {
       const key = pair.key.value;
       if (!existing.has(key)) existing.set(key, pair.value.clone());
-      else if (key !== 'prefix') introduce(existing.get(key), pair.value);
+      else if (key !== 'prefix') introduce(existing.get(key), pair.value, retiredPersona);
+      else if (typeof existing.get(key) === 'string' && retiredPersona) {
+        const previous = existing.get(key), suffix = `\n\n${retiredPersona}`;
+        if (previous.endsWith(suffix)) existing.set(key, previous.slice(0, -suffix.length));
+        else if (previous === retiredPersona) existing.set(key, pair.value.clone());
+      }
     }
   } else if (isSeq(existing) && isSeq(generated)) {
     for (const row of generated.items) {
       if (!isMap(row) || !row.has('id')) continue;
       const current = existing.items.find(item => isMap(item) && item.get('id') === row.get('id'));
-      if (current) introduce(current, row);
+      if (current) introduce(current, row, retiredPersona);
       else existing.add(row.clone());
     }
   }
 }
 
-export function mergeProfilePatch(source, generated) {
+export function mergeProfilePatch(source, generated, retiredPersona) {
   const doc = document(source), managed = document(generated);
   doc.contents.flow = false;
   for (const patch of managed.contents.items) {
@@ -62,7 +67,7 @@ export function mergeProfilePatch(source, generated) {
         if (key === 'config' && entry.get('id').startsWith('preset-') && isMap(current.get(key))) {
           const plugins = current.get(key).get('plugins');
           if (isSeq(plugins)) {
-            introduce(plugins, pair.value.get('plugins'));
+            introduce(plugins, pair.value.get('plugins'), retiredPersona);
             continue;
           }
         }

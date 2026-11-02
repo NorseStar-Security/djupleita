@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import css from './Panel.module.css';
 import { ScopeEditor } from './ScopeEditor.tsx';
+import { EngagementMode, engagementMode } from './EngagementMode.tsx';
 import distribution from '../../../../configs/distribution.json' with { type: 'json' };
 import { registerBrand } from './brand.tsx';
 import type { ReviewQuestion, ReviewGrant } from '../../../dsh-plugin/src/review.ts';
@@ -395,6 +396,8 @@ export function apply(ctx: Context): void {
       title: () => ctx.locale.bind('pentest')('title'), description: () => ctx.locale.bind('pentest')('description') }] }), 'pentest-ui: tab type');
   const sources = new Map<string, PanelInjected>();
   const lifetime = new AbortController();
+  const mode = engagementMode(connection, lifetime.signal);
+  ctx.effect(() => () => mode.dispose(), 'pentest-ui: engagement mode');
   const reviews = pollingSource(createSnapshotStore<{ snapshot?: ReviewSnapshot; loading: boolean; error?: string }>({ loading: true }), reviewLoader(connection));
   const reviewFor = (sessionId: string): ReviewInjected => ({ hooks: { reviews }, sessionId,
     async reviewOperation(endpoint, payload) {
@@ -430,18 +433,18 @@ export function apply(ctx: Context): void {
       return source;
   };
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'djupleita-review',
-    order: -100, locale: 'pentest', inject: reviewFor }, ReviewCards));
+    order: -100, locale: 'pentest', inject: reviewFor }, props => <EngagementMode mode={mode} activeOnly><ReviewCards {...props} /></EngagementMode>));
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: ID,
-    locale: 'pentest', inject: sourceFor }, Panel));
+    locale: 'pentest', inject: sourceFor }, props => <EngagementMode mode={mode}><Panel {...props} /></EngagementMode>));
   const settings = () => sourceFor('djupleita-settings');
   ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: 'djupleita-engagement',
     order: -100, label: () => ctx.locale.bind('pentest')('coreTitle'), locale: 'pentest', inject: settings },
     props => props.view === 'summary' ? props.t('coreDescription')
-      : <Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} included />));
+      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} included /></EngagementMode>));
   for (const plugin of distribution.plugins) {
     const tabs = plugin.tabs.filter((tab): tab is Tab => TABS.includes(tab as Tab));
-    const ConfigPage = (props: Props) => <Panel {...props} initialTab={tabs[0] ?? 'plugins'}
-      visibleTabs={tabs} configKeys={plugin.configKeys} included />;
+    const ConfigPage = (props: Props) => <EngagementMode mode={mode}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
+      visibleTabs={tabs} configKeys={plugin.configKeys} included /></EngagementMode>;
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config',
       key: plugin.name, locale: 'pentest', inject: settings }, ConfigPage));
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({ name: 'plugins.row.config',
