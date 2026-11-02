@@ -61,3 +61,11 @@
 .assessmentStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 18px; }
 .assessmentStats span { padding: 12px; border: 1px solid #303b50; border-radius: 8px; color: #9eacc1; font-size: 11px; }
 .assessmentStats strong { display: block; font-size: 18px; font-weight: 600; color: #93dfbd; }
+
+.learning table { width: 100%; text-align: left; border-collapse: collapse; margin: 12px 0; }
+.learning th, .learning td { padding: 7px 10px; border-bottom: 1px solid #344052; }
+.learning details { margin: 12px 0; }
+.learning summary { cursor: pointer; font-size: 13px; }
+.learning h4 { margin: 12px 0 4px; }
+.learning pre { font-size: 12px; max-height: 240px; overflow: auto; }
+.learning label { display: grid; gap: 6px; margin-top: 12px; }

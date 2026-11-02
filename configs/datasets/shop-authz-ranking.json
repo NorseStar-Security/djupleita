@@ -1,0 +1,276 @@
+{
+  "name": "Shop bounty: prioritize ownership checks (SYNTHETIC)",
+  "requestBudget": 2,
+  "rows": [
+    {
+      "id": "https://shop.example.test/shop/login",
+      "split": "train",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:1"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/account/settings",
+      "split": "train",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:2"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/orders/1001",
+      "split": "train",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:3"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/invoices/9001",
+      "split": "train",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:4"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/catalog?q=shoes",
+      "split": "train",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 1,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:5"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/assets/site.css",
+      "split": "train",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:train:6"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/auth/reset",
+      "split": "validation",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:1"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/admin/help",
+      "split": "validation",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:2"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/shipments/2001",
+      "split": "validation",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:3"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/receipts/3001",
+      "split": "validation",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:4"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/search?q=book",
+      "split": "validation",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 1,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:5"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/assets/logo.svg",
+      "split": "validation",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:validation:6"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/user/profile",
+      "split": "test",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:1"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/account/preferences",
+      "split": "test",
+      "features": {
+        "auth": 1,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:2"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/returns/4001",
+      "split": "test",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:3"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/reservations/5001",
+      "split": "test",
+      "features": {
+        "auth": 0,
+        "object": 1,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 1,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:4"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/browse?q=bag",
+      "split": "test",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 1,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:5"
+      ]
+    },
+    {
+      "id": "https://shop.example.test/shop/assets/banner.png",
+      "split": "test",
+      "features": {
+        "auth": 0,
+        "object": 0,
+        "query": 0,
+        "novelty": 1
+      },
+      "reward": 0,
+      "cost": 1,
+      "evidenceIds": [
+        "synthetic:shop:test:6"
+      ]
+    }
+  ]
+}

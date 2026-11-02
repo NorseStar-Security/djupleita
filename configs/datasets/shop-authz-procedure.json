@@ -1,0 +1,235 @@
+{
+  "kind": "authz-procedure",
+  "name": "Shop authz · ownership evidence (12 synthetic cases)",
+  "baseline": "Report an authorization vulnerability whenever the second account receives HTTP 200. Otherwise report safe.",
+  "rows": [
+    {
+      "id": "train-1",
+      "appId": "shop-train-1",
+      "split": "train",
+      "evidenceIds": [
+        "train-1-owner",
+        "train-1-peer",
+        "train-1-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"train-1-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"train-1-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-train-1.example.test/shop/orders/100\",\"status\":200,\"body\":{\"objectId\":100,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"train-1-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-train-1.example.test/shop/orders/100\",\"status\":200,\"body\":{\"objectId\":100,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}}]}",
+      "expected": {
+        "verdict": "vulnerable",
+        "requiredEvidence": [
+          "train-1-owner",
+          "train-1-peer",
+          "train-1-role"
+        ]
+      }
+    },
+    {
+      "id": "train-2",
+      "appId": "shop-train-2",
+      "split": "train",
+      "evidenceIds": [
+        "train-2-owner",
+        "train-2-peer",
+        "train-2-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"train-2-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"train-2-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-train-2.example.test/shop/orders/101\",\"status\":200,\"body\":{\"objectId\":101,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"train-2-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-train-2.example.test/shop/orders/101\",\"status\":403,\"body\":{\"error\":\"forbidden\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "train-2-owner",
+          "train-2-peer",
+          "train-2-role"
+        ]
+      }
+    },
+    {
+      "id": "train-3",
+      "appId": "shop-train-3",
+      "split": "train",
+      "evidenceIds": [
+        "train-3-owner",
+        "train-3-peer",
+        "train-3-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"train-3-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"train-3-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-train-3.example.test/shop/orders/102\",\"status\":200,\"body\":{\"objectId\":102,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"train-3-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-train-3.example.test/shop/orders/102\",\"status\":200,\"body\":{\"error\":\"not-authorized\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "train-3-owner",
+          "train-3-peer",
+          "train-3-role"
+        ]
+      }
+    },
+    {
+      "id": "train-4",
+      "appId": "shop-train-4",
+      "split": "train",
+      "evidenceIds": [
+        "train-4-owner",
+        "train-4-peer",
+        "train-4-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"train-4-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"train-4-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-train-4.example.test/shop/orders/103\",\"status\":503,\"body\":{\"error\":\"unavailable\"}},{\"id\":\"train-4-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-train-4.example.test/shop/orders/103\",\"status\":200,\"body\":{\"objectId\":103,\"privateNote\":\"unknown-owner\"}}]}",
+      "expected": {
+        "verdict": "inconclusive",
+        "requiredEvidence": [
+          "train-4-owner",
+          "train-4-peer",
+          "train-4-role"
+        ]
+      }
+    },
+    {
+      "id": "validation-1",
+      "appId": "shop-validation-1",
+      "split": "validation",
+      "evidenceIds": [
+        "validation-1-owner",
+        "validation-1-peer",
+        "validation-1-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"validation-1-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"validation-1-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-validation-1.example.test/shop/orders/110\",\"status\":200,\"body\":{\"objectId\":110,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"validation-1-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-validation-1.example.test/shop/orders/110\",\"status\":200,\"body\":{\"objectId\":110,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}}]}",
+      "expected": {
+        "verdict": "vulnerable",
+        "requiredEvidence": [
+          "validation-1-owner",
+          "validation-1-peer",
+          "validation-1-role"
+        ]
+      }
+    },
+    {
+      "id": "validation-2",
+      "appId": "shop-validation-2",
+      "split": "validation",
+      "evidenceIds": [
+        "validation-2-owner",
+        "validation-2-peer",
+        "validation-2-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"validation-2-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"validation-2-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-validation-2.example.test/shop/orders/111\",\"status\":200,\"body\":{\"objectId\":111,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"validation-2-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-validation-2.example.test/shop/orders/111\",\"status\":403,\"body\":{\"error\":\"forbidden\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "validation-2-owner",
+          "validation-2-peer",
+          "validation-2-role"
+        ]
+      }
+    },
+    {
+      "id": "validation-3",
+      "appId": "shop-validation-3",
+      "split": "validation",
+      "evidenceIds": [
+        "validation-3-owner",
+        "validation-3-peer",
+        "validation-3-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"validation-3-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"validation-3-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-validation-3.example.test/shop/orders/112\",\"status\":200,\"body\":{\"objectId\":112,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"validation-3-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-validation-3.example.test/shop/orders/112\",\"status\":200,\"body\":{\"error\":\"not-authorized\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "validation-3-owner",
+          "validation-3-peer",
+          "validation-3-role"
+        ]
+      }
+    },
+    {
+      "id": "validation-4",
+      "appId": "shop-validation-4",
+      "split": "validation",
+      "evidenceIds": [
+        "validation-4-owner",
+        "validation-4-peer",
+        "validation-4-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"validation-4-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"validation-4-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-validation-4.example.test/shop/orders/113\",\"status\":503,\"body\":{\"error\":\"unavailable\"}},{\"id\":\"validation-4-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-validation-4.example.test/shop/orders/113\",\"status\":200,\"body\":{\"objectId\":113,\"privateNote\":\"unknown-owner\"}}]}",
+      "expected": {
+        "verdict": "inconclusive",
+        "requiredEvidence": [
+          "validation-4-owner",
+          "validation-4-peer",
+          "validation-4-role"
+        ]
+      }
+    },
+    {
+      "id": "test-1",
+      "appId": "shop-test-1",
+      "split": "test",
+      "evidenceIds": [
+        "test-1-owner",
+        "test-1-peer",
+        "test-1-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"test-1-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"test-1-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-test-1.example.test/shop/orders/120\",\"status\":200,\"body\":{\"objectId\":120,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"test-1-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-test-1.example.test/shop/orders/120\",\"status\":200,\"body\":{\"objectId\":120,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}}]}",
+      "expected": {
+        "verdict": "vulnerable",
+        "requiredEvidence": [
+          "test-1-owner",
+          "test-1-peer",
+          "test-1-role"
+        ]
+      }
+    },
+    {
+      "id": "test-2",
+      "appId": "shop-test-2",
+      "split": "test",
+      "evidenceIds": [
+        "test-2-owner",
+        "test-2-peer",
+        "test-2-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"test-2-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"test-2-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-test-2.example.test/shop/orders/121\",\"status\":200,\"body\":{\"objectId\":121,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"test-2-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-test-2.example.test/shop/orders/121\",\"status\":403,\"body\":{\"error\":\"forbidden\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "test-2-owner",
+          "test-2-peer",
+          "test-2-role"
+        ]
+      }
+    },
+    {
+      "id": "test-3",
+      "appId": "shop-test-3",
+      "split": "test",
+      "evidenceIds": [
+        "test-3-owner",
+        "test-3-peer",
+        "test-3-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"test-3-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"test-3-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-test-3.example.test/shop/orders/122\",\"status\":200,\"body\":{\"objectId\":122,\"owner\":\"A\",\"privateNote\":\"synthetic-order-data\"}},{\"id\":\"test-3-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-test-3.example.test/shop/orders/122\",\"status\":200,\"body\":{\"error\":\"not-authorized\"}}]}",
+      "expected": {
+        "verdict": "safe",
+        "requiredEvidence": [
+          "test-3-owner",
+          "test-3-peer",
+          "test-3-role"
+        ]
+      }
+    },
+    {
+      "id": "test-4",
+      "appId": "shop-test-4",
+      "split": "test",
+      "evidenceIds": [
+        "test-4-owner",
+        "test-4-peer",
+        "test-4-role"
+      ],
+      "input": "{\"observations\":[{\"id\":\"test-4-role\",\"description\":\"A and B are test accounts with identical customer role and tenant; the object is private to its owner.\"},{\"id\":\"test-4-owner\",\"identity\":\"A\",\"request\":\"GET https://shop-test-4.example.test/shop/orders/123\",\"status\":503,\"body\":{\"error\":\"unavailable\"}},{\"id\":\"test-4-peer\",\"identity\":\"B\",\"request\":\"GET https://shop-test-4.example.test/shop/orders/123\",\"status\":200,\"body\":{\"objectId\":123,\"privateNote\":\"unknown-owner\"}}]}",
+      "expected": {
+        "verdict": "inconclusive",
+        "requiredEvidence": [
+          "test-4-owner",
+          "test-4-peer",
+          "test-4-role"
+        ]
+      }
+    }
+  ]
+}

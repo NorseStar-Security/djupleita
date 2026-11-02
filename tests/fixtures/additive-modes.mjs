@@ -91,6 +91,33 @@ try {
       }
     }
   }
+  // Exercise actual shell and mutation dispatch in the shipped composition.
+  const nativeAgent = ctx.agents.get(SessionId('fixture-pentest'));
+  const mutationPath = join(root, 'native-write.txt');
+  const disconnect = ctx.pentest.review.connect();
+  const approvals = new Set();
+  const approval = setInterval(() => {
+    for (const item of ctx.pentest.review.snapshot().pending) {
+      if (['bash', 'write', 'edit'].includes(item.tool)) {
+        approvals.add(item.tool);
+        void ctx.pentest.review.decide(item.id, item.sessionId, 'once');
+      }
+    }
+  }, 25);
+  try {
+    for (const [name, args] of [
+      ['bash', { command: 'printf native-shell-fixture', description: 'Print a local fixture marker', workdir: root }],
+      ['write', { file_path: mutationPath, content: 'native-before' }],
+      ['edit', { file_path: mutationPath, old_string: 'native-before', new_string: 'native-after' }],
+    ]) {
+      const result = await executeModelToolFixture(ctx, { agent: nativeAgent, name, arguments: args,
+        callId: ToolCallId(`fixture-native-${name}`), signal: AbortSignal.timeout(15000) });
+      assert(!result.isError, `${name}: ${JSON.stringify(result)}`);
+      if (name === 'bash') assert(JSON.stringify(result).includes('native-shell-fixture'));
+    }
+    assert.equal(await readFile(mutationPath, 'utf8'), 'native-after');
+    assert.deepEqual([...approvals].sort(), ['bash', 'edit', 'write']);
+  } finally { clearInterval(approval); disconnect(); }
   assert.deepEqual(catalogs.pentest.toSorted(), catalogs.standard.toSorted());
   console.log(JSON.stringify({ modes: Object.keys(catalogs), nativeInvocations: true, ptcCatalog: true, baseCatalogsPreserved: true, childCatalogsPreserved: true }));
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }

@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection';
 import { clientRequestSchema } from '@deepseek-ai/dsh-client-connection';
+import { RunInputSchema, studyReceipt } from '@dsh-pentest/learning';
 import { z } from 'zod';
 import { IdentitySchema } from '@dsh-pentest/identities';
 import type { Identity } from '@dsh-pentest/identities';
@@ -23,7 +24,7 @@ export const DesktopChannel = {
     ctx.effect(() => ctx.pentest.review.connect(), 'pentest: interactive owner review');
     // Exact Connection Fetch routes require an authenticated owner Peer before
     // dispatch. Keep this surface outside the shared model-facing API gateway.
-    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
+    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'learning/cancel', 'learning/revoke', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
       path: `/api/pentest/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {
       const parsed = clientRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -92,8 +93,13 @@ export const DesktopChannel = {
           await ctx.pentest.updatePlugins(input.config, input.sessionId as SessionId); return reply({ saved: true });
         }
         if (endpoint === 'learning/run') {
-          const input = z.object({ datasetId: z.string(), trials: z.number().int().min(2).max(1000), sessionId: SessionSchema }).parse(payload);
-          return reply(await ctx.pentest.learning().run(input.datasetId, input.trials, input.sessionId as SessionId, ctx.pentest.signal(signal)));
+          const input = RunInputSchema.extend({ sessionId: SessionSchema }).parse(payload);
+          return reply(studyReceipt(await ctx.pentest.learning().run(input.datasetId, input.trials, input.sessionId as SessionId, ctx.pentest.signal(signal), input.backend)));
+        }
+        if (endpoint === 'learning/cancel') { ctx.pentest.learning().cancel(); return reply({ cancelled: true }); }
+        if (endpoint === 'learning/revoke') {
+          const input = z.object({ sessionId: SessionSchema }).parse(payload);
+          await ctx.pentest.revokeProcedure(input.sessionId as SessionId); return reply({ revoked: true });
         }
         if (endpoint === 'learning/promote') {
           const input = z.object({ runId: z.string().uuid(), sessionId: SessionSchema }).parse(payload);

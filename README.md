@@ -165,7 +165,7 @@ Use `/goal <objective>` in the chat composer for work that should continue acros
 | Graph | SQLite evidence graph, observed/inferred/verified relationships, bounded path queries and RAGE 0.1 NDJSON import/export. Discovery edges are not access capabilities. |
 | Identities / authz | Keychain/Secret Service bearer, Basic, header and browser-storage identities. A/B/anonymous read replays retain separate evidence and produce authorization candidates. Trusted ownership assertions can verify findings. |
 | Trajectories / export | Hash-linked, fsynced, redacted chat/session/tool/judgment events. Optional OTLP/HTTP JSON logs with stable chat trace IDs, durable destination cursors and retry outbox. |
-| Learning | Confined offline Optuna ranking studies, immutable dataset hashes, separate train/validation/test splits, SQLite trial history, owner-only promotion requiring held-out improvement. |
+| Learning | Optuna crawl ranking and GEPA authz procedures, isolated datasets, held-out evaluation, model trajectories, bounded calls and cancellation. Explicit owner promotion; persistent procedures can be disabled. |
 
 The [Neo recon page](https://docs.neo.projectdiscovery.io/platform/agents/discovery/recon-agent) describes passive capabilities rather than a public implementation of its proprietary agent. This project implements those capabilities using public APIs and the named open-source adapters. It does not run the proprietary Neo agent.
 
@@ -272,7 +272,13 @@ Search `pentest_rea_catalog` with `query`, then request `tool` by exact name for
 
 ### Learning and telemetry
 
-`configs/datasets/lab-ranking.json` is a synthetic acceptance fixture, not evidence of real pentest improvement. Replace it with operator-labelled, separated engagement data. Studies tune only crawl-ranking weights; they cannot tune scope or destructive-action policy. Reports include every trial, data hash, scores and the offline-estimate limitation. Live efficiency should be evaluated separately.
+The included **Optuna learning** plugin now offers two backends in Studies. **Optuna** tunes crawl-ranking weights from labelled candidates; **GEPA** revises an authorization-testing procedure from recorded model outputs and fixed evaluator feedback. Both retain dataset hashes, separate train/validation/test evidence, reports, trajectories and explicit owner promotion. Scope, credentials, budgets and approval rules are outside the search space.
+
+Use [12 synthetic examples](configs/datasets/shop-authz-procedure.json) to improve the agent's checklist, compare the old and new instructions, check fresh examples kept aside, and use the checklist in the next chat. The [dataset guide](configs/datasets/shop-authz-procedure.md) documents expected answers, scoring and budgets.
+
+Run `pnpm setup:tools --only learning`, then load local setup in the plugin to install pinned Optuna 5.0.0 and GEPA 0.1.4. GEPA uses the selected chat model for task evaluation and reflection, with provider charges, bounded calls, cancellation and no target requests. Python receives no API keys or assessment-tool access. Review case feedback and held-out results before **Promote procedure**. Promotion adds advisory context to future agent requests while this plugin is enabled, survives restart, and can be revoked with **Disable procedure**.
+
+Optuna's [18-row ranking dataset](configs/datasets/shop-authz-ranking.json) and [guide](configs/datasets/shop-authz-ranking.md) remain available for improving endpoint selection under a two-request budget. `configs/datasets/lab-ranking.json` remains a minimal acceptance fixture. Ranking efficiency and procedure correctness are different objectives; these examples are not a comparative backend benchmark. Validate any learned change on independent labelled applications and authorized live tests.
 
 For OTLP logs, configure `telemetry.enabled`, the full `/v1/logs` endpoint, and an optional host-bound identity ID. Allow the collector under telemetry service scope. The exporter is off by default. Export failures retain local trajectories and queued payloads; exhausted retries are retained for inspection. Use a collector or a vendor's OTLP/HTTP JSON endpoint. No hosted Logfire or Jev account was used in acceptance tests.
 
@@ -295,7 +301,7 @@ DSH_TEST_FFUF="$PWD/.pentest/toolchains/ffuf/2.3.0/darwin-arm64/ffuf" \
 pnpm test
 ```
 
-Install Chromium with `pnpm setup:tools --only browser`, then **Load local setup**. Browser/worker tests run on macOS and Linux with their respective sandbox backend. Optional REA/Optuna/native secure-store smoke tests run when their environment variables are set. Tests use local fixtures and generated credentials. They do not scan an external target.
+Install Chromium with `pnpm setup:tools --only browser`, then **Load local setup**. Browser/worker tests run on macOS and Linux with their respective sandbox backend. Optional REA/Optuna/GEPA/native secure-store smoke tests run when their environment variables are set. Tests use local fixtures and generated credentials. They do not scan an external target.
 
 CI builds and tests both macOS and Linux. After building the harness and installing Playwright Chromium, `DSH_TEST_WEB_UI=1 pnpm exec vitest run tests/web-issues.test.ts` checks authenticated web scope editing, destination approvals and setup controls. Mode fixtures compare upstream catalogs, invoke native file tools and execute both normal and Pentest tools through PTC; replay fixtures check inherited assessment membership.
 

@@ -20,8 +20,8 @@ import { ReconService, ReconConfigSchema, PassiveConfigSchema, PassiveReconServi
 import { FuzzService, FuzzConfigSchema, installFfuf as installFfufTool } from '@dsh-pentest/fuzz';
 import { ReaService, ReaConfigSchema, installRea as installReaTools } from '@dsh-pentest/rea';
 import { OtlpExporter, ExportConfigSchema } from '@dsh-pentest/export';
-import { LearningService, LearningConfigSchema, RankingSchema } from '@dsh-pentest/learning';
-import type { Ranking } from '@dsh-pentest/learning';
+import { LearningService, LearningConfigSchema, RankingSchema, PromotionSchema } from '@dsh-pentest/learning';
+import type { Ranking, LearningModel, ProcedurePromotion } from '@dsh-pentest/learning';
 import type { ToolExecution } from '@deepseek-ai/dsh-tools';
 import { z } from 'zod';
 import { ReviewService } from './review.ts';
@@ -77,6 +77,12 @@ export class PentestRuntime {
   private reaService?: ReaService;
   private exporter?: OtlpExporter;
   private learningService?: LearningService;
+  private learningModel?: LearningModel;
+  private learningSelection?: (session: SessionId) => Readonly<ModelSelection>;
+  setLearningSelection(resolve: (session: SessionId) => Readonly<ModelSelection>): void { this.learningSelection = resolve; }
+  private currentProcedure?: ProcedurePromotion;
+  get procedure(): ProcedurePromotion | undefined { return this.currentProcedure; }
+  setLearningModel(model: LearningModel): void { this.learningModel = model; }
   private exportError?: string;
   private revision = new AbortController();
   readonly trajectories: TrajectoryStore;
@@ -139,9 +145,10 @@ export class PentestRuntime {
     runtime.releaseWriter = () => unlink(lockPath);
     try {
       try {
-        const saved = z.object({ scope: ScopeSchema, policy: PolicyConfigSchema, ranking: RankingSchema.optional() }).parse(JSON.parse(await readFile(join(runtime.root, 'settings.json'), 'utf8')));
+        const saved = z.object({ scope: ScopeSchema, policy: PolicyConfigSchema, ranking: RankingSchema.optional(), procedure: PromotionSchema.optional() }).parse(JSON.parse(await readFile(join(runtime.root, 'settings.json'), 'utf8')));
         runtime.currentScope = new ScopeService(saved.scope, undefined, runtime.review); runtime.currentPolicy = freeze(saved.policy);
         if (saved.ranking) runtime.currentRanking = freeze(saved.ranking);
+        if (saved.procedure) runtime.currentProcedure = freeze(saved.procedure);
         runtime.currentFrontier = new CrawlFrontier(runtime.frontier.config, runtime.scope, runtime.currentRanking);
       } catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
       try {
@@ -228,7 +235,7 @@ export class PentestRuntime {
   }
   learning(): LearningService {
     if (!this.currentPlugins.learning) throw new PentestError('LEARNING_CONFIG', 'Configure the Optuna Python environment in the Plugins panel');
-    return this.learningService ??= new LearningService(this.currentPlugins.learning, join(this.root, 'studies'), this.trajectories, this.redactor);
+    return this.learningService ??= new LearningService(this.currentPlugins.learning, join(this.root, 'studies'), this.trajectories, this.redactor, this.learningModel, session => this.learningSelection?.(session) ?? this.model(session));
   }
   /** Plugin-owned background work remains optional and never removes local trajectories. */
   async exportTick(signal: AbortSignal): Promise<void> {
@@ -275,13 +282,14 @@ export class PentestRuntime {
   }
 
   /** Called only by owner UI/RPC. Revoke in-flight work before exposing a new scope/policy revision. */
-  async updateSettings(scope: Scope, policy: PolicyConfig, operatorSession: SessionId, ranking: Ranking = this.currentRanking): Promise<void> {
+  async updateSettings(scope: Scope, policy: PolicyConfig, operatorSession: SessionId, ranking: Ranking = this.currentRanking, procedure: ProcedurePromotion | null | undefined = this.currentProcedure): Promise<void> {
     if (this.closing) throw new PentestError('RUNTIME_CLOSED', 'Engagement is closing');
     const checkedRanking = freeze(RankingSchema.parse(ranking));
+    const checkedProcedure = procedure ? freeze(PromotionSchema.parse(procedure)) : undefined;
     const checkedScope = new ScopeService(scope, undefined, this.review), checkedPolicy = freeze(PolicyConfigSchema.parse(policy));
     const next = this.settingsQueue.then(async () => {
       const path = join(this.root, 'settings.json'), temporary = `${path}.${id<'WriteId'>()}.tmp`;
-      await writeFile(temporary, `${JSON.stringify({ scope: checkedScope.scope, policy: checkedPolicy, ranking: checkedRanking })}\n`, { mode: 0o600 });
+      await writeFile(temporary, `${JSON.stringify({ scope: checkedScope.scope, policy: checkedPolicy, ranking: checkedRanking, procedure: checkedProcedure })}\n`, { mode: 0o600 });
       await this.trajectories.append(operatorSession, 'engagement/settings', this.redactor.json({
         source: 'desktop-owner', previousScope: this.scope.version, scope: checkedScope.scope, policy: checkedPolicy, ranking: checkedRanking,
       }));
@@ -290,6 +298,7 @@ export class PentestRuntime {
       this.revision.abort(new PentestError('POLICY_REVISED', 'Engagement scope or policy changed in the desktop UI'));
       await this.browserService?.close(); delete this.browserService; await this.reaService?.close(); delete this.reaService; delete this.exporter;
       this.revision = new AbortController(); this.currentScope = checkedScope; this.currentPolicy = checkedPolicy; this.currentRanking = checkedRanking;
+      if (checkedProcedure) this.currentProcedure = checkedProcedure; else delete this.currentProcedure;
       this.currentFrontier = new CrawlFrontier(this.frontier.config, checkedScope, this.currentRanking);
     });
     this.settingsQueue = next.catch(() => {}); await next;
@@ -362,8 +371,24 @@ export class PentestRuntime {
     await this.updatePlugins(mergeLocalSetup(this.currentPlugins, local), session);
   }
   async promoteStudy(runId: string, session: SessionId): Promise<void> {
-    const ranking = await this.learning().promotion(runId, session);
-    await this.updateSettings(this.scope.scope, this.currentPolicy, session, ranking);
+    const artifact = await this.learning().promotion(runId, session);
+    if ('text' in artifact) await this.updateProcedure(artifact, session);
+    else await this.updateSettings(this.scope.scope, this.currentPolicy, session, artifact);
+  }
+  private async updateProcedure(procedure: ProcedurePromotion | null, session: SessionId): Promise<void> {
+    if (this.closing) throw new PentestError('RUNTIME_CLOSED', 'Engagement is closing');
+    const checked = procedure ? freeze(PromotionSchema.parse(procedure)) : undefined;
+    const next = this.settingsQueue.then(async () => {
+      const path = join(this.root, 'settings.json'), temporary = path + '.' + id<'WriteId'>() + '.tmp';
+      await writeFile(temporary, JSON.stringify({ scope: this.scope.scope, policy: this.currentPolicy, ranking: this.currentRanking, procedure: checked }), { mode: 0o600 });
+      await this.trajectories.append(session, 'learning/procedure-update', this.redactor.json({ source: 'desktop-owner', procedure: checked ?? null }));
+      await rename(temporary, path);
+      if (checked) this.currentProcedure = checked; else delete this.currentProcedure;
+    });
+    this.settingsQueue = next.catch(() => {}); await next;
+  }
+  async revokeProcedure(session: SessionId): Promise<void> {
+    await this.updateProcedure(null, session);
   }
   /** Model-facing status never embeds trajectories, graph bodies or previous tool results. */
   async status(session: SessionId, availableTools?: readonly string[]): Promise<Json> {
@@ -394,7 +419,7 @@ export class PentestRuntime {
     const trajectory = sessionId ? await this.trajectories.page(sessionId) : { events: [], total: 0, nextBefore: null, file: '' };
     return this.redactor.json({ engagement: { ...this.engagement.engagement, scope: this.scope.scope }, budget: this.engagement.snapshot(),
       policy: this.currentPolicy, policyVersion: this.policy(sessionId ?? 'inspection' as SessionId).version,
-      identities: this.identities.list(), graph: this.graphPage(), ranking: this.currentRanking,
+      identities: this.identities.list(), graph: this.graphPage(), ranking: this.currentRanking, procedure: this.currentProcedure ?? null,
       pluginConfig: this.currentPlugins, setup: { ...await this.toolSetup() }, telemetry: { ...(this.exporter ? await this.exporter.status() : { queued: 0, exhausted: 0 }), error: this.exportError ?? null },
       learning: this.currentPlugins.learning ? await this.learning().studies() : null,
       review: this.review.snapshot(sessionId), plugins: this.inventory(), sessions: await this.trajectories.sessions(),
