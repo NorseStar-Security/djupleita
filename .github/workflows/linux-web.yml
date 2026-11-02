@@ -30,8 +30,8 @@ jobs:
           node packages/browser/node_modules/playwright/cli.js install --with-deps chromium
       - name: Build distribution and web harness
         run: |
-          pnpm typecheck
           pnpm build:harness
+          pnpm typecheck
           pnpm build
           pnpm setup:tools --only recon
           pnpm setup:tools --only rea
@@ -80,8 +80,8 @@ jobs:
           node packages/browser/node_modules/playwright/cli.js install chromium
       - name: Build distribution and web harness
         run: |
-          pnpm typecheck
           pnpm build:harness
+          pnpm typecheck
           pnpm build
           pnpm setup:tools --only recon
       - name: Check shared modes, approvals, replay and web controls
