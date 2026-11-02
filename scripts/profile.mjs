@@ -30,6 +30,20 @@ export async function prepareProfile(destination = profile) {
     await writeFile(configPath, `${JSON.stringify(template, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
   }
   const engagement = JSON.parse(await readFile(configPath, 'utf8'));
+  // Older installations shipped an empty boundary before the enforcement switch
+  // existed. Initialize that untouched default in the saved configuration so
+  // the runtime, agent and editor all receive the same course scope.
+  const scope = engagement.scope;
+  if (scope && !Object.hasOwn(scope, 'enabled') &&
+      ['targets', 'exclusions', 'networks'].every(key => Array.isArray(scope[key]) && scope[key].length === 0)) {
+    const defaults = JSON.parse(await readFile(join(root, 'configs/scope.example.json'), 'utf8'));
+    engagement.scope = { ...defaults, ...scope, enabled: defaults.enabled, targets: defaults.targets };
+    await writeFile(`${configPath}.pre-scope-defaults.bak`, await readFile(configPath), { mode: 0o600, flag: 'wx' })
+      .catch(error => { if (error.code !== 'EEXIST') throw error; });
+    const pending = `${configPath}.${randomUUID()}.tmp`;
+    await writeFile(pending, `${JSON.stringify(engagement, null, 2)}\n`, { mode: 0o600 });
+    await rename(pending, configPath);
+  }
   const modules = join(destination, 'node_modules');
   await mkdir(modules, { recursive: true, mode: 0o700 });
   const workspaces = globSync(['vendor/*/package.json', 'packages/*/*/package.json', 'apps/*/package.json'], { cwd: upstream });

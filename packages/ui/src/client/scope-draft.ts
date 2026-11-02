@@ -1,13 +1,12 @@
 import example from '../../../../configs/scope.example.json' with { type: 'json' };
 export const scopeExample = example;
 
-/** Fill missing targets in the draft without changing saved targets or service/network settings. */
+/** Start with the actual saved policy; course targets are an explicit draft action. */
 export function initialScopeDraft(scope: Record<string, unknown>): string {
-  if (scope.targets !== undefined && (!Array.isArray(scope.targets) || scope.targets.length > 0)) return JSON.stringify(scope, null, 2);
-  const emptyBoundary = ['exclusions', 'networks'].every(key => scope[key] === undefined || Array.isArray(scope[key]) && scope[key].length === 0);
+  return JSON.stringify(scope, null, 2);
+}
+export function courseScopeDraft(scope: Record<string, unknown>): string {
   return JSON.stringify({ ...example, ...scope, targets: example.targets,
-    enabled: scope.enabled ?? (scope.targets === undefined ? example.enabled : true),
-    ...(emptyBoundary ? { exclusions: example.exclusions } : {}),
     services: { ...example.services, ...(scope.services as Record<string, unknown> | undefined) },
   }, null, 2);
 }

@@ -95,3 +95,34 @@ it('upgrades an old preset with compaction and orchestration while preserving pr
     expect(JSON.parse(await readFile(path, 'utf8')).dsh.profile.bundles).not.toContain('@djupleita/plugin-ffuf');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+it('saves course defaults for legacy empty boundaries once and preserves explicit scope choices', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'djupleita-scope-defaults-'));
+  const path = join(directory, 'engagement.json');
+  const defaults = JSON.parse(await readFile(resolve('configs/scope.example.json'), 'utf8'));
+  const template = JSON.parse(await readFile(resolve('configs/engagement.example.json'), 'utf8'));
+  const services = { ...defaults.services, model: [{ host: 'model.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/v1'], allowPrivateAddresses: false }] };
+  const legacy = { targets: [], exclusions: [], networks: [], services };
+  const prepare = () => execFileSync(process.execPath, ['--input-type=module', '-e',
+    "import { prepareProfile } from './scripts/profile.mjs'; await prepareProfile(process.argv[1]);", directory],
+  { cwd: resolve('.'), env: { ...process.env, DSH_PENTEST_ENGAGEMENT: path } });
+  try {
+    const original = JSON.stringify({ ...template, scope: legacy });
+    await writeFile(path, original);
+    // Recover safely if a previous launch stopped after creating the backup.
+    await writeFile(`${path}.pre-scope-defaults.bak`, original, { mode: 0o600 });
+    prepare();
+    const migrated = await readFile(path, 'utf8');
+    expect(JSON.parse(migrated)).toEqual({ ...template, scope: { ...defaults, services } });
+    expect(await readFile(`${path}.pre-scope-defaults.bak`, 'utf8')).toBe(original);
+    prepare();
+    expect(await readFile(path, 'utf8')).toBe(migrated);
+    for (const scope of [{ ...legacy, enabled: false }, { ...legacy, enabled: true },
+      { ...legacy, targets: [{ host: 'saved.example.test', schemes: ['https'], ports: [443], pathPrefixes: ['/'], allowPrivateAddresses: false }] },
+      { ...legacy, exclusions: ['saved.example.test'] }, { ...legacy, networks: ['192.0.2.0/24'] }]) {
+      const saved = JSON.stringify({ ...template, scope });
+      await writeFile(path, saved); prepare();
+      expect(await readFile(path, 'utf8')).toBe(saved);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

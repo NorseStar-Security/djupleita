@@ -17,7 +17,7 @@ await mkdir(process.env.HOME, { recursive: true });
 const { prepareProfile } = await import('../../scripts/profile.mjs');
 const profile = join(process.env.DSH_HOME, 'profiles/pentest');
 const require = createRequire(resolve('vendor/deepseek-harness/packages/boot/config-editor/package.json'));
-let ctx, providerFailure, toolReplies = 0;
+let ctx, initialScope, providerFailure, toolReplies = 0;
 const model = 'accounts/fireworks/routers/deepseek-flash-latest';
 const provider = createServer(async (request, response) => {
   try {
@@ -25,6 +25,10 @@ const provider = createServer(async (request, response) => {
     const body = JSON.parse(Buffer.concat(chunks));
     const tools = body.tools ?? [];
     if (tools.length) {
+      // Dynamic operational context is a durable user-role snapshot in this harness.
+      const prompt = JSON.stringify({ system: body.system, messages: body.messages });
+      for (const target of initialScope.targets) assert(prompt.includes(target.host), 'Saved targets must reach the model context');
+      assert(prompt.includes(`Target scope management is ${initialScope.enabled ? 'ON' : 'OFF'}:`));
       const rea = tools.find(tool => tool.name === 'pentest_rea').input_schema;
       assert(!JSON.stringify(rea).includes('"$ref"'), 'REA must not contain orphaned references');
       const assessment = tools.find(tool => tool.name === 'pentest_assessment').input_schema;
@@ -35,6 +39,7 @@ const provider = createServer(async (request, response) => {
     if (hasResult) {
       const results = body.messages.flatMap(message => Array.isArray(message.content) ? message.content : []).filter(block => block.type === 'tool_result');
       assert(results.every(result => result.is_error !== true), 'The trusted status tool must succeed');
+      for (const target of initialScope.targets) assert(JSON.stringify(results).includes(target.host), 'Status tool results must contain the same saved targets');
       toolReplies++;
     }
     const frames = [
@@ -78,7 +83,7 @@ try {
     provideCmdline(inner, { args: ['--no-open', '--host', '127.0.0.1', '--port', '0'], exit() {}, ready: { onReady(listener) { queueMicrotask(listener); return () => {}; } } });
   } });
 
-  const initialScope = structuredClone(ctx.pentest.scope.scope);
+  initialScope = structuredClone(ctx.pentest.scope.scope);
   await ctx.workspaceRegistry.create(root, 'Provider fixture');
   const { chromium } = await import('../../packages/browser/node_modules/playwright/index.mjs');
   const browser = await chromium.launch({ headless: true });

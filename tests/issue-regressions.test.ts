@@ -12,7 +12,7 @@ import { Redactor } from '../packages/trajectory/src/index.ts';
 import { ReviewService, allowanceHost } from '../packages/dsh-plugin/src/review.ts';
 import type { ReviewOrigin } from '../packages/dsh-plugin/src/review.ts';
 import { PentestRuntime } from '../packages/dsh-plugin/src/runtime.ts';
-import { initialScopeDraft, scopeExample, scopePreview } from '../packages/ui/src/client/scope-draft.ts';
+import { initialScopeDraft, courseScopeDraft, scopeExample, scopePreview } from '../packages/ui/src/client/scope-draft.ts';
 import { action, engagement, scope, policyConfig, testJudge, MemorySink } from './fixtures.ts';
 
 const origin = (tool = 'first_tool'): ReviewOrigin => ({ sessionId: id<'SessionId'>(), tool,
@@ -107,13 +107,15 @@ it('keeps setup dismissal through restart and refresh without changing tool conf
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-it('prefills course targets, keeps legacy enforcement on, and preserves existing settings', () => {
+it('shows the saved scope exactly and inserts course targets only on request', () => {
   const empty = { enabled: false, targets: [], exclusions: [], networks: [], services: { model: [], intelligence: [], telemetry: [] } };
-  const shown = initialScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown));
+  expect(JSON.parse(initialScopeDraft(empty))).toEqual(empty);
+  const shown = courseScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown));
   expect(JSON.parse(shown)).toEqual(scopeExample);
-  expect(JSON.parse(initialScopeDraft({ ...empty, enabled: undefined })).enabled).toBe(true);
+  expect(JSON.parse(initialScopeDraft({ ...empty, enabled: undefined })).enabled).toBeUndefined();
   expect(JSON.parse(initialScopeDraft(scope()))).toEqual(scope());
-  expect(JSON.parse(initialScopeDraft({}))).toEqual(scopeExample);
+  expect(JSON.parse(initialScopeDraft({}))).toEqual({});
+  expect(JSON.parse(courseScopeDraft({}))).toEqual(scopeExample);
   for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443]);
   expect(scopePreview(shown)).toContain('ports 80, 443');
   expect(scopePreview(shown)).toContain('OFF');
@@ -122,17 +124,19 @@ it('prefills course targets, keeps legacy enforcement on, and preserves existing
   expect(scopePreview(JSON.stringify({ ...empty, targets: ['*.example.test'] }))).toContain('host-rule object');
 });
 
-it('prefills targets even after model/service setup and preserves custom boundaries and saved targets', () => {
+it('explicit course target insertion preserves services, enforcement and custom boundaries', () => {
   const services = { model: scope().targets, intelligence: scope().targets, telemetry: scope().targets };
   const empty = { enabled: false, targets: [], exclusions: [], networks: [], services };
-  const initial = ScopeSchema.parse(JSON.parse(initialScopeDraft(empty)));
+  const initial = ScopeSchema.parse(JSON.parse(courseScopeDraft(empty)));
   expect(initial).toEqual({ ...scopeExample, services });
   expect(empty.targets).toEqual([]);
   for (const saved of [{ ...empty, exclusions: ['saved.example.test'] }, { ...empty, networks: ['192.0.2.0/24'] }]) {
-    expect(JSON.parse(initialScopeDraft(saved))).toEqual({ ...saved, targets: scopeExample.targets });
+    expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
+    expect(JSON.parse(courseScopeDraft(saved))).toEqual({ ...saved, targets: scopeExample.targets });
   }
   const saved = { ...scope(), services };
   expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
+  expect(JSON.parse(courseScopeDraft({ ...empty, enabled: true })).enabled).toBe(true);
 });
 
 it('retains the target enforcement switch across restarts and cancels work when it changes', async () => {
@@ -156,6 +160,23 @@ it('retains the target enforcement switch across restarts and cancels work when 
     expect(runtime.scope.enabled).toBe(false); expect(() => runtime.scope.check(destination)).not.toThrow();
     const events = await runtime.trajectories.page(session);
     expect(events.events.filter(event => event.type === 'engagement/settings')).toHaveLength(2);
+  } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+it('keeps an explicitly saved empty scope authoritative over launcher defaults', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'djupleita-saved-empty-scope-'));
+  const config = { root, engagement: engagement(), policy: policyConfig,
+    keychainHelper: '/unused', secrets: { async get() { return undefined; }, async set() {}, async remove() {} } };
+  let runtime = await PentestRuntime.open(config, testJudge);
+  const session = id<'SessionId'>();
+  try {
+    const empty = { ...scope(), enabled: false, targets: [] };
+    await runtime.updateSettings(empty, policyConfig, session);
+    await runtime.close(); runtime = await PentestRuntime.open(config, testJudge);
+    expect(runtime.scope.scope).toEqual(empty);
+    expect((await runtime.status(session)) as object).toMatchObject({ engagement: { scope: empty } });
+    expect(runtime.scope.instructions()).toContain('"targets":[]');
+    expect(JSON.parse(initialScopeDraft(runtime.scope.scope))).toEqual(empty);
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 

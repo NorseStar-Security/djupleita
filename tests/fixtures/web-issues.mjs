@@ -21,14 +21,16 @@ try {
   const suffix = courseScope.targets[0].host.split('.').slice(-2).join('.');
   const example = JSON.parse(JSON.stringify(courseScope).replaceAll(suffix, 'example.test'));
   const template = JSON.parse(await readFile(resolve('configs/engagement.example.json'), 'utf8'));
-  template.scope = example;
+  template.scope = { targets: [], exclusions: [], networks: [], services: example.services };
   await writeFile(process.env.DSH_PENTEST_ENGAGEMENT, JSON.stringify(template));
-  await prepareProfile(profile);
+  const prepared = await prepareProfile(profile);
+  assert.deepEqual(prepared.engagement.scope, courseScope, 'Legacy blank defaults must be saved before boot');
   const path = join(profile, 'cordis.patch.yml');
   // Preserve executable platform expressions through a document edit.
   const doc = require('yaml').parseDocument(await readFile(path, 'utf8'), { customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: value => value }] });
   for (const row of doc.contents.items) for (const entry of row.get('insert')?.items ?? []) {
     if (entry.get('id') === 'pentest') {
+      entry.get('config').get('engagement').set('scope', example);
       entry.get('config').set('root', join(root, 'engagements'));
       entry.get('config').set('plugins', {});
       entry.get('config').set('keychainHelper', '/unused-fixture-helper');
@@ -65,6 +67,10 @@ try {
     const editor = page.locator('textarea[name="scope"]');
     const readScope = async () => JSON.parse((await editor.inputValue()).replaceAll(suffix, 'example.test'));
     assert.deepEqual(await readScope(), example);
+    await page.getByText('Saved scope available to the agent: 3 target rules.', { exact: false }).waitFor();
+    const status = await ctx.pentest.status('web-fixture');
+    assert.deepEqual(status.engagement.scope, example);
+    for (const target of example.targets) assert(ctx.pentest.scope.instructions().includes(target.host));
     const toggle = page.getByRole('switch', { name: 'Scope management', exact: true });
     assert.equal(await toggle.isChecked(), false);
     assert.equal(ctx.pentest.scope.enabled, false, 'Fresh course scope management starts off');
@@ -91,10 +97,12 @@ try {
     await ctx.pentest.updateSettings({ enabled: false, targets: [], exclusions: [], networks: [], services }, (await ctx.pentest.snapshot()).policy, 'web-fixture');
     await page.reload(); await policy();
     const configuredDraft = { ...example, services };
-    assert.deepEqual(await readScope(), configuredDraft, 'Configured model services must not suppress example targets');
+    assert.deepEqual(await readScope(), { ...configuredDraft, targets: [] }, 'An explicitly saved empty scope must stay empty in the editor');
+    await page.getByText('Saved scope available to the agent: 0 target rules.', { exact: false }).waitFor();
     await editor.fill('');
     await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
     assert.deepEqual(await readScope(), configuredDraft, 'A blank editor can restore the example with its saved services');
+    await page.getByText('Unapplied draft changes.', { exact: false }).waitFor();
     const customDraft = { ...configuredDraft, targets: [], exclusions: ['custom.example.test'], networks: ['192.0.2.0/24'] };
     await editor.fill(JSON.stringify(customDraft));
     await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
@@ -157,6 +165,6 @@ try {
     await policy();
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).waitFor();
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
-    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }
