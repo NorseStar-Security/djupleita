@@ -224,6 +224,9 @@ try {
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).waitFor();
     const savedScope = structuredClone(ctx.pentest.scope.scope);
     const savedBudget = ctx.pentest.engagement.snapshot();
+    const { SessionId } = await import('../../vendor/deepseek-harness/packages/core/session/lib/index.js');
+    const existingPentestAgent = (await ctx.agents.create({ sessionId: SessionId('existing-pentest-mode-fixture'), meta: { cwd: root, agentPreset: 'pentest' },
+      setup: async inner => { await ctx.agentPresets.mount(inner, 'pentest'); } })).agent;
     await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).click();
     await poll(() => ctx.get('pentest') === undefined);
     await page.getByText('OFF · Basic DSH behavior.', { exact: false }).waitFor();
@@ -234,16 +237,19 @@ try {
     await page.getByText('Djupleita · Engagement and identities', { exact: true }).click();
     await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).waitFor();
     assert.equal(await page.locator('textarea[name="scope"]').count(), 0);
-    const { SessionId } = await import('../../vendor/deepseek-harness/packages/core/session/lib/index.js');
     const { ToolCallId } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
     const { executeModelToolFixture } = await import('../../vendor/deepseek-harness/packages/test-support/tool-testkit/lib/index.js');
     await writeFile(join(root, 'basic-dsh.txt'), 'Basic DSH native read fixture');
     const agent = (await ctx.agents.create({ sessionId: SessionId('basic-mode-fixture'), meta: { cwd: root, agentPreset: 'standard' },
       setup: async inner => { await ctx.agentPresets.mount(inner, 'standard'); } })).agent;
-    const prompt = await ctx.systemPrompt.assemble({ scope: agent });
-    assert(!JSON.stringify(prompt).includes('authorized penetration testing assistant'));
-    assert(!JSON.stringify(prompt).includes('Target scope management is'));
-    assert(!JSON.stringify(prompt).includes('operator-provided engagement context'));
+    const freshPentestAgent = (await ctx.agents.create({ sessionId: SessionId('fresh-pentest-mode-fixture'), meta: { cwd: root, agentPreset: 'pentest' },
+      setup: async inner => { await ctx.agentPresets.mount(inner, 'pentest'); } })).agent;
+    for (const scoped of [agent, existingPentestAgent, freshPentestAgent]) {
+      const prompt = JSON.stringify(await ctx.systemPrompt.assemble({ scope: scoped }));
+      assert(!prompt.includes('authorized penetration testing assistant'));
+      assert(!prompt.includes('Target scope management is'));
+      assert(!prompt.includes('operator-provided engagement context'));
+    }
     const result = await executeModelToolFixture(ctx, { agent, name: 'read', arguments: { file_path: join(root, 'basic-dsh.txt') },
       callId: ToolCallId('basic-mode-read'), signal: AbortSignal.timeout(5000) });
     assert(!result.isError);

@@ -71,3 +71,7 @@
 .learning h4 { margin: 12px 0 4px; }
 .learning pre { font-size: 12px; max-height: 240px; overflow: auto; }
 .learning label { display: grid; gap: 6px; margin-top: 12px; }
+
+.panelFailure { margin: 16px; padding: 16px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 10px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-primary); font: inherit; }
+.panelFailure h3 { margin-top: 0; }.panelFailure p { line-height: 1.5; }
+.panelFailure button { border: 1px solid var(--dsw-alias-border-l3); border-radius: 7px; padding: 8px 12px; background: var(--dsw-alias-interactive-bg-hover); color: inherit; font: inherit; cursor: pointer; }

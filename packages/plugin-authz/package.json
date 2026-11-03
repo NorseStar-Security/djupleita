@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-authz",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. Compare requests across identity A, identity B and anonymous access.",

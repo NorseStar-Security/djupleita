@@ -38,6 +38,15 @@ try {
   assert.equal((await fetch(origin)).status, 401);
   browser = await chromium.launch({ headless: true });
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(15000);
+  let breakEditor = false;
+  await page.route('**/api/pentest/snapshot', async route => {
+    const response = await route.fetch();
+    if (!breakEditor) return route.fulfill({ response });
+    const body = await response.json();
+    delete body.result.value.graph;
+    await route.fulfill({ response, json: body });
+  });
   // Never include the token in a Playwright assertion or failure output.
   try { await page.goto(address); } catch { throw new Error('Release authentication failed'); }
   assert.equal(await page.title(), 'Djupleita');
@@ -54,12 +63,18 @@ try {
   await policy();
   const editor = page.locator('textarea[name="scope"]'); await editor.waitFor();
   assert.deepEqual(JSON.parse(await editor.inputValue()), engagement.scope);
+  breakEditor = true;
+  await page.getByRole('alert', { name: 'Djupleita panel error' }).waitFor();
+  assert.equal(await page.locator('[data-slot-error]').count(), 0);
   await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).click();
+  breakEditor = false;
   await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).waitFor();
   await page.reload(); await policy();
   await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).click();
   await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).waitFor();
-  console.log(`Extracted ${release.target} release: authenticated browser, saved scope and engagement off/on passed.`);
+  await editor.waitFor();
+  assert.deepEqual(JSON.parse(await editor.inputValue()), engagement.scope);
+  console.log(`Extracted ${release.target} release: authenticated browser, saved scope, visible editor failure and master off/on passed.`);
 } catch (error) {
   // Print only startup errors with no token-bearing URLs or local assessment state.
   const safe = output.split('\n').filter(line => /(?:error|failed|invalid|unknown|unsupported|expected|not found)/i.test(line) && !/token=|https?:\/\//.test(line)).slice(-12).join('\n');

@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-recon",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. Passive DNS, associated domains, Chaos, exposure statistics and managed ProjectDiscovery tools.",
