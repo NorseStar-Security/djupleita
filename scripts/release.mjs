@@ -6,13 +6,14 @@ import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { scanRelease } from './security/release-scan.mjs';
 import { scanner, privatePath } from './security/scan.mjs';
 const root = resolve(import.meta.dirname, '..');
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const inside = (parent, path) => { const rel = relative(parent, path); return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel)); };
 const omitted = /^(?:node_modules|\.git|\.pentest|\.dsh|\.security-tools|\.desktop-build|\.cache|coverage|test-results|playwright-report|__pycache__|tests?|__tests__|fixtures|__fixtures__|examples?|benchmarks?)$/;
 export function runtimeFile(path) {
-  return !path.split(/[\\/]/).some(part => omitted.test(part) || /^\.env(?:\.|$)/.test(part)) && !/\.(?:test|spec)\.[cm]?[jt]sx?(?:\.map)?$|\.tsbuildinfo$|\.log$|\.(?:pem|key|p12|pfx)$/.test(path);
+  return !/(?:^|[\\/])\.(?:coveralls|travis|github|gitlab|circleci)(?:[\\/.]|$)/.test(path) && !path.split(/[\\/]/).some(part => omitted.test(part) || /^\.env(?:\.|$)/.test(part)) && !/\.(?:test|spec)\.[cm]?[jt]sx?(?:\.map)?$|\.d\.[cm]?ts$|\.map$|\.tsbuildinfo$|\.log$|\.(?:pem|key|p12|pfx)$/.test(path);
 }
 async function dependency(source, name) {
   for (let current = source; ; current = dirname(current)) {
@@ -128,8 +129,15 @@ export async function packageRelease(output = join(root, 'artifacts/release')) {
     const launcher = '#!/bin/sh\nset -eu\nrelease_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$release_dir/runtime/bin/node" "$release_dir/app/scripts/release-launch.mjs" "$@"\n';
     await writeFile(join(payload, 'djupleita'), launcher, { mode: 0o755 });
     if (process.platform === 'darwin') await writeFile(join(payload, 'Djupleita.command'), launcher, { mode: 0o755 });
+    // DevTools ships a public Google metrics key. Strip that optional telemetry
+    // credential from the portable app; it is not needed for local inspection.
+    for (const file of globSync('app/vendor/deepseek-harness/packages/experimental/inspector/lib/devtools/**/*.js', { cwd: payload })) {
+      const path = join(payload, file), contents = await readFile(path, 'utf8');
+      const clean = contents.replace(/(https:\/\/chromeuxreport\.googleapis\.com\/v1\/records:queryRecord\?key=)[A-Za-z0-9_-]+/g, '$1');
+      if (clean !== contents) await writeFile(path, clean);
+    }
     const scan = scanner();
-    try { await auditTree(payload, scan.referencePattern); scan(['dir', payload]); } finally { scan.close(); }
+    try { await auditTree(payload, scan.referencePattern); await scanRelease(payload, dependencies); } finally { scan.close(); }
     await mkdir(output, { recursive: true });
     const archive = join(output, `${name}.tar.gz`);
     execFileSync('tar', ['-czf', archive, '-C', scratch, name], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
