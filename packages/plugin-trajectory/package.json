@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-trajectory",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. Read verified, redacted chat and tool trajectories beside the conversation.",

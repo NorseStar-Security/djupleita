@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-assessment",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Durable bounded runs, readiness checks, coverage cells, persistent leads, scorecards and bundled assessment skills.",
