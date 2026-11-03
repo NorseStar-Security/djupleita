@@ -9,6 +9,7 @@ describe('engagement destinations', () => {
   it('loads course defaults with enforcement off and enforces the production exception when enabled', async () => {
     expect(template.scope).toEqual(courseScope);
     expect(courseScope.enabled).toBe(false);
+    expect(courseScope.exclusions).toEqual([`*.${courseScope.targets[0]!.host.split('.').slice(1).join('.')}`]);
     // Exercise the shipped rule shape using only reserved fixture hosts and local DNS answers.
     const suffix = courseScope.targets[0]!.host.split('.').slice(-2).join('.');
     const fixture = ScopeSchema.parse(JSON.parse(JSON.stringify(courseScope).replaceAll(suffix, 'example.test')));
@@ -20,9 +21,48 @@ describe('engagement destinations', () => {
       await expect(on.authorize({ url: `https://${host}/any/path`, purpose: 'target' })).resolves.toMatchObject({ addresses: [{ address: '10.20.30.40', family: 4 }] });
     }
     for (const host of ['mail.prod.example.test', 'nested.www.prod.example.test', 'prod.example.test', 'dev.example.test', 'test.example.test', 'example.test', 'outside.example.test', 'www.prod.example.test.evil.example.test']) {
-      expect(() => on.check({ url: `https://${host}/`, purpose: 'target' })).toThrow('outside');
+      expect(() => on.check({ url: `https://${host}/`, purpose: 'target' })).toThrow(/outside|Excluded/);
     }
-    expect(() => on.check({ url: 'https://www.prod.example.test:8443/', purpose: 'target' })).toThrow('outside');
+    for (const access of ['read', 'active'] as const) {
+      expect(() => on.check({ url: 'https://mail.prod.example.test/', purpose: 'target', access })).toThrow('Excluded');
+      expect(() => on.check({ url: 'https://www.prod.example.test/', purpose: 'target', access })).not.toThrow();
+    }
+    expect(() => on.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'read' })).not.toThrow();
+    expect(() => on.check({ url: 'https://www.prod.example.test:8443/', purpose: 'target' })).toThrow('Excluded');
+  });
+  it('confines an exact target exception to its URL constraints regardless of rule order', () => {
+    const config = scope();
+    const exact = { ...config.targets[0]!, host: 'www.prod.example.test', pathPrefixes: ['/api'] };
+    // A broad matching target before the exact one must not hide the exception.
+    config.targets.push(exact, { ...exact, host: '*.prod.example.test' });
+    config.exclusions = ['*.prod.example.test'];
+    const service = new ScopeService(config);
+    for (const access of ['read', 'active'] as const) {
+      for (const url of ['https://www.prod.example.test/api', 'https://WWW.PROD.EXAMPLE.TEST./api/items']) {
+        expect(service.check({ url, purpose: 'target', access }).rule.host).toBe(exact.host);
+      }
+      for (const url of ['https://mail.prod.example.test/api', 'https://nested.www.prod.example.test/api',
+        'https://www.prod.example.test:8443/api', 'http://www.prod.example.test/api',
+        'https://www.prod.example.test/admin', 'https://www.prod.example.test/apiculture',
+        'https://www.prod.example.test/api/%2e%2e/admin']) {
+        expect(() => service.check({ url, purpose: 'target', access })).toThrow('Excluded');
+      }
+    }
+    expect(service.instructions()).toContain('an exact exclusion still wins');
+    const tied = new ScopeService({ ...config, exclusions: [...config.exclusions, 'WWW.PROD.EXAMPLE.TEST.'] });
+    for (const access of ['read', 'active'] as const) {
+      expect(() => tied.check({ url: 'https://www.prod.example.test/api', purpose: 'target', access })).toThrow('Excluded');
+    }
+  });
+  it('does not use target exceptions or service rules to release excluded service traffic', () => {
+    const config = scope('www.prod.example.test');
+    config.exclusions = ['*.prod.example.test'];
+    for (const purpose of ['model', 'intelligence', 'telemetry'] as const) config.services[purpose] = config.targets;
+    const service = new ScopeService(config);
+    expect(() => service.check({ url: 'https://www.prod.example.test/', purpose: 'target' })).not.toThrow();
+    for (const purpose of ['model', 'intelligence', 'telemetry'] as const) {
+      expect(() => service.check({ url: 'https://www.prod.example.test/', purpose })).toThrow('Excluded');
+    }
   });
   it('disables only target boundaries while retaining URL validation, DNS pinning, services and legacy enforcement', async () => {
     const resolver = vi.fn(async () => [{ address: '127.0.0.1', family: 4 }]);

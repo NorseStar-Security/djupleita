@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { ScopeService } from '../packages/scope/src/index.ts';
 import { PolicyService } from '../packages/policy/src/index.ts';
-import { HttpBroker, httpDestination } from '../packages/http/src/index.ts';
+import { HttpBroker, ServiceJsonClient, httpDestination } from '../packages/http/src/index.ts';
 import type { HttpInput, Transport } from '../packages/http/src/index.ts';
 import { Redactor } from '../packages/trajectory/src/index.ts';
 import { ReconService } from '../packages/recon/src/index.ts';
@@ -126,4 +126,21 @@ it('allows passive subject research without authorizing active recon', () => {
   expect(() => recon.check({ tool: 'subfinder', target: 'research.example.test', depth: 1 })).not.toThrow();
   expect(() => recon.check({ tool: 'subfinder', target: 'excluded.example.test', depth: 1 })).toThrow('Excluded');
   for (const tool of ['httpx', 'katana'] as const) expect(() => recon.check({ tool, target: read.url, depth: 1 })).toThrow('outside');
+});
+
+it('allows credential-free public DNS JSON research while retaining exclusions, private networks and service boundaries', async () => {
+  const config = { ...scope('target.example.test'), exclusions: ['excluded.example.test'] };
+  let address = '93.184.216.34';
+  const scopes = new ScopeService(config, async () => [{ address, family: 4 }]);
+  const identities = { headers: vi.fn() }, transport = vi.fn<Transport>(async () => ({ status: 200, headers: {}, body: '{"Status":0}' }));
+  const client = new ServiceJsonClient(scopes, identities as never, new Redactor(), transport);
+  const signal = AbortSignal.timeout(5000);
+  await expect(client.research('https://resolver.example.test/resolve?name=store.droplet.example.test&type=A', signal)).resolves.toEqual({ Status: 0 });
+  expect(transport.mock.calls[0]![2]).toEqual({ accept: 'application/json' }); expect(identities.headers).not.toHaveBeenCalled();
+  await expect(client.research('https://excluded.example.test/resolve', signal)).rejects.toThrow('Excluded');
+  await expect(client.research('https://resolver.example.test/delete', signal)).rejects.toThrow('read-only');
+  await expect(client.send('https://resolver.example.test/resolve', 'intelligence', null, signal, undefined, 'GET')).rejects.toThrow('outside');
+  address = '127.0.0.1';
+  await expect(client.research('https://private.example.test/resolve', signal)).rejects.toThrow('unapproved');
+  expect(transport).toHaveBeenCalledOnce();
 });

@@ -15,9 +15,9 @@ it('preserves passive provenance, strips credential samples and never grants sco
   config.scope.exclusions = ['excluded.example.test'];
   const graph = new AttackGraph(':memory:', config.id), sessions = new EngagementService(config), session = id<'SessionId'>(); sessions.attach(session);
   const scopes = new ScopeService(config.scope), store = new TrajectoryStore(join(root, 'events'), config.id, redactor), evidence = new EvidenceStore(root, redactor);
-  const calls: string[] = [], candidates: string[] = [];
+  const calls: string[] = [], accessKinds: (string | undefined)[] = [], candidates: string[] = [];
   const service = new PassiveReconService({ dohEndpoint: 'https://dns.google/resolve', pdcpIdentityId: id<'IdentityId'>() }, scopes, sessions,
-    async url => { calls.push(url); return url.includes('/associated') ? { results: [{ domain: 'outside.invalid' }] } : { total_leaks: 4, employees_sample_data: [{ password: 'breached-secret' }] }; },
+    async (url, _signal, _identity, access) => { calls.push(url); accessKinds.push(access); return url.includes('/associated') ? { results: [{ domain: 'outside.invalid' }] } : { total_leaks: 4, employees_sample_data: [{ password: 'breached-secret' }] }; },
     graph, evidence, store, redactor, () => ({ observe(urls: string[]) { candidates.push(...urls); return urls.filter(url => { try { scopes.check({ url, purpose: 'target' }); return true; } catch { return false; } }).length; } }) as never);
   try {
     const result = await service.run({ operation: 'associated-domains', domain: 'app.example.test', page: 1 }, session, new AbortController().signal) as Record<string, unknown>;
@@ -26,6 +26,7 @@ it('preserves passive provenance, strips credential samples and never grants sco
     expect(JSON.stringify(exposure)).toContain('total_leaks'); expect(JSON.stringify(exposure)).not.toContain('breached-secret');
     await expect(service.run({ operation: 'dns', domain: 'excluded.example.test', page: 1 }, session, new AbortController().signal)).rejects.toThrow('Excluded');
     await service.run({ operation: 'dns', domain: 'research.example.test', page: 1 }, session, new AbortController().signal);
+    expect(accessKinds).toEqual(['service', 'service', ...Array(7).fill('research')]);
     expect(calls).toHaveLength(9); expect(sessions.snapshot().requests).toBe(9);
     expect(graph.snapshot().edges.every(edge => edge.attributes.walkable === false)).toBe(true);
   } finally { graph.close(); }

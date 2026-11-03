@@ -10,9 +10,17 @@ import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import css from './Panel.module.css';
+import { EvidenceGraph } from './EvidenceGraph.tsx';
+import { PolicyEditor } from './PolicyEditor.tsx';
+import { BudgetCard } from './BudgetCard.tsx';
+import type { BudgetSnapshot } from './BudgetCard.tsx';
+import { CrawlPanel } from './CrawlPanel.tsx';
+import type { CrawlSnapshot } from './CrawlPanel.tsx';
+import { PluginCredentials } from './PluginCredentials.tsx';
+import type { CredentialSnapshot } from './PluginCredentials.tsx';
 import { ScopeEditor } from './ScopeEditor.tsx';
 import { EngagementMode, engagementMode } from './EngagementMode.tsx';
 import { LearningStudies } from './Learning.tsx';
@@ -26,7 +34,7 @@ import { AssessmentPanel } from './AssessmentPanel.tsx';
 import type { ReviewSnapshot } from './reviews.ts';
 
 const en = {
-  title: 'Pentest', description: 'Trajectories, evidence and test controls', trajectory: 'Trajectory', graph: 'Graph', assessment: 'Assessment',
+  title: 'Pentest', description: 'Trajectories, evidence and test controls', trajectory: 'Trajectory', graph: 'Graph', evidenceGraph: 'Evidence graph', assessment: 'Assessment',
   identities: 'Identities', policy: 'Policy', plugins: 'Plugins', loading: 'Loading engagement…', refresh: 'Refresh',
   requests: 'requests', nodes: 'nodes', edges: 'relationships', noEvents: 'Tool activity will appear here as this chat runs.',
   addIdentity: 'Add identity', name: 'Name', role: 'Role', tenant: 'Tenant', hosts: 'Hosts, separated by commas',
@@ -46,7 +54,7 @@ const en = {
   revoked: 'Allowance revoked.', closeReviewNotice: 'Dismiss decision notice',
   pendingApprovals: 'Pending approvals', allAgents: 'All chats and subagents in this engagement',
   noApprovals: 'No pending approvals.', thisChat: 'This chat', subagent: 'Subagent', agent: 'Agent',
-  included: 'Included with Djupleita', coreTitle: 'Djupleita · Engagement and identities',
+  crawl: 'Crawl', included: 'Included with Djupleita', coreTitle: 'Djupleita · Engagement and identities',
   coreDescription: 'Engagement scope, request budgets, action review and securely stored identities.',
   hideSetup: 'Hide setup reminder', showSetup: 'Show setup reminder', setupHidden: 'Setup reminder hidden. Tool setup remains in Plugins.', setupShown: 'Setup reminder restored.',
   toolSetup: 'Tool setup', setupNeeded: 'Testing tools need setup', setupIntro: 'Install only the tools you need for this engagement. Other toolchains are optional; a requested tool reports its own missing prerequisites.',
@@ -62,7 +70,7 @@ const en = {
 type Key = keyof typeof en;
 const zh: Record<Key, string> = {
   assessment: '评估',
-  title: '渗透测试', description: '轨迹、证据与测试控制', trajectory: '轨迹', graph: '关系图', identities: '身份', policy: '策略', plugins: '插件',
+  title: '渗透测试', description: '轨迹、证据与测试控制', trajectory: '轨迹', graph: '关系图', evidenceGraph: '证据关系图', identities: '身份', policy: '策略', plugins: '插件',
   loading: '正在加载测试…', refresh: '刷新', requests: '请求', nodes: '节点', edges: '关系', noEvents: '聊天运行时，工具活动会显示在此处。',
   addIdentity: '添加身份', name: '名称', role: '角色', tenant: '租户', hosts: '主机（用逗号分隔）', secret: '凭据', kind: '凭据类型',
   save: '保存到钥匙串', saved: '身份已保存', candidate: '推断', verified: '已验证', observed: '已观察', detail: '详情', scope: '目标范围',
@@ -79,7 +87,7 @@ const zh: Record<Key, string> = {
   revoked: '已撤销许可。', closeReviewNotice: '关闭决定通知',
   pendingApprovals: '待批准的操作', allAgents: '本次测试中的所有聊天和子代理',
   noApprovals: '没有待批准的操作。', thisChat: '当前聊天', subagent: '子代理', agent: '代理',
-  included: 'Djupleita 内置插件', coreTitle: 'Djupleita · 测试范围与身份',
+  crawl: '爬取', included: 'Djupleita 内置插件', coreTitle: 'Djupleita · 测试范围与身份',
   coreDescription: '测试范围、请求预算、操作审查与钥匙串身份。',
   hideSetup: '隐藏安装提醒', showSetup: '显示安装提醒', setupHidden: '安装提醒已隐藏；仍可在插件中安装工具。', setupShown: '已恢复安装提醒。',
   toolSetup: '工具安装', setupNeeded: '测试工具需要安装', setupIntro: 'Djupleita 包含这些插件。首次使用时需在本地安装可执行依赖。',
@@ -101,10 +109,10 @@ interface GraphPage { nodes: Row[]; edges: Row[]; counts: { nodes: number; edges
 interface EventDetail { text: string; offset: number; nextOffset: number | null; totalChars: number }
 interface Snapshot {
   engagement: { name: string; scope: { targets: { host: string }[] } }; policyVersion: string;
-  budget: { requests: number; remainingRequests: number }; identities: Row[];
+  budget: BudgetSnapshot; identities: Row[];
   graph: GraphPage; events: Row[]; trajectory: Omit<EventPage, 'events'>; plugins: Row[]; policy: Row;
   review: { pending: ReviewQuestion[]; grants: ReviewGrant[] };
-  pluginConfig: Row; telemetry: Row; learning: { active: boolean; datasets: Row[]; reports: Row[] } | null; ranking: Row;
+  credentials: CredentialSnapshot; crawl: CrawlSnapshot; pluginConfig: Row; telemetry: Row; learning: { active: boolean; datasets: Row[]; reports: Row[] } | null; ranking: Row;
   procedure?: { runId: string; text: string; datasetHash: string } | null;
   setup?: ToolSetup;
 }
@@ -119,16 +127,17 @@ interface PanelInjected {
   sessionId: string;
   inspect<T>(endpoint: string, payload: Row): Promise<T>;
   refresh(): void;
+  openPolicy(): void;
   createIdentity(metadata: Row, secret: string): Promise<void>;
   updateSettings(scope: Row, policy: Row): Promise<void>;
   ownerOperation(endpoint: string, payload: Row): Promise<void>;
   reviewOperation: ReviewInjected['reviewOperation'];
 }
 type Props = PropsLocale<'pentest'> & InjectFace<PanelInjected> & Pick<GlobalStandardProps, 'useSessions'> & {
-  initialTab?: Tab; visibleTabs?: readonly Tab[]; configKeys?: readonly string[]; included?: boolean;
+  initialTab?: Tab; visibleTabs?: readonly Tab[]; configKeys?: readonly string[]; included?: boolean; pluginId?: string;
 };
-type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins' | 'assessment';
-const TABS: Tab[] = ['trajectory', 'graph', 'assessment', 'identities', 'policy', 'studies', 'plugins'];
+type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins' | 'assessment' | 'crawl';
+const TABS: Tab[] = ['trajectory', 'graph', 'assessment', 'identities', 'policy', 'studies', 'plugins', 'crawl'];
 function stringify(value: unknown): string { return JSON.stringify(value, null, 2); }
 function label(row: Row, key: string): string { return String(row[key] ?? ''); }
 
@@ -235,23 +244,19 @@ export function ReviewCards({ useReviews, reviewOperation, sessionId, useSession
 }
 
 function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, createIdentity, updateSettings, ownerOperation, inspect: remoteInspect, sessionId, t,
-  initialTab = 'trajectory', visibleTabs = TABS, configKeys, included }: Props): ReactNode {
+  initialTab = 'trajectory', visibleTabs = TABS, configKeys, included, pluginId, openPolicy }: Props): ReactNode {
   const state = useData(value => value);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [expanded, setExpanded] = useState<string>();
-  const [selected, setSelected] = useState<string>();
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<EventPage>();
-  const [graphHistory, setGraphHistory] = useState<GraphPage>();
   const [detail, setDetail] = useState<EventDetail & { seq: string }>();
   const [reading, setReading] = useState(false);
   const currentSession = useRef(sessionId); currentSession.current = sessionId;
-  useEffect(() => { setHistory(undefined); setGraphHistory(undefined); setDetail(undefined); setExpanded(undefined); setSelected(undefined); setReading(false); setNotice(''); }, [sessionId]);
+  useEffect(() => { setHistory(undefined); setDetail(undefined); setExpanded(undefined); setReading(false); setNotice(''); }, [sessionId]);
   const data = state.snapshot;
   const events = history ?? (data ? { ...data.trajectory, events: data.events } : undefined);
-  const graph = graphHistory ?? data?.graph;
-  const graphPositions = new Map(graph?.nodes.map((node, index) => [node.id, index]));
   const inspect = async <T,>(endpoint: string, payload: Row): Promise<T> => {
     const result = await remoteInspect<T>(endpoint, payload);
     if (currentSession.current !== sessionId) throw new Error('Inspection belongs to the previous session');
@@ -295,10 +300,12 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
       <button className={css.button} onClick={refresh} disabled={state.loading} aria-label={t('refresh')}>↻</button></header>
     {data && <div className={css.stats}><span><strong>{data.budget.requests}</strong> {t('requests')}</span>
       <span><strong>{data.graph.counts.nodes}</strong> {t('nodes')}</span><span><strong>{data.graph.counts.edges}</strong> {t('edges')}</span></div>}
+    {data?.budget.timeExhausted && tab !== 'policy' && <p className={css.error} role="alert">Engagement time budget expired. Open Engagement and identities → Policy → Renew time budget.</p>}
     <nav className={css.tabs} aria-label={t('title')}>{visibleTabs.map(item => <button key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{t(item)}</button>)}</nav>
     {state.error && <div className={css.error} role="alert">{state.error}</div>}
     {notice && (tab === 'trajectory' || tab === 'graph') && <div className={css.error} role="alert">{notice}</div>}
     {data && <div className={css.body}>
+      {tab === 'crawl' && <CrawlPanel data={data.crawl} operate={ownerOperation} openPolicy={openPolicy} />}
       {tab === 'assessment' && <AssessmentPanel key={sessionId} inspect={inspect} sessionId={sessionId} identities={data.identities} />}
       {tab === 'trajectory' && events && <div className={css.timeline}>
         <div className={css.setupActions}><span>{events.total} {t('savedEvents')}</span>
@@ -325,27 +332,7 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
               </div>}
             </>}</article>;
         })}</div>}
-      {tab === 'graph' && graph && <div>{graph.nodes.length === 0 ? <p className={css.empty}>{t('noGraph')}</p> : <>
-        <p>{t('graphPage')}</p><div className={css.setupActions}>
-          <button className={css.button} disabled={reading || graph.offset === 0} onClick={() => { void read(async () => { setGraphHistory(await inspect<GraphPage>('graph/page', { offset: Math.max(0, graph.offset - 150) })); setSelected(undefined); }); }}>{t('previousPage')}</button>
-          <span>{graph.offset + 1}–{graph.offset + graph.nodes.length} / {graph.counts.nodes}</span>
-          <button className={css.button} disabled={reading || graph.nextOffset === null} onClick={() => { void read(async () => { setGraphHistory(await inspect<GraphPage>('graph/page', { offset: graph.nextOffset })); setSelected(undefined); }); }}>{t('nextPage')}</button>
-        </div>
-        <svg viewBox={`0 0 620 ${Math.max(240, Math.ceil(graph.nodes.length / 3) * 115)}`} className={css.graph} aria-label={t('graph')}>
-          {graph.edges.map(edge => {
-            const a = graphPositions.get(edge.source) ?? -1, b = graphPositions.get(edge.target) ?? -1;
-            if (a < 0 || b < 0) return null;
-            return <g key={label(edge, 'id')}><line x1={100 + a % 3 * 210} y1={55 + Math.floor(a / 3) * 115} x2={100 + b % 3 * 210} y2={55 + Math.floor(b / 3) * 115}
-              stroke={edge.status === 'verified' ? '#45bd97' : '#6b7798'} strokeDasharray={edge.status === 'inferred' ? '5 5' : undefined} strokeWidth="1.5" /></g>;
-          })}
-          {graph.nodes.map((node, i) => <g key={label(node, 'id')} role="button" tabIndex={0} onClick={() => setSelected(label(node, 'id'))} onKeyDown={event => { if (event.key === 'Enter') setSelected(label(node, 'id')); }}>
-            <rect x={15 + i % 3 * 210} y={25 + Math.floor(i / 3) * 115} width="180" height="60" rx="10" fill="#202838" stroke={node.id === selected ? '#45bd97' : '#45506a'} />
-            <text x={30 + i % 3 * 210} y={48 + Math.floor(i / 3) * 115} fill="#8e9cb6" fontSize="10">{label(node, 'type')}</text>
-            <text x={30 + i % 3 * 210} y={68 + Math.floor(i / 3) * 115} fill="#e8edf7" fontSize="11">{label(node, 'name').slice(0, 23)}</text>
-          </g>)}
-        </svg><div className={css.legend}><span>— {t('observed')}</span><span>┄ {t('candidate')}</span><span className={css.verified}>— {t('verified')}</span></div>
-        {selected && <pre>{stringify({ node: graph.nodes.find(node => node.id === selected), relationships: graph.edges.filter(edge => edge.source === selected || edge.target === selected) })}</pre>}</>}
-      </div>}
+      {tab === 'graph' && <EvidenceGraph key={sessionId} engagement={data.engagement} revision={stringify(data.graph.counts)} inspect={remoteInspect} />}
       {tab === 'identities' && <div>{data.identities.length === 0 && <p className={css.empty}>{t('noIdentities')}</p>}
         {data.identities.map(identity => <article className={css.card} key={label(identity, 'id')}><strong>{label(identity, 'name')}</strong><small>{label(identity, 'role')} / {label(identity, 'tenant')}</small>
           <code>{label(identity, 'id')}</code><small>{Array.isArray(identity.hosts) ? identity.hosts.join(', ') : ''}</small></article>)}
@@ -354,14 +341,19 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
           <label>{t('kind')}<select name="kind"><option value="bearer">Bearer token</option><option value="basic">Basic (user:password)</option><option value="headers">Headers (JSON)</option><option value="browser-state">Browser storage state (JSON)</option></select></label>
           <label>{t('secret')}<textarea name="secret" required autoComplete="off" spellCheck={false} /></label><button className={css.button} disabled={saving}>{t('save')}</button>
           <p role="status">{notice}</p></form></div>}
-      {tab === 'policy' && <div><ReviewCards useReviews={useReviews} useSessions={useSessions} reviewOperation={reviewOperation} sessionId={sessionId} t={t} /><h3>{t('scope')}</h3><p>{t('modelScope')}</p><div className={css.pills}>{data.engagement.scope.targets.map(rule => <code key={rule.host}>{rule.host}</code>)}</div>
+      {tab === 'policy' && <div><ReviewCards useReviews={useReviews} useSessions={useSessions} reviewOperation={reviewOperation} sessionId={sessionId} t={t} />
+        <BudgetCard budget={data.budget} busy={saving} renew={() => { void operate('budget/renew-time', {}, 'Time budget renewed; request usage retained.'); }} />
         <form className={css.form} key={data.policyVersion} onSubmit={event => { void saveSettings(event); }}>
+          <PolicyEditor policy={data.policy} />
+          <h3>{t('scope')}</h3><p>{t('modelScope')}</p><div className={css.pills}>{data.engagement.scope.targets.map(rule => <code key={rule.host}>{rule.host}</code>)}</div>
           <ScopeEditor scope={data.engagement.scope} title={t('scope')} />
-          <label>{t('policy')}<textarea className={css.editor} name="policy" defaultValue={stringify(data.policy)} required spellCheck={false} /></label>
           <button className={css.button} disabled={saving}>{t('saveSettings')}</button><p role="status">{notice}</p>
-        </form></div>}
+        </form>
+        {(!pluginId || pluginId === 'engagement') && <PluginCredentials data={data.credentials} plugin="engagement" operate={ownerOperation} />}
+        </div>}
       {tab === 'studies' && <LearningStudies learning={data.learning} procedure={data.procedure ?? null} busy={saving} notice={notice} operate={operate} />}
       {tab === 'plugins' && <div>
+        {pluginId && <PluginCredentials data={data.credentials} plugin={pluginId} operate={ownerOperation} />}
         {data.setup && <ToolSetupCard setup={data.setup} t={t} busy={saving}
           operate={(endpoint, success) => { void operate(endpoint, {}, success); }} />}
         <form className={css.form} key={stringify(editorConfig)} onSubmit={event => { event.preventDefault(); const values = new FormData(event.currentTarget);
@@ -412,7 +404,8 @@ export function apply(ctx: Context): void {
           if (!reply.ok) throw new Error(reply.error.message);
           return reply.value as T;
         };
-        source = { ...reviewFor(sessionId), hooks: { data, reviews }, sessionId, inspect, refresh: () => { void data.refresh(); void reviews.refresh(); }, async createIdentity(metadata, secret) {
+        source = { openPolicy: () => { const navigation = ctx.get('pluginNavigation') as { openItem?(id: string): void; openList(): void } | undefined;
+        if (navigation?.openItem) navigation.openItem('djupleita-engagement'); else navigation?.openList(); }, ...reviewFor(sessionId), hooks: { data, reviews }, sessionId, inspect, refresh: () => { void data.refresh(); void reviews.refresh(); }, async createIdentity(metadata, secret) {
           await inspect('identity/create', { metadata, secret }); await data.refresh();
         }, async updateSettings(scope, policy) {
           await inspect('settings/update', { scope, policy }); await data.refresh();
@@ -423,6 +416,19 @@ export function apply(ctx: Context): void {
       }
       return source;
   };
+  // The same session-scoped extension point used by Chat and Trajectory works
+  // in both the native desktop browser and the authenticated Linux web app.
+  const EvidenceView = ({ useData, inspect, sessionId }: InjectFace<PanelInjected>) => {
+    const state = useData(value => value);
+    if (!state.snapshot) return <p role="status">{state.error ?? 'Loading evidence graph…'}</p>;
+    return <EvidenceGraph key={sessionId} engagement={state.snapshot.engagement} revision={stringify(state.snapshot.graph.counts)} inspect={inspect} />;
+  };
+  const EvidenceMode = (props: InjectFace<PanelInjected>) => {
+    const enabled = useSyncExternalStore(mode.subscribe, mode.getSnapshot).snapshot?.enabled;
+    return enabled ? <EvidenceView {...props} /> : <EngagementMode mode={mode}><></></EngagementMode>;
+  };
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({ name: 'conversation.view', id: 'djupleita-evidence',
+    order: 20, locale: 'pentest', label: () => ctx.locale.bind('pentest')('evidenceGraph'), inject: sourceFor }, props => <EvidenceMode {...props} />));
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'djupleita-review',
     order: -100, locale: 'pentest', inject: reviewFor }, props => <EngagementMode mode={mode} activeOnly><ReviewCards {...props} /></EngagementMode>));
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: ID,
@@ -431,11 +437,11 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: 'djupleita-engagement',
     order: -100, label: () => ctx.locale.bind('pentest')('coreTitle'), locale: 'pentest', inject: settings },
     props => props.view === 'summary' ? props.t('coreDescription')
-      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} included /></EngagementMode>));
+      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} pluginId="engagement" included /></EngagementMode>));
   for (const plugin of distribution.plugins) {
     const tabs = plugin.tabs.filter((tab): tab is Tab => TABS.includes(tab as Tab));
-    const ConfigPage = (props: Props) => <EngagementMode mode={mode}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
-      visibleTabs={tabs} configKeys={plugin.configKeys} included /></EngagementMode>;
+    const ConfigPage = (props: Props) => <EngagementMode mode={mode} controls={false} openControls={props.openPolicy}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
+      visibleTabs={tabs} configKeys={plugin.configKeys} pluginId={plugin.id} included /></EngagementMode>;
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config',
       key: plugin.name, locale: 'pentest', inject: settings }, ConfigPage));
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({ name: 'plugins.row.config',

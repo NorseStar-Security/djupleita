@@ -37,7 +37,7 @@ try {
   const events = source.session.snapshotEvents(), original = JSON.stringify(events);
   const selected = events.find(event => event.type === 'user/message' && event.data.source.kind === 'user');
   let membershipAtAdmission = false;
-  ctx.on('agent/pre-step', async (payload, next) => {
+  const stopMembership = ctx.on('agent/pre-step', async (payload, next) => {
     if (payload.agent.id !== source.id) membershipAtAdmission = ctx.pentest.assessment.current(payload.agent.id)?.id === run.id;
     return next();
   });
@@ -50,6 +50,11 @@ try {
   assert.equal(JSON.stringify(source.session.snapshotEvents()), original);
   const replay = JSON.stringify(inputs.at(-1));
   assert(replay.includes('REVISED_REQUEST')); assert(!replay.includes('ORIGINAL_REQUEST')); assert(!replay.includes('Local fixture answer'));
+  stopMembership();
+  const fresh = await commands.fork({ sessionId: source.id, replay: { messageSeq: selected.seq, text: 'FRESH_REQUEST', history: 'fresh' } });
+  await ctx.agents.get(fresh.sessionId).whenIdle();
+  assert.equal(ctx.pentest.assessment.current(fresh.sessionId), undefined, 'Fresh replay must not inherit assessment-run context');
+  assert.equal(ctx.pentest.assessment.forkLineage(fresh.sessionId).replayHistory, 'fresh');
   const ordinary = await commands.fork({ sessionId: source.id });
   assert.equal(ctx.pentest.assessment.current(ordinary.sessionId).id, run.id);
   const paused = ctx.pentest.assessment.control(run.id, 'pause', 'Pause branches together');

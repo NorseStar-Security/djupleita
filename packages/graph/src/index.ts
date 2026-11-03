@@ -96,6 +96,43 @@ export class AttackGraph {
     return { nodes, edges, counts, offset, nextOffset: offset + nodes.length < counts.nodes ? offset + nodes.length : null };
   }
 
+  /** Search the whole engagement, independently of the legacy drawing page. */
+  explore(query = '', type = '', collection = '', offset = 0) {
+    if (query.length > 300 || type.length > 128 || collection.length > 128 || !Number.isInteger(offset) || offset < 0)
+      throw new PentestError('GRAPH_PAGE', 'Invalid graph search');
+    const where = `(? = '' OR instr(lower(json_extract(n.body, '$.name')), lower(?)) > 0 OR instr(lower(n.id), lower(?)) > 0)
+      AND (? = '' OR json_extract(n.body, '$.type') = ?)
+      AND (? = '' OR EXISTS (SELECT 1 FROM json_each(n.body, '$.evidenceIds') ref JOIN evidence e ON e.id=ref.value WHERE json_extract(e.body, '$.tool') = ?)
+        OR EXISTS (SELECT 1 FROM edges relation, json_each(relation.body, '$.evidenceIds') ref JOIN evidence e ON e.id=ref.value
+          WHERE (relation.source=n.id OR relation.target=n.id) AND json_extract(e.body, '$.tool') = ?))`;
+    const args = [query, query, query, type, type, collection, collection, collection];
+    const total = Number(this.db.prepare(`SELECT count(*) AS total FROM nodes n WHERE ${where}`).get(...args)!.total);
+    const nodes = this.db.prepare(`SELECT n.body FROM nodes n WHERE ${where}
+      ORDER BY CASE WHEN json_extract(n.body, '$.type') LIKE '%Target' THEN 0 ELSE 1 END, n.id LIMIT 100 OFFSET ?`)
+      .all(...args, offset).map(row => NodeSchema.parse(JSON.parse(String(row.body))));
+    const types = this.db.prepare("SELECT json_extract(body, '$.type') AS name, count(*) AS count FROM nodes GROUP BY name ORDER BY name")
+      .all().map(row => ({ name: String(row.name), count: Number(row.count) }));
+    const collections = this.db.prepare("SELECT json_extract(body, '$.tool') AS name, count(*) AS count FROM evidence GROUP BY name ORDER BY name")
+      .all().map(row => ({ name: String(row.name), count: Number(row.count) }));
+    return { nodes, total, counts: this.counts(), types, collections, offset, nextOffset: offset + nodes.length < total ? offset + nodes.length : null };
+  }
+
+  /** Follow relationships across node pages without materializing the full graph. */
+  neighborhood(nodeId: string, offset = 0) {
+    if (!Number.isInteger(offset) || offset < 0) throw new PentestError('GRAPH_PAGE', 'Invalid relationship page');
+    const node = this.getNode(nodeId);
+    if (!node) throw new PentestError('GRAPH_REFERENCE', 'Graph node no longer exists');
+    const total = Number(this.db.prepare('SELECT count(*) AS total FROM edges WHERE source=? OR target=?').get(nodeId, nodeId)!.total);
+    const edges = this.db.prepare('SELECT body FROM edges WHERE source=? OR target=? ORDER BY id LIMIT 30 OFFSET ?')
+      .all(nodeId, nodeId, offset).map(row => EdgeSchema.parse(JSON.parse(String(row.body))));
+    const ids = [...new Set(edges.flatMap(edge => [edge.source, edge.target]))].filter(value => value !== nodeId);
+    const nodes = ids.map(value => this.getNode(value)!);
+    const evidenceIds = [...new Set([...node.evidenceIds, ...edges.flatMap(edge => edge.evidenceIds)])];
+    // A capture list can be large; keep this owner-facing response bounded too.
+    const evidence = evidenceIds.slice(0, 100).map(value => JSON.parse(String(this.db.prepare('SELECT body FROM evidence WHERE id=?').get(value)!.body)) as Evidence);
+    return { node, nodes, edges, total, offset, nextOffset: offset + edges.length < total ? offset + edges.length : null, evidence, evidenceTotal: evidenceIds.length };
+  }
+
   /** Traversal excludes inferred capabilities unless the caller requests hypotheses. */
   paths(source: string, target: string, maxDepth: number, includeInferred = false): GraphEdge[][] {
     if (!Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > 32) throw new PentestError('GRAPH_DEPTH', 'Path depth must be between 0 and 32');

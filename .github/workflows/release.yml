@@ -55,7 +55,7 @@ jobs:
           pnpm typecheck
           pnpm build
           pnpm release:test
-          pnpm exec vitest run --maxWorkers=1 packages/dsh-plugin/src/mode.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts packages/dsh-plugin/src/tool-schema.test.ts
+          pnpm exec vitest run --maxWorkers=1 packages/dsh-plugin/src/mode.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/policy.test.ts tests/red-team-policy.test.ts tests/budget-renewal.test.ts tests/recon-batch.test.ts tests/graph.test.ts tests/http.test.ts tests/passive.test.ts tests/research.test.ts tests/worker.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/integration.test.ts packages/dsh-plugin/src/assessment-integration.test.ts packages/dsh-plugin/src/tool-schema.test.ts
       - name: Build macOS credential helper
         if: runner.os == 'macOS'
         run: pnpm build:keychain

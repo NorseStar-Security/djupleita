@@ -71,9 +71,13 @@ try {
       const sdk = JSON.stringify(prompt.sections);
       for (const name of ['pentest_status', 'read', 'glob', 'grep']) assert(sdk.includes(name), `PTC SDK lacks ${name}`);
       const disconnect = ctx.pentest.review.connect();
+      const decided = new Set();
       const approval = setInterval(() => {
         for (const item of ctx.pentest.review.snapshot().pending) {
-          if (item.tool === 'run_code') void ctx.pentest.review.decide(item.id, item.sessionId, 'once');
+          if (item.tool === 'run_code' && !decided.has(item.id)) {
+            decided.add(item.id);
+            void ctx.pentest.review.decide(item.id, item.sessionId, 'once');
+          }
         }
       }, 25);
       try {
@@ -96,9 +100,11 @@ try {
   const mutationPath = join(root, 'native-write.txt');
   const disconnect = ctx.pentest.review.connect();
   const approvals = new Set();
+  const decided = new Set();
   const approval = setInterval(() => {
     for (const item of ctx.pentest.review.snapshot().pending) {
-      if (['bash', 'write', 'edit'].includes(item.tool)) {
+      if (['bash', 'write', 'edit'].includes(item.tool) && !decided.has(item.id)) {
+        decided.add(item.id);
         approvals.add(item.tool);
         void ctx.pentest.review.decide(item.id, item.sessionId, 'once');
       }

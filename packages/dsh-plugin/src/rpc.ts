@@ -9,6 +9,8 @@ import type { Identity } from '@dsh-pentest/identities';
 import type { SessionId } from '@dsh-pentest/contracts';
 import { ScopeSchema } from '@dsh-pentest/contracts';
 import { PolicyConfigSchema } from '@dsh-pentest/policy';
+import { CrawlConfigSchema } from '@dsh-pentest/crawl';
+import { CredentialSlot } from './credentials.ts';
 import { PluginConfigSchema } from './runtime.ts';
 import type {} from './index.ts';
 import { assessmentEndpoints, assessmentRequest } from './assessment-rpc.ts';
@@ -24,7 +26,7 @@ export const DesktopChannel = {
     ctx.effect(() => ctx.pentest.review.connect(), 'pentest: interactive owner review');
     // Exact Connection Fetch routes require an authenticated owner Peer before
     // dispatch. Keep this surface outside the shared model-facing API gateway.
-    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'learning/cancel', 'learning/revoke', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
+    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'graph/explore', 'graph/neighborhood', 'identity/create', 'credentials/save', 'credentials/remove', 'crawl/seeds', 'crawl/start', 'crawl/stop', 'crawl/settings', 'settings/update', 'budget/renew-time', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'learning/cancel', 'learning/revoke', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
       path: `/api/pentest/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {
       const parsed = clientRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -53,6 +55,15 @@ export const DesktopChannel = {
           const input = z.object({ offset: z.number().int().min(0).default(0) }).parse(payload);
           return reply(ctx.pentest.graphPage(input.offset));
         }
+        if (endpoint === 'graph/explore') {
+          const input = z.object({ query: z.string().max(300).default(''), type: z.string().max(128).default(''),
+            collection: z.string().max(128).default(''), offset: z.number().int().min(0).default(0) }).parse(payload);
+          return reply(ctx.pentest.graphExplore(input.query, input.type, input.collection, input.offset));
+        }
+        if (endpoint === 'graph/neighborhood') {
+          const input = z.object({ nodeId: z.string().min(1).max(4096), offset: z.number().int().min(0).default(0) }).parse(payload);
+          return reply(ctx.pentest.graphNeighborhood(input.nodeId, input.offset));
+        }
         if (endpoint.startsWith('setup/')) {
           const input = z.object({ sessionId: SessionSchema }).parse(payload);
           if (endpoint === 'setup/check') return reply(await ctx.pentest.toolSetup(true));
@@ -78,10 +89,40 @@ export const DesktopChannel = {
           await ctx.pentest.review.addDestination(input.host, input.sessionId as SessionId);
           return reply({ saved: true });
         }
+        if (endpoint === 'credentials/save') {
+          const input = z.object({ sessionId: SessionSchema, credential: z.unknown() }).parse(payload);
+          await ctx.pentest.credentials.save(input.credential, input.sessionId as SessionId, signal);
+          return reply({ saved: true });
+        }
+        if (endpoint === 'credentials/remove') {
+          const input = z.object({ sessionId: SessionSchema, slot: CredentialSlot }).parse(payload);
+          await ctx.pentest.credentials.remove(input.slot, input.sessionId as SessionId); return reply({ removed: true });
+        }
+        if (endpoint.startsWith('crawl/')) {
+          const input = z.object({ sessionId: SessionSchema, urls: z.array(z.url().max(4096)).min(1).max(100).optional(), config: CrawlConfigSchema.optional() }).parse(payload);
+          if (endpoint === 'crawl/seeds') {
+            if (!input.urls) throw new Error('Provide seed URLs');
+            return reply(ctx.pentest.crawlControls.seeds(input.urls));
+          }
+          if (endpoint === 'crawl/start') ctx.pentest.crawlControls.start(input.sessionId as SessionId);
+          if (endpoint === 'crawl/stop') await ctx.pentest.crawlControls.stop();
+          if (endpoint === 'crawl/settings') {
+            if (!input.config) throw new Error('Provide crawl limits');
+            await ctx.pentest.crawlControls.stop();
+            await ctx.pentest.updatePlugins({ ...ctx.pentest.pluginConfig, crawl: input.config }, input.sessionId as SessionId);
+            ctx.pentest.resetCrawl();
+          }
+          return reply(ctx.pentest.crawlControls.snapshot());
+        }
         if (endpoint === 'identity/create') {
           const input = IdentityInput.parse(payload);
           const identity = await ctx.pentest.createIdentity(input.metadata as Omit<Identity, 'id'>, input.secret, signal);
           return reply(identity);
+        }
+        if (endpoint === 'budget/renew-time') {
+          const input = z.object({ sessionId: SessionSchema }).parse(payload);
+          await ctx.pentest.renewTimeBudget(input.sessionId as SessionId);
+          return reply(ctx.pentest.engagement.snapshot());
         }
         if (endpoint === 'settings/update') {
           const input = SettingsInput.parse(payload);

@@ -35,9 +35,11 @@ export function classifyHttp(input: HttpInput): { effects: Effect[]; reversible:
   const parsed = new URL(input.url);
   let path = `${parsed.pathname}${parsed.search}`;
   try { path = decodeURIComponent(path); } catch { /* Preserve malformed input for policy review. */ }
-  const semantics = `${path}\n${input.bodyEncoding === 'base64' ? Buffer.from(input.body ?? '', 'base64').toString('utf8') : input.body ?? ''}`;
+  // Split camelCase action names before matching complete words. A case-insensitive
+  // [A-Z] suffix also matched ordinary words such as dropdown and droplet.
+  const semantics = `${path}\n${input.bodyEncoding === 'base64' ? Buffer.from(input.body ?? '', 'base64').toString('utf8') : input.body ?? ''}`.replace(/([a-z])([A-Z])/g, '$1 $2');
   if (endsSession(input)) return { effects: ['disrupt'], reversible: false };
-  if (input.method === 'DELETE' || /(?:\b|[_/])(?:delete|remove|destroy|drop|truncate|purge|wipe)(?:[A-Z_\s/(]|\b)/i.test(semantics)) {
+  if (input.method === 'DELETE' || /(?:\b|[_/])(?:delete|remove|destroy|drop|truncate|purge|wipe)(?:[_\s/(]|\b)/i.test(semantics)) {
     return { effects: ['delete'], reversible: false };
   }
   if (input.method === 'PUT') return { effects: ['overwrite'], reversible: false };
@@ -124,6 +126,7 @@ export class HttpBroker {
     if (followRedirects && Object.keys(credentialHeaders).length) throw new PentestError('CREDENTIAL_REDIRECT', 'Adapter credentials require individual redirect handling');
     HttpInputSchema.parse(raw);
     if (!this.engagement.hasSession(sessionId)) throw new PentestError('SESSION_UNBOUND', 'Session is not attached to this engagement');
+    this.engagement.assertAvailable();
     publicHeaders(raw.headers);
     if (Buffer.from(raw.body ?? '', raw.bodyEncoding ?? 'utf8').byteLength > this.config.maxRequestBytes) throw new PentestError('REQUEST_LIMIT', 'Request body exceeded the configured byte limit');
     const runSignal = this.observer?.signal?.(sessionId);
@@ -201,6 +204,17 @@ export class HttpBroker {
 export class ServiceJsonClient {
   constructor(private readonly scope: ScopeService, private readonly identities: IdentityService,
     private readonly redactor: Redactor, private readonly transport: Transport = pinnedTransport) {}
+  /** Public, credential-free JSON lookups use ordinary research access. */
+  async research(url: string, signal: AbortSignal): Promise<Json> {
+    const input: HttpInput = { url, method: 'GET', headers: {} };
+    const destination = httpDestination(input);
+    if (destination.access !== 'read') throw new PentestError('RESEARCH_METHOD', 'Public JSON lookups require a read-only GET endpoint');
+    const merged = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
+    const grant = await this.scope.authorize(destination, merged);
+    const response = await this.transport(grant, input, { accept: 'application/json' }, 4 * 1024 * 1024, merged);
+    if (response.status < 200 || response.status >= 300) throw new PentestError(`SERVICE_HTTP_${response.status}`, `Public lookup returned HTTP ${response.status}; redirects are not followed`);
+    return response.body.trim() ? this.redactor.json(JSON.parse(response.body)) : null;
+  }
   async send(url: string, purpose: Exclude<Purpose, 'target'>, body: Json, signal: AbortSignal,
     identityId?: IdentityId, method: 'GET' | 'POST' = 'POST'): Promise<Json> {
     const merged = AbortSignal.any([signal, AbortSignal.timeout(30000)]);

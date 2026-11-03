@@ -288,3 +288,18 @@ it('commits branch lineage and shared run membership together or rolls both back
     expect(f.service.current(child)?.id).toBe(f.run.id);
   } finally { db.close(); await f.close(); }
 });
+
+
+it('records fresh replay lineage without inheriting earlier assessment-run context across restart', async () => {
+  const f = await fixture();
+  try {
+    const child = id<'SessionId'>();
+    const lineage = { sourceId: f.session, childId: child, atSeq: -1, replayMessageSeq: 13, replayHistory: 'fresh' as const };
+    f.service.recordFork(lineage);
+    expect(f.service.current(child)).toBeUndefined();
+    expect(f.service.forkLineage(child)).toEqual(lineage);
+    await f.reopen();
+    expect(f.service.current(child)).toBeUndefined();
+    expect(f.service.forkLineage(child)).toEqual(lineage);
+  } finally { await f.close(); }
+});

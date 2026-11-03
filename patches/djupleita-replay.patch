@@ -6,7 +6,7 @@ diff --git a/packages/api/session-controller/src/types.ts b/packages/api/session
    /** Exact inclusive source event seq; omission selects the latest completed-turn prefix. */
    readonly atSeq?: number
 +  /** Replace this human message in a new branch, retaining its attachments and excluding its later history. Mutually exclusive with atSeq. */
-+  readonly replay?: { readonly messageSeq: number; readonly text: string }
++  readonly replay?: { readonly messageSeq: number; readonly text: string; readonly history?: 'retain' | 'fresh' }
    /** False asks the Host to check for required migration before forking. Defaults to true. */
    readonly allowMigration?: boolean
  }
@@ -18,7 +18,7 @@ diff --git a/packages/api/session-controller/src/types.ts b/packages/api/session
 +     * @mode serial
 +     * @param fork - source, child and exact inherited cut for durable feature inheritance.
 +     */
-+    'api-session/forked'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void | Promise<void>
++    'api-session/forked'(fork: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number; replayHistory?: 'fresh' }): void | Promise<void>
 +    /**
       * A Session became visible or its Agent was created or disposed.
       * Consumers upsert the summary and replace its current running and availability state.
@@ -58,7 +58,15 @@ diff --git a/packages/api/session-controller/src/index.ts b/packages/api/session
 diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/session-controller/src/commands.ts
 --- a/packages/api/session-controller/src/commands.ts
 +++ b/packages/api/session-controller/src/commands.ts
-@@ -207,11 +207,21 @@
+@@ -4,6 +4,7 @@
+ import { randomUUID } from 'node:crypto'
+ import type { Context } from '@deepseek-ai/cordis'
+ import { brandString } from '@deepseek-ai/dsh-brand'
++import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+ import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
+ import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+ import type {
+@@ -207,11 +208,22 @@
    /**
     * Create a new ordinary Session from an exact event prefix. An explicit
     * `atSeq` is the inclusive cut; an omitted value selects the latest
@@ -76,6 +84,7 @@ diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/sess
 +    signal?.throwIfAborted()
 +    if (request.replay !== undefined && (request.atSeq !== undefined
 +      || !Number.isSafeInteger(request.replay.messageSeq) || request.replay.messageSeq < 0
++      || (request.replay.history !== undefined && request.replay.history !== 'retain' && request.replay.history !== 'fresh')
 +      || typeof request.replay.text !== 'string' || request.replay.text.trim().length === 0
 +      || Buffer.byteLength(request.replay.text) > 1024 * 1024)) {
 +      throw new RemoteError('gateway/bad-request', 'Replay requires one human message and non-empty text up to 1 MiB; atSeq must be omitted', {})
@@ -83,7 +92,7 @@ diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/sess
      let atSeq: ReturnType<typeof SessionSeq> | undefined
      try {
        atSeq = request.atSeq === undefined ? undefined : SessionSeq(request.atSeq)
-@@ -235,8 +245,15 @@
+@@ -235,8 +247,15 @@
        )
      }
      using source = observed
@@ -96,12 +105,12 @@ diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/sess
 +    }
 +    const boundary = request.replay === undefined
 +      ? atSeq ?? latestCompletedPrefixBoundary(source.events)
-+      : request.replay.messageSeq - 1
++      : request.replay.history === 'fresh' ? -1 : request.replay.messageSeq - 1
 +    if (boundary === undefined || (boundary !== -1 && source.events[boundary]?.seq !== boundary)) {
        throw new RemoteError(
          'session/fork-unavailable',
          request.atSeq === undefined
-@@ -245,7 +262,14 @@
+@@ -245,7 +264,14 @@
          { sessionId: request.sessionId },
        )
      }
@@ -117,7 +126,36 @@ diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/sess
      let workspace: Workspace | undefined
      try {
        workspace = await this.forkWorkspace(source.header)
-@@ -291,6 +315,17 @@
+@@ -259,8 +285,13 @@
+     const childId = brandString<SessionId>(`session-${randomUUID()}`)
+     const composition = await this.agents.composeAgent(this.agents.presetForObservation(source))
+     try {
+-      const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
+-      await this.ctx.agents.create({
++      // Read the latest source selection, not the inherited cut or the background-saved default.
++      let modelState: ReturnType<typeof modelSelectionProjectionDefinition.init> = { lastUsed: null, pending: null }
++      for (const event of source.events) modelState = modelSelectionProjectionDefinition.apply(modelState, event)
++      const selection = request.replay === undefined ? this.ctx.agentDefaultModel.currentSelection()
++        : modelState.pending ?? modelState.lastUsed ?? this.ctx.agentDefaultModel.currentSelection()
++      const { provider, model, reasoningEffort } = selection
++      const { agent: child } = await this.ctx.agents.create({
+         sessionId: childId,
+         seed,
+         inheritedEventCount: SessionLogOffset(boundary + 1),
+@@ -271,9 +302,11 @@
+             ? {}
+             : { agentPreset: composition.agentPreset }),
+         },
+-        agentOptions: { provider, model },
++        agentOptions: { provider, model, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) },
+         setup: composition.setup,
+       })
++      // Inherited request headers otherwise take precedence over Agent options.
++      if (request.replay !== undefined) child.model.select({ provider, model, ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }) })
+     } catch (error) {
+       throw new RemoteError(
+         'gateway/internal',
+@@ -291,6 +324,18 @@
            { sessionId: childId, workspaceId: workspace.id },
          )
        }
@@ -126,6 +164,7 @@ diff --git a/packages/api/session-controller/src/commands.ts b/packages/api/sess
 +    await this.ctx.serial('api-session/forked', {
 +      sourceId: request.sessionId, childId, atSeq: boundary,
 +      ...(request.replay === undefined ? {} : { replayMessageSeq: request.replay.messageSeq }),
++      ...(request.replay?.history === 'fresh' ? { replayHistory: 'fresh' as const } : {}),
 +    })
 +    signal?.throwIfAborted()
 +    if (replay !== undefined) {
@@ -142,7 +181,7 @@ diff --git a/packages/api/session-controller/src/client/contract/sessions.ts b/p
    fork(opts: {
      sessionId: SessionId
      atSeq?: number
-+    replay?: { messageSeq: number; text: string }
++    replay?: { messageSeq: number; text: string; history?: 'retain' | 'fresh' }
 +    signal?: AbortSignal
      increaseTitle?: boolean
      onCreated?: (childId: SessionId) => void
@@ -154,7 +193,7 @@ diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/pa
    async fork(opts: {
      sessionId: SessionId
      atSeq?: number
-+    replay?: { messageSeq: number; text: string }
++    replay?: { messageSeq: number; text: string; history?: 'retain' | 'fresh' }
 +    signal?: AbortSignal
      increaseTitle?: boolean
      onCreated?: (childId: SessionId) => void
@@ -176,7 +215,7 @@ diff --git a/packages/api/session-controller/src/client/sessions/manager.ts b/pa
     */
    async fork(
 -    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean },
-+    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean; replay?: { messageSeq: number; text: string }; signal?: AbortSignal },
++    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean; replay?: { messageSeq: number; text: string; history?: 'retain' | 'fresh' }; signal?: AbortSignal },
    ): Promise<RemoteResult<{ sessionId: SessionId }>> {
      const source = this.summaries.find(s => s.sessionId === opts.sessionId)
      const result = await this.remote.session.fork({
@@ -197,7 +236,7 @@ diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/cli
    inspectCall: ((callId: ToolCallId) => void) | undefined
    forkAt: (seq: number) => void
 +  /** Edit one original human message in a new branch; resolves after replay admission. */
-+  replayAt?: ((seq: number, text: string, signal: AbortSignal) => Promise<void>) | undefined
++  replayAt?: ((seq: number, text: string, signal: AbortSignal, history: 'retain' | 'fresh') => Promise<void>) | undefined
    /** Session-authorized image loader supplied by the Chat view. */
    loadImage: MessageImageLoader
    fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
@@ -206,7 +245,7 @@ diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/cli
    }
    forkAt: (seq: number) => void
 +  /** Edit one original human message in a new branch; resolves after replay admission. */
-+  replayAt?: ((seq: number, text: string, signal: AbortSignal) => Promise<void>) | undefined
++  replayAt?: ((seq: number, text: string, signal: AbortSignal, history: 'retain' | 'fresh') => Promise<void>) | undefined
    fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
  }
  
@@ -295,8 +334,8 @@ diff --git a/packages/client/ui-chat/src/client/apply.ts b/packages/client/ui-ch
              },
              read: () => chatScrollPositions.get(sessionId) ?? null,
            },
-+          replayAt: async (seq, text, signal) => {
-+            const childId = await ctx.sessions.fork({ sessionId, replay: { messageSeq: seq, text }, signal })
++          replayAt: async (seq, text, signal, history) => {
++            const childId = await ctx.sessions.fork({ sessionId, replay: { messageSeq: seq, text, history }, signal })
 +            ctx.uiWorkspace.openSession(childId)
 +          },
            forkAt: (seq) => {
@@ -311,7 +350,7 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/
  import type { ReactNode } from 'react'
  import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
  import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
-@@ -299,10 +299,31 @@
+@@ -299,10 +299,41 @@
  
  /** User and admitted-steering keyed Chat renderer. */
  export const UserMessageNodeView = memo(function UserMessageNodeView({
@@ -337,6 +376,16 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/
 +      replayTrigger.current?.focus()
 +    }
 +  }, [editing])
++  const submitReplay = (history: 'retain' | 'fresh') => {
++    if (pendingReplay.current || busy || !draft.trim() || replayAt === undefined) return
++    const pending = new AbortController()
++    pendingReplay.current = pending
++    setBusy(true); setFailure(false)
++    void replayAt(data.seq, draft, pending.signal, history)
++      .then(() => { if (!pending.signal.aborted) { restoreFocus.current = true; setEditing(false) } })
++      .catch(() => { if (!pending.signal.aborted) setFailure(true) })
++      .finally(() => { if (pendingReplay.current === pending) { pendingReplay.current = null; setBusy(false) } })
++  }
 +  const canReplay = replayAt !== undefined && forkAllowed
 +    && typeof data.source === 'object' && data.source !== null
 +    && 'kind' in data.source && data.source.kind === 'user'
@@ -345,7 +394,7 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/
      <UserStyleBubble
        content={data.content}
        interactive
-@@ -315,12 +336,35 @@
+@@ -315,12 +346,29 @@
          <MessageIconActions
            text={text}
            time={data.time}
@@ -359,14 +408,7 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/
      />
 +    {editing && <form className={css.replayForm} aria-busy={busy} onSubmit={event => {
 +      event.preventDefault()
-+      if (pendingReplay.current || busy || !draft.trim() || replayAt === undefined) return
-+      const pending = new AbortController()
-+      pendingReplay.current = pending
-+      setBusy(true); setFailure(false)
-+      void replayAt(data.seq, draft, pending.signal)
-+        .then(() => { if (!pending.signal.aborted) { restoreFocus.current = true; setEditing(false) } })
-+        .catch(() => { if (!pending.signal.aborted) setFailure(true) })
-+        .finally(() => { if (pendingReplay.current === pending) { pendingReplay.current = null; setBusy(false) } })
++      submitReplay('fresh')
 +    }}>
 +      <label>{t('message.editReplay')}<textarea ref={replayEditor} value={draft} disabled={busy} rows={5}
 +        onChange={event => { setDraft(event.target.value) }} /></label>
@@ -374,6 +416,7 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.tsx b/packages/
 +      {failure && <p role="alert">{t('message.replayFailed')}</p>}
 +      <div className={css.replayButtons}>
 +        <button type="button" onClick={() => { pendingReplay.current?.abort(); pendingReplay.current = null; setBusy(false); restoreFocus.current = true; setEditing(false) }}>{t('cancel')}</button>
++        <button type="button" disabled={busy || !draft.trim()} onClick={() => { submitReplay('retain') }}>{t('message.replayRetain')}</button>
 +        <button type="submit" disabled={busy || !draft.trim()}>{t('message.replaySubmit')}</button>
 +      </div>
 +    </form>}
@@ -409,90 +452,98 @@ diff --git a/packages/client/ui-chat/src/client/chat/MessageItem.module.css b/pa
 diff --git a/packages/client/ui-chat/src/client/locale.ts b/packages/client/ui-chat/src/client/locale.ts
 --- a/packages/client/ui-chat/src/client/locale.ts
 +++ b/packages/client/ui-chat/src/client/locale.ts
-@@ -160,6 +160,10 @@
+@@ -160,6 +160,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': '已停止',
    'message.branch': '在新对话中分支',
 +  'message.editReplay': "编辑并重放",
 +  'message.replaySubmit': "在新对话中重放",
-+  'message.replayHelp': "在此请求之前创建新对话。附件会保留，原对话仍然可用。",
++  'message.replayRetain': "保留历史重放",
++  'message.replayHelp': "选择保留此前消息，或仅将编辑后的请求和附件发送到全新对话。两种方式都使用下方模型选择器中的当前模型，原对话不变。",
 +  'message.replayFailed': "无法重放此请求。编辑后的文本仍然保留。",
    'message.branchUnavailable': '仅可从已完成轮次的最后一条消息分支',
    'message.retry.active': '正在重试模型请求',
    'message.retry.cancelled': '模型请求重试已取消',
-@@ -362,6 +366,10 @@
+@@ -362,6 +367,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Stopped',
    'message.branch': 'Branch into a new conversation',
 +  'message.editReplay': 'Edit and replay',
 +  'message.replaySubmit': 'Replay in new chat',
-+  'message.replayHelp': 'Creates a new chat before this request. Attachments are retained; your original chat stays available.',
++  'message.replayRetain': "Replay with earlier history",
++  'message.replayHelp': "Keep earlier messages, or start fresh with only this edited request and its attachments. Both use the current model selected in the composer below. Your original chat stays available.",
 +  'message.replayFailed': 'Could not replay this request. Your edited text is still available.',
    'message.branchUnavailable': 'Available only on the last message of a completed turn',
    'message.retry.active': 'Retrying model request',
    'message.retry.cancelled': 'Model request retry cancelled',
-@@ -561,6 +569,10 @@
+@@ -561,6 +571,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': '停止しました',
    'message.branch': '新しい会話に分岐',
 +  'message.editReplay': "編集して再実行",
 +  'message.replaySubmit': "新しいチャットで再実行",
-+  'message.replayHelp': "このリクエストの直前から新しいチャットを作成します。添付ファイルと元のチャットは保持されます。",
++  'message.replayRetain': "履歴を保持して再実行",
++  'message.replayHelp': "以前のメッセージを保持するか、編集したリクエストと添付ファイルだけで新しいチャットを開始します。どちらも下の入力欄で選択した現在のモデルを使い、元のチャットは保持されます。",
 +  'message.replayFailed': "このリクエストを再実行できませんでした。編集したテキストは保持されています。",
    'message.branchUnavailable': '完了したターンの最後のメッセージでのみ利用できます',
    'message.retry.active': 'モデルリクエストを再試行中',
    'message.retry.cancelled': 'モデルリクエストの再試行をキャンセルしました',
-@@ -760,6 +772,10 @@
+@@ -760,6 +775,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Detenido',
    'message.branch': 'Pasar a una nueva conversación',
 +  'message.editReplay': "Editar y repetir",
 +  'message.replaySubmit': "Repetir en un chat nuevo",
-+  'message.replayHelp': "Crea un chat nuevo antes de esta solicitud. Se conservan los archivos adjuntos y el chat original.",
++  'message.replayRetain': "Repetir con historial previo",
++  'message.replayHelp': "Conserva los mensajes anteriores o empieza de cero solo con esta solicitud editada y sus adjuntos. Ambas opciones usan el modelo seleccionado en el editor inferior. El chat original se conserva.",
 +  'message.replayFailed': "No se pudo repetir esta solicitud. El texto editado sigue disponible.",
    'message.branchUnavailable': 'Disponible solo en el último mensaje de un turno completado',
    'message.retry.active': 'Reintentando solicitud de modelo',
    'message.retry.cancelled': 'Reintento de solicitud de modelo cancelado',
-@@ -959,6 +975,10 @@
+@@ -959,6 +979,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Arrêté',
    'message.branch': 'Lancez-vous dans une nouvelle conversation',
 +  'message.editReplay': "Modifier et relancer",
 +  'message.replaySubmit': "Relancer dans un nouveau chat",
-+  'message.replayHelp': "Crée un nouveau chat avant cette demande. Les pièces jointes et le chat d’origine sont conservés.",
++  'message.replayRetain': "Relancer avec l’historique",
++  'message.replayHelp': "Conservez les messages précédents ou repartez de zéro avec cette demande modifiée et ses pièces jointes. Les deux options utilisent le modèle sélectionné dans la zone de saisie ci-dessous. Le chat original est conservé.",
 +  'message.replayFailed': "Impossible de relancer cette demande. Le texte modifié reste disponible.",
    'message.branchUnavailable': "Disponible uniquement sur le dernier message d'un tour terminé",
    'message.retry.active': 'Nouvelle tentative de demande de modèle',
    'message.retry.cancelled': 'Nouvelle tentative de demande de modèle annulée',
-@@ -1158,6 +1178,10 @@
+@@ -1158,6 +1183,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Angehalten',
    'message.branch': 'Verzweigen Sie in ein neues Gespräch',
 +  'message.editReplay': "Bearbeiten und erneut ausführen",
 +  'message.replaySubmit': "In neuem Chat ausführen",
-+  'message.replayHelp': "Erstellt einen neuen Chat vor dieser Anfrage. Anhänge und ursprünglicher Chat bleiben erhalten.",
++  'message.replayRetain': "Mit bisherigem Verlauf ausführen",
++  'message.replayHelp': "Behalten Sie frühere Nachrichten oder starten Sie nur mit dieser bearbeiteten Anfrage und ihren Anhängen neu. Beide Optionen verwenden das unten ausgewählte Modell. Der ursprüngliche Chat bleibt erhalten.",
 +  'message.replayFailed': "Diese Anfrage konnte nicht erneut ausgeführt werden. Der bearbeitete Text bleibt erhalten.",
    'message.branchUnavailable': 'Nur verfügbar bei der letzten Nachricht einer abgeschlossenen Runde',
    'message.retry.active': 'Modellanforderung wird erneut versucht',
    'message.retry.cancelled': 'Wiederholungsversuch der Modellanforderung abgebrochen',
-@@ -1357,6 +1381,10 @@
+@@ -1357,6 +1387,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Остановлено',
    'message.branch': 'Перейти к новому разговору',
 +  'message.editReplay': "Изменить и повторить",
 +  'message.replaySubmit': "Повторить в новом чате",
-+  'message.replayHelp': "Создаёт новый чат перед этим запросом. Вложения и исходный чат сохраняются.",
++  'message.replayRetain': "Повторить с историей",
++  'message.replayHelp': "Сохраните предыдущие сообщения или начните заново только с этим изменённым запросом и вложениями. Оба варианта используют модель, выбранную в поле ввода ниже. Исходный чат сохраняется.",
 +  'message.replayFailed': "Не удалось повторить запрос. Изменённый текст сохранён.",
    'message.branchUnavailable': 'Доступно только в последнем сообщении о завершенном ходу.',
    'message.retry.active': 'Повторный запрос модели',
    'message.retry.cancelled': 'Повтор запроса модели отменен.',
-@@ -1556,6 +1584,10 @@
+@@ -1556,6 +1591,11 @@
    'message.turnProcess.separator': ' · ',
    'message.stopped': 'Parado',
    'message.branch': 'Ramifique para uma nova conversa',
 +  'message.editReplay': "Editar e repetir",
 +  'message.replaySubmit': "Repetir em novo chat",
-+  'message.replayHelp': "Cria um novo chat antes desta solicitação. Os anexos e o chat original são preservados.",
++  'message.replayRetain': "Repetir com histórico anterior",
++  'message.replayHelp': "Mantenha as mensagens anteriores ou comece do zero apenas com esta solicitação editada e seus anexos. As duas opções usam o modelo selecionado no campo de mensagem abaixo. O chat original é preservado.",
 +  'message.replayFailed': "Não foi possível repetir a solicitação. O texto editado continua disponível.",
    'message.branchUnavailable': 'Disponível apenas na última mensagem de um turno concluído',
    'message.retry.active': 'Tentando novamente a solicitação de modelo',
@@ -540,7 +591,7 @@ diff --git a/packages/api/session-controller/tests/session-replay.host.spec.ts b
 new file mode 100644
 --- /dev/null
 +++ b/packages/api/session-controller/tests/session-replay.host.spec.ts
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,158 @@
 +import { mkdtemp, rm } from 'node:fs/promises'
 +import { tmpdir } from 'node:os'
 +import { join } from 'node:path'
@@ -622,7 +673,7 @@ new file mode 100644
 +  await source.whenIdle()
 +  const selected = source.session.snapshotEvents().find(event => event.type === 'user/message')!
 +  const create = vi.spyOn(ctx.agents, 'create')
-+  for (const replay of [{ messageSeq: selected.seq, text: ' ' }, { messageSeq: -1, text: 'revised' }, { messageSeq: 9999, text: 'revised' }, { messageSeq: 0, text: 'revised' }]) {
++  for (const replay of [{ messageSeq: selected.seq, text: ' ' }, { messageSeq: -1, text: 'revised' }, { messageSeq: 9999, text: 'revised' }, { messageSeq: 0, text: 'revised' }, { messageSeq: selected.seq, text: 'revised', history: 'invalid' as never }]) {
 +    await expect(commands.fork({ sessionId: source.id, replay })).rejects.toMatchObject({ code: 'gateway/bad-request' })
 +  }
 +  await expect(commands.fork({ sessionId: source.id, atSeq: 0, replay: { messageSeq: selected.seq, text: 'revised' } })).rejects.toMatchObject({ code: 'gateway/bad-request' })
@@ -668,11 +719,42 @@ new file mode 100644
 +  expect(JSON.stringify(child.session.deriveMessages())).toContain('revised after restart')
 +  expect(JSON.stringify(child.session.deriveMessages())).not.toContain('persisted request')
 +})
++
++
++it('starts fresh without prior requests, answers or goal commands and uses the latest selected model', async () => {
++  const { ctx, commands, source } = await fixture()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'EARLIER_PRIVATE_CONTEXT' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  source.followup(createUserMessage({ content: [{ type: 'text', text: 'SELECTED_REQUEST' }], source: { kind: 'user' } }))
++  await source.whenIdle()
++  const selected = source.session.snapshotEvents().filter(event => event.type === 'user/message').at(-1)!
++  const second = new MockAdapter([textResponse('fresh answer'), textResponse('retained answer')], {
++    efforts: [{ id: 'high' as never, name: 'High' }], defaultEffort: 'high' as never,
++  })
++  ctx.llm.registerAdapter(['other-provider'], second)
++  source.model.select({ provider: 'other-provider', model: 'chosen-model', reasoningEffort: 'high' as never })
++  const original = JSON.stringify(source.session.snapshotEvents())
++  const lineage = vi.fn(); ctx.on('api-session/forked', lineage)
++  for (const history of ['fresh', 'retain'] as const) {
++    const result = await commands.fork({ sessionId: source.id, replay: { messageSeq: selected.seq, text: 'EDITED_REQUEST', history } })
++    const child = ctx.agents.get(result.sessionId)!
++    await child.whenIdle()
++    const messages = JSON.stringify(second.requests.at(-1)?.messages)
++    expect(messages).toContain('EDITED_REQUEST')
++    expect(messages.includes('EARLIER_PRIVATE_CONTEXT')).toBe(history === 'retain')
++    expect(messages).not.toContain('SELECTED_REQUEST')
++    expect(child.session.inheritedEventCount).toBe(history === 'fresh' ? 0 : selected.seq)
++    expect(child.model.current()).toEqual({ provider: 'other-provider', model: 'chosen-model', reasoningEffort: 'high' })
++    expect(JSON.stringify(source.session.snapshotEvents())).toBe(original)
++  }
++  expect(second.requests).toHaveLength(2)
++  expect(lineage.mock.calls[0]?.[0]).toMatchObject({ atSeq: -1, replayHistory: 'fresh' })
++})
 diff --git a/packages/client/ui-chat/tests/replay-edit.client.spec.tsx b/packages/client/ui-chat/tests/replay-edit.client.spec.tsx
 new file mode 100644
 --- /dev/null
 +++ b/packages/client/ui-chat/tests/replay-edit.client.spec.tsx
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,67 @@
 +// @vitest-environment jsdom
 +import { afterEach, expect, it, vi } from 'vitest'
 +import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -706,7 +788,7 @@ new file mode 100644
 +  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
 +  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'revised request' } })
 +  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replay in new chat' })) })
-+  expect(replayAt).toHaveBeenCalledWith(7, 'revised request', expect.any(AbortSignal))
++  expect(replayAt).toHaveBeenCalledWith(7, 'revised request', expect.any(AbortSignal), 'fresh')
 +  expect(screen.queryByRole('textbox')).toBeNull()
 +})
 +it('retains the edited text after failure and refuses blank submissions', async () => {
@@ -730,6 +812,15 @@ new file mode 100644
 +  expect(signal?.aborted).toBe(true)
 +  cleanup(); show(vi.fn(), false)
 +  expect(screen.queryByRole('button', { name: 'Edit and replay' })).toBeNull()
++})
++
++
++it('offers replay retaining earlier history independently from fresh replay', async () => {
++  const { replayAt } = show()
++  fireEvent.click(screen.getByRole('button', { name: 'Edit and replay' }))
++  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep context' } })
++  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replay with earlier history' })) })
++  expect(replayAt).toHaveBeenCalledWith(7, 'keep context', expect.any(AbortSignal), 'retain')
 +})
 diff --git a/benchmarks/session-corpus/session-corpus.worker.ts b/benchmarks/session-corpus/session-corpus.worker.ts
 --- a/benchmarks/session-corpus/session-corpus.worker.ts
@@ -765,7 +856,7 @@ diff --git a/apps/web/tests/edit-replay.e2e.ts b/apps/web/tests/edit-replay.e2e.
 new file mode 100644
 --- /dev/null
 +++ b/apps/web/tests/edit-replay.e2e.ts
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +// Keyless built-client exercise of editing a cold human request into a new chat.
 +import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 +import { tmpdir } from 'node:os'
@@ -829,8 +920,9 @@ new file mode 100644
 +  expect(await form.ariaSnapshot()).toMatchInlineSnapshot(`
 +    "- text: Edit and replay
 +    - textbox "Edit and replay": Explain the earlier request using only the history in this branch.
-+    - paragraph: Creates a new chat before this request. Attachments are retained; your original chat stays available.
++    - paragraph: Keep earlier messages, or start fresh with only this edited request and its attachments. Both use the current model selected in the composer below. Your original chat stays available.
 +    - button "Cancel"
++    - button "Replay with earlier history"
 +    - button "Replay in new chat""
 +  `)
 +  for (const width of [390, 1680]) {
@@ -858,7 +950,7 @@ new file mode 100644
 +  await edit.click()
 +  await page.getByRole('textbox', { name: 'Edit and replay', exact: true }).fill(REVISED)
 +  const settled = scaffold.whenTurnSettled(60_000)
-+  await page.getByRole('button', { name: 'Replay in new chat', exact: true }).click()
++  await page.getByRole('button', { name: 'Replay with earlier history', exact: true }).click()
 +  const childId = await settled
 +  expect(childId).not.toBe(SOURCE)
 +  await page.getByText(ANSWER, { exact: true }).waitFor({ timeout: 15_000 })

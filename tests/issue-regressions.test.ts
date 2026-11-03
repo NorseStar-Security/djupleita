@@ -107,7 +107,7 @@ it('keeps setup dismissal through restart and refresh without changing tool conf
   } finally { await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-it('shows the saved scope exactly and inserts course targets only on request', () => {
+it('shows the saved scope exactly and inserts course targets and exclusions only on request', () => {
   const empty = { enabled: false, targets: [], exclusions: [], networks: [], services: { model: [], intelligence: [], telemetry: [] } };
   expect(JSON.parse(initialScopeDraft(empty))).toEqual(empty);
   const shown = courseScopeDraft(empty), parsed = ScopeSchema.parse(JSON.parse(shown));
@@ -118,13 +118,16 @@ it('shows the saved scope exactly and inserts course targets only on request', (
   expect(JSON.parse(courseScopeDraft({}))).toEqual(scopeExample);
   for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443]);
   expect(scopePreview(shown)).toContain('ports 80, 443');
+  expect(scopePreview(shown)).toContain(`Excluded: ${scopeExample.exclusions[0]}`);
+  expect(scopePreview(shown)).toContain('Exact exclusions win');
+  expect(JSON.parse(courseScopeDraft(scopeExample))).toEqual(scopeExample);
   expect(scopePreview(shown)).toContain('OFF');
   expect(scopePreview(JSON.stringify({ ...parsed, enabled: true }))).toContain('ON');
   expect(scopePreview('{')).toContain('needs attention');
   expect(scopePreview(JSON.stringify({ ...empty, targets: ['*.example.test'] }))).toContain('host-rule object');
 });
 
-it('explicit course target insertion preserves services, enforcement and custom boundaries', () => {
+it('explicit course scope insertion preserves services, enforcement and custom boundaries', () => {
   const services = { model: scope().targets, intelligence: scope().targets, telemetry: scope().targets };
   const empty = { enabled: false, targets: [], exclusions: [], networks: [], services };
   const initial = ScopeSchema.parse(JSON.parse(courseScopeDraft(empty)));
@@ -132,7 +135,7 @@ it('explicit course target insertion preserves services, enforcement and custom 
   expect(empty.targets).toEqual([]);
   for (const saved of [{ ...empty, exclusions: ['saved.example.test'] }, { ...empty, networks: ['192.0.2.0/24'] }]) {
     expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);
-    expect(JSON.parse(courseScopeDraft(saved))).toEqual({ ...saved, targets: scopeExample.targets });
+    expect(JSON.parse(courseScopeDraft(saved))).toEqual({ ...saved, targets: scopeExample.targets, exclusions: [...scopeExample.exclusions, ...saved.exclusions] });
   }
   const saved = { ...scope(), services };
   expect(JSON.parse(initialScopeDraft(saved))).toEqual(saved);

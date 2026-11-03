@@ -1,6 +1,6 @@
 {
   "name": "Djupleita",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "plugins": [
     {
       "id": "rea",
@@ -67,7 +67,7 @@
       "description": "A shared crawl frontier that prioritizes coverage within the engagement scope and budgets.",
       "configKeys": [],
       "tabs": [
-        "policy",
+        "crawl",
         "graph"
       ]
     },

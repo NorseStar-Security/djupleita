@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-validation",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Owner-defined object authorization proofs, negative controls, independent review and redacted reports.",

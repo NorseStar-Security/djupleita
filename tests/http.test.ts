@@ -31,3 +31,15 @@ it('detects deletion semantics outside the HTTP method', () => {
   expect(classifyHttp({ url: 'https://app.test/object?action=delete', method: 'GET', headers: {} }).effects).toContain('delete');
   expect(classifyHttp({ url: 'https://app.test/graphql', method: 'POST', headers: {}, body: 'mutation { deleteUser(id: "1") }' }).effects).toContain('delete');
 });
+
+
+it('distinguishes ordinary drop-prefixed research terms from deletion action names', () => {
+  for (const url of ['https://research.example.test/dropdown',
+    'https://resolver.example.test/resolve?name=store.droplet.example.test&type=A',
+    'https://research.example.test/certificates?q=%25.dropdown.example.test']) {
+    expect(classifyHttp({ url, method: 'GET', headers: {} })).toEqual({ effects: ['read'], reversible: true });
+  }
+  for (const path of ['/drop', '/drop-table', '/dropTable', '/deleteUser', '/removeAccount', '/items?action=dropTable', '/items?action=delete']) {
+    expect(classifyHttp({ url: `https://app.example.test${path}`, method: 'GET', headers: {} }).effects).toContain('delete');
+  }
+});

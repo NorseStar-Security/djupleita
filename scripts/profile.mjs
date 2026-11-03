@@ -37,7 +37,7 @@ export async function prepareProfile(destination = profile) {
   if (scope && !Object.hasOwn(scope, 'enabled') &&
       ['targets', 'exclusions', 'networks'].every(key => Array.isArray(scope[key]) && scope[key].length === 0)) {
     const defaults = JSON.parse(await readFile(join(root, 'configs/scope.example.json'), 'utf8'));
-    engagement.scope = { ...defaults, ...scope, enabled: defaults.enabled, targets: defaults.targets };
+    engagement.scope = { ...defaults, ...scope, enabled: defaults.enabled, targets: defaults.targets, exclusions: defaults.exclusions };
     await writeFile(`${configPath}.pre-scope-defaults.bak`, await readFile(configPath), { mode: 0o600, flag: 'wx' })
       .catch(error => { if (error.code !== 'EEXIST') throw error; });
     const pending = `${configPath}.${randomUUID()}.tmp`;

@@ -63,21 +63,25 @@ export async function runWorker(command: WorkerCommand, options: SandboxOptions,
   } finally { await launch.close(); }
 }
 
-/** A private worker proxy. CONNECT grants require whole-host scope because TLS paths are opaque. */
+/** A private worker proxy. Active CONNECT grants require whole-host scope because TLS paths are opaque. */
 export class WorkerProxy {
   private readonly server = createServer();
   private readonly sockets = new Set<net.Socket>();
   private readonly token = randomBytes(32).toString('hex');
   private port = 0;
+  private denial?: PentestError;
+  assertHealthy(): void { if (this.denial) throw this.denial; }
+  private failed(error: unknown): void { if (error instanceof PentestError) this.denial ??= error; }
   constructor(private readonly scope: ScopeService, private readonly engagement: EngagementService,
     private readonly trajectory: TrajectoryStore, private readonly redactor: Redactor,
-    private readonly session: SessionId, private readonly purpose: Purpose, private readonly signal: AbortSignal) {
+    private readonly session: SessionId, private readonly purpose: Purpose, private readonly signal: AbortSignal,
+    private readonly access: 'read' | 'active' = 'active') {
     redactor.register(this.token);
     this.server.on('connection', socket => { this.sockets.add(socket); socket.on('close', () => this.sockets.delete(socket)); });
     this.server.on('request', (request, response) => { void (async () => {
       if (!this.auth(request.headers['proxy-authorization'])) { response.writeHead(407); response.end(); return; }
       if (request.method !== 'GET' && request.method !== 'HEAD') throw new PentestError('PROXY_METHOD', 'Recon proxy permits GET and HEAD only');
-      const grant = await this.scope.authorize({ url: request.url ?? '', purpose: this.purpose }, this.signal);
+      const grant = await this.scope.authorize({ url: request.url ?? '', purpose: this.purpose, access: this.access }, this.signal);
       const reservation = await this.engagement.acquire(this.signal);
       try {
         await this.record(grant.url.href);
@@ -91,14 +95,14 @@ export class WorkerProxy {
         upstream.once('error', () => { response.destroy(); });
         await new Promise<void>((resolve, reject) => { response.once('finish', resolve); response.once('close', resolve); upstream.once('error', reject); upstream.end(); });
       } finally { reservation.release(); }
-    })().catch(error => { if (!response.headersSent) response.writeHead(403); response.end(this.redactor.text(error instanceof Error ? error.message : 'Proxy denied')); }); });
+    })().catch(error => { this.failed(error); if (!response.headersSent) response.writeHead(403); response.end(this.redactor.text(error instanceof Error ? error.message : 'Proxy denied')); }); });
     this.server.on('connect', (request, client, head) => { void (async () => {
       if (!this.auth(request.headers['proxy-authorization'])) throw new PentestError('PROXY_AUTH', 'Proxy authentication required');
       const authority = request.url ?? '';
       if (!/^(?:[a-z0-9.-]+|\[[a-f0-9:]+\]):[0-9]+$/i.test(authority)) throw new PentestError('PROXY_AUTHORITY', 'Invalid CONNECT authority');
-      const grant = await this.scope.authorize({ url: `https://${authority}/`, purpose: this.purpose }, this.signal);
+      const grant = await this.scope.authorize({ url: `https://${authority}/`, purpose: this.purpose, access: this.access }, this.signal);
       const rules = this.purpose === 'target' ? this.scope.scope.targets : this.scope.scope.services[this.purpose];
-      if ((this.scope.enabled || this.purpose !== 'target') && !rules.some(rule => rule.pathPrefixes.includes('/') && matchesHost(grant.url.hostname, rule.host)
+      if (!(this.purpose === 'target' && this.access === 'read') && (this.scope.enabled || this.purpose !== 'target') && !rules.some(rule => rule.pathPrefixes.includes('/') && matchesHost(grant.url.hostname, rule.host)
         && rule.schemes.includes('https') && rule.ports.includes(Number(grant.url.port || 443)))) {
         throw new PentestError('PROXY_PATH', 'TLS tunnels require whole-host path scope');
       }
@@ -110,7 +114,7 @@ export class WorkerProxy {
       const close = () => { if (!released) { released = true; reservation.release(); } upstream.destroy(); client.destroy(); this.sockets.delete(upstream); };
       upstream.once('error', close); client.once('error', close); client.once('close', close); upstream.once('close', close);
       upstream.once('connect', () => { client.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) upstream.write(head); client.pipe(upstream); upstream.pipe(client); });
-    })().catch(() => { client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); }); });
+    })().catch(error => { this.failed(error); client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); }); });
   }
   async start(): Promise<void> {
     await new Promise<void>((resolve, reject) => { this.server.once('error', reject); this.server.listen(0, '127.0.0.1', resolve); });

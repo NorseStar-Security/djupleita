@@ -5,7 +5,7 @@
     { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
     { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
   ],
-  "exclusions": [],
+  "exclusions": ["*.prod.norsestar.internal"],
   "networks": [],
   "services": { "intelligence": [], "model": [], "telemetry": [] }
 }

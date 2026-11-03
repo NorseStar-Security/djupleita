@@ -31,7 +31,12 @@ it('unloads the complete engagement layer, keeps owner controls, and restores sa
     await ctx.plugin(HttpTools);
     expect(ctx.pentestMode.enabled).toBe(true);
     expect(ctx.tools.get('pentest_http')).toBeDefined();
-    expect(JSON.stringify(await ctx.systemPrompt.assemble())).toContain('authorized penetration testing assistant');
+    const onPrompt = JSON.stringify(await ctx.systemPrompt.assemble());
+    expect(onPrompt).toContain('authorized penetration testing assistant');
+    expect(onPrompt).toContain('operator-provided engagement context');
+    expect(onPrompt).toContain('bounded active testing');
+    expect(onPrompt).toContain('previous task-specific passive-only limit');
+    expect(onPrompt).toContain('Never work around a denied operation');
     const original = ctx.pentest;
     const scope = { ...original.scope.scope, enabled: false, exclusions: ['saved.example.test'] };
     await original.updateSettings(scope, policyConfig, id<'SessionId'>());
@@ -44,6 +49,7 @@ it('unloads the complete engagement layer, keeps owner controls, and restores sa
     const offPrompt = await ctx.systemPrompt.assemble();
     expect(offPrompt.contexts.filter(context => context.name.startsWith('djupleita-')).map(context => context.name)).toEqual(['djupleita-mode']);
     expect(JSON.stringify(offPrompt)).toContain('engagement layer is OFF');
+    expect(JSON.stringify(offPrompt)).not.toContain('operator-provided engagement context');
 
     // The native pipeline no longer requires a pentest effect adapter.
     let calls = 0;

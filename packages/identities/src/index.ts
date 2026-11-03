@@ -68,7 +68,8 @@ export class LinuxSecretServiceProvider implements SecretProvider {
 export const IdentitySchema = z.object({
   id: z.string().uuid(), name: z.string().min(1), role: z.string().min(1), tenant: z.string().min(1),
   hosts: z.array(z.string().min(1)).min(1),
-  kind: z.enum(['bearer', 'basic', 'headers', 'browser-state']),
+  kind: z.enum(['bearer', 'basic', 'headers', 'browser-state', 'api-key']),
+  pluginCredential: z.string().max(128).optional(),
 });
 export type Identity = Omit<z.infer<typeof IdentitySchema>, 'id'> & { id: IdentityId };
 
@@ -103,6 +104,19 @@ export class IdentityService {
     return identity;
   }
 
+  /** Owner-managed plugin records can be removed without exposing their value. */
+  async remove(identityId: IdentityId, signal?: AbortSignal): Promise<void> {
+    this.get(identityId);
+    await this.secrets.remove(this.reference(identityId), signal);
+    this.identities.delete(identityId);
+    // Keep redacting retired values while an earlier in-flight call may finish.
+  }
+  /** Only trusted CLI adapters consume opaque API keys; never a model-facing tool. */
+  async apiKey(identityId: IdentityId, signal?: AbortSignal): Promise<string> {
+    if (this.get(identityId).kind !== 'api-key') throw new PentestError('IDENTITY_KIND', 'Expected a plugin API key');
+    return this.secret(identityId, signal);
+  }
+
   async headers(identityId: IdentityId, url: URL, signal?: AbortSignal): Promise<Record<string, string>> {
     const identity = this.get(identityId);
     if (!identity.hosts.some(host => matchesHost(url.hostname, host))) {
@@ -120,6 +134,7 @@ export class IdentityService {
         return { authorization: `Basic ${encoded}` };
       }
       case 'headers': return z.record(z.string(), z.string()).parse(JSON.parse(secret));
+      case 'api-key': throw new PentestError('IDENTITY_KIND', 'Plugin API keys require their configured adapter');
       case 'browser-state': throw new PentestError('IDENTITY_KIND', 'Browser state must be delivered to an isolated browser context');
     }
   }
@@ -150,6 +165,9 @@ export class IdentityService {
           throw new PentestError('INVALID_CREDENTIAL', 'Credential header is not permitted');
         }
         this.redactor.register(value);
+        // A provider can echo the token alone, including after a process restart.
+        const bearer = /^Bearer (.+)$/i.exec(value);
+        if (bearer) this.redactor.register(bearer[1]!);
       }
     }
     if (kind === 'browser-state') z.object({ cookies: z.array(z.unknown()), origins: z.array(z.unknown()) }).parse(JSON.parse(secret));

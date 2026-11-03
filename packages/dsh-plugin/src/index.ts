@@ -4,6 +4,7 @@ import { BlockAssembler } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { ToolDefinition, ToolExecution, ToolExecutionToken, PostToolDecision } from '@deepseek-ai/dsh-tools';
 import type {} from '@deepseek-ai/dsh-user-approval';
+import { prepareProfileAction, executeReconPlan, actionProfileBinding } from './action-profile.ts';
 import type { ReviewOrigin } from './review.ts';
 import type {} from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-api-session-controller';
@@ -21,7 +22,7 @@ import { DesktopChannel } from './rpc.ts';
 import { inspectTrajectory, TrajectoryInputSchema } from './inspection.ts';
 import { webFetch } from './web-fetch.ts';
 import { BrowserInputSchema } from '@dsh-pentest/browser';
-import { ReconInputSchema, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
+import { ReconRequestSchema, reconInputs, reconMode, PassiveInputSchema } from '@dsh-pentest/recon';
 import { FuzzInputSchema } from '@dsh-pentest/fuzz';
 import { RunInputSchema, studyReceipt } from '@dsh-pentest/learning';
 import { reaEffects, ReaCatalogInputSchema } from '@dsh-pentest/rea';
@@ -62,7 +63,7 @@ export function modelJudge(ctx: Context): JudgmentProvider {
 export const ToolPolicy = {
   name: 'pentest-tool-policy', inject: ['tools', 'pentest'],
   apply(ctx: Context): void {
-    const accepted = new Map<ToolExecutionToken, { hash: string; policyVersion: string; origin: ReviewOrigin }>();
+    const accepted = new Map<ToolExecutionToken, { hash: string; policyVersion: string; origin: ReviewOrigin; profileBinding: string }>();
     let persistenceFailed = false;
     ctx.on('api-session/forked', async fork => {
       const lineage = { ...fork, sourceId: fork.sourceId as unknown as import('@dsh-pentest/contracts').SessionId,
@@ -88,12 +89,15 @@ export const ToolPolicy = {
         const runtime = ctx.pentest;
         const origin = runtime.reviewOrigin(exec);
         const policy = runtime.policy(origin.sessionId);
+        let profileBinding = '';
         await runtime.review.run(origin, async () => {
-          const action = runtime.describe(exec);
+          const prepared = await prepareProfileAction(ctx, runtime, exec);
+          const { action } = prepared;
+          profileBinding = actionProfileBinding(prepared);
           await runtime.trajectories.flush();
           await policy.authorize({ action, signal: exec.signal }, runtime.approve);
         });
-        accepted.set(exec.token, { hash: digest({ name: exec.name, arguments: exec.arguments }), policyVersion: policy.version, origin });
+        accepted.set(exec.token, { hash: digest({ name: exec.name, arguments: exec.arguments }), policyVersion: policy.version, origin, profileBinding });
         return next();
       } catch (error) {
         return { kind: 'deny', reason: ctx.pentest.redactor.text(error instanceof Error ? error.message : 'Pentest policy failed') };
@@ -101,9 +105,13 @@ export const ToolPolicy = {
     });
     ctx.on('tools/execute', async (exec, next) => {
       const binding = accepted.get(exec.token);
-      return binding ? ctx.pentest.review.run(binding.origin, async () => exec.name === 'web_fetch'
-        ? { isError: false as const, value: await webFetch(ctx.pentest, exec), content: [] }
-        : next()) : next();
+      return binding ? ctx.pentest.review.run(binding.origin, async () => {
+        if (exec.name === 'web_fetch') return { isError: false as const, value: await webFetch(ctx.pentest, exec), content: [] };
+        const prepared = await prepareProfileAction(ctx, ctx.pentest, exec);
+        if (actionProfileBinding(prepared) !== binding.profileBinding) throw new PentestError('ACTION_CHANGED', 'Resolved destinations or workspace changed after policy authorization');
+        if (prepared.recon) return { isError: false as const, value: await executeReconPlan(ctx.pentest, exec, prepared.recon), content: [] };
+        return next();
+      }) : next();
     });
     // Other harness plugins (sandbox, files, shell) use the same owner review surface.
     ctx.on('approval/request', async (request, next) => {
@@ -233,7 +241,7 @@ export const CrawlTools = {
       async execute(args, exec) {
         const input = schema.parse(args), session = ctx.pentest.session(exec), crawler = ctx.pentest.crawl(session);
         crawler.observe(input.seeds, 'seed');
-        return ctx.pentest.redactor.json(await crawler.run(session, exec.signal));
+        return ctx.pentest.redactor.json(await ctx.pentest.crawlControls.run(crawler, session, exec.signal));
       } }, { plugin: 'crawl', confinement: 'brokered', describe(args) { return {
         destinations: schema.parse(args).seeds.map(url => ({ url, purpose: 'target' as const })), effects: ['read'], reversible: true };
       } });
@@ -276,25 +284,25 @@ export const BrowserTools = {
 };
 export const ReconTools = {
   name: 'pentest-recon', inject: ['tools', 'pentest'], apply(ctx: Context): void {
-    register(ctx, { name: 'pentest_intelligence', description: 'Passive DNS records, PDCP associated domains, Chaos subdomains and breach-exposure statistics for scoped subjects. Results feed the evidence graph without expanding target scope.',
+    register(ctx, { name: 'pentest_intelligence', description: 'Public credential-free DNS records, or optional credential-backed PDCP/Chaos data. Inspect pentest_status intelligence availability before optional sources. Results and provenance are saved automatically without expanding target scope.',
       parameters: toolSchema(PassiveInputSchema), output, async execute(args, exec) {
         return ctx.pentest.intelligence().run(PassiveInputSchema.parse(args), ctx.pentest.session(exec), ctx.pentest.signal(exec.signal));
       } }, { plugin: 'passive-intelligence', confinement: 'brokered', describe(args) {
         const input = PassiveInputSchema.parse(args);
         let scoped = true;
         try { ctx.pentest.intelligence().check(input.domain); } catch (error) { if (!(error instanceof PentestError) || error.code !== 'OUT_OF_SCOPE') throw error; scoped = false; }
-        return { destinations: scoped ? [] : [{ url: `https://${input.domain}/`, purpose: 'target' }], effects: ['read'], reversible: true }; } });
+        return { destinations: scoped ? [] : [{ url: `https://${input.domain}/`, purpose: 'target', access: 'read' }], effects: ['read'], reversible: true, activity: 'research' }; } });
     register(ctx, { name: 'pentest_recon_doctor', description: 'Inspect configured ProjectDiscovery executables and verify their pinned checksums.',
       parameters: { type: 'object', additionalProperties: false }, output, async execute() { return ctx.pentest.recon().doctor(); } }, readDescriptor('recon'));
-    register(ctx, { name: 'pentest_recon', description: 'Run typed ProjectDiscovery reconnaissance: passive subfinder/asnmap/uncover, or explicit active httpx/katana. Discovery feeds the evidence graph and shared scoped frontier.',
-      parameters: toolSchema(ReconInputSchema), output, async execute(args, exec) {
-        const input = ReconInputSchema.parse(args), session = ctx.pentest.session(exec);
-        return ctx.pentest.recon().run(input, session, ctx.pentest.signal(exec.signal));
+    register(ctx, { name: 'pentest_recon', description: 'Run pinned ProjectDiscovery tools: passive subfinder/asnmap/uncover or active httpx/katana. Use target for ONE domain/URL; use targets (URL array) for an httpx batch with shared rate and concurrency limits. Evidence is saved automatically; no target-list or note file is needed.',
+      parameters: toolSchema(ReconRequestSchema), output, async execute(args, exec) {
+        const inputs = reconInputs(args), session = ctx.pentest.session(exec), recon = ctx.pentest.recon(), signal = ctx.pentest.signal(exec.signal);
+        return inputs.length > 1 ? recon.runBatch(inputs, session, signal) : recon.run(inputs[0]!, session, signal);
       } }, { plugin: 'recon', confinement: 'transport', describe(args) {
-        const input = ReconInputSchema.parse(args);
-        let scoped = reconMode(input.tool) === 'passive';
-        if (scoped) try { ctx.pentest.recon().check(input); } catch (error) { if (!(error instanceof PentestError) || error.code !== 'OUT_OF_SCOPE') throw error; scoped = false; }
-        return { destinations: scoped ? [] : [{ url: reconMode(input.tool) === 'active' ? input.target : `https://${input.target}/`, purpose: 'target' }], effects: ['read'], reversible: true };
+        const inputs = reconInputs(args), passive = reconMode(inputs[0]!.tool) === 'passive';
+        let scoped = passive;
+        if (scoped) try { for (const input of inputs) ctx.pentest.recon().check(input); } catch (error) { if (!(error instanceof PentestError) || error.code !== 'OUT_OF_SCOPE') throw error; scoped = false; }
+        return { destinations: scoped ? [] : inputs.map(input => ({ url: passive ? `https://${input.target}/` : input.target, purpose: 'target' as const })), effects: ['read'], reversible: true, activity: passive ? 'research' : 'recon' };
       } });
   },
 };
@@ -411,6 +419,10 @@ export async function applyCore(ctx: Context, config: RuntimeConfig, internals: 
       text: persona && 'prefix' in persona ? persona.prefix : '' });
     inner.systemPrompt.context({ name: 'djupleita-target-scope', order: 790, required: true, interpolate: false,
       text: () => runtime.scope.instructions() });
+    inner.systemPrompt.context({ name: 'djupleita-action-profile', order: 791, required: true, interpolate: false,
+      text: () => runtime.policyProfile === 'red-team'
+        ? 'Red team action profile: pursue the operator-requested assessment through managed tools, including bounded active analysis. Routine research, managed reconnaissance and workspace changes follow the configured policy; unknown effects go to an isolated LLM risk judge by default. Use pentest_recon for subfinder/httpx. Let the installed controls evaluate operations and respond to concrete tool decisions. Scope and destructive-action reviews remain authoritative; use managed tools for network traffic because arbitrary shell destinations are not broker-verified.'
+        : 'Review action profile: pursue the operator-requested assessment through managed tools. Unknown or destructive operations can require owner review; surface a review when the tool requests it. Target scope is enforced independently.' });
   });
   ctx.inject(['agents'], inner => { runtime.setLearningSelection(session => inner.agents.get(session as unknown as import('@deepseek-ai/dsh-session').SessionId)?.model.current() ?? runtime.model(session)); });
   runtime.setLearningModel(async (session, request, signal, route) => {
