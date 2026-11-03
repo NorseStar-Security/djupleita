@@ -109,16 +109,22 @@ export class ScopeService {
     if (!this.enabled && destination.purpose === 'target') return { url,
       rule: { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: ['/'], allowPrivateAddresses: true } };
     const override = this.reviewer?.allows('scope', destination) ?? false;
-    if (!override && this.scope.exclusions.some(rule => matchesHost(host, rule))) {
-      throw new PentestError('OUT_OF_SCOPE', `Excluded destination: ${host}`);
-    }
     const read = destination.purpose === 'target' && destination.access === 'read' && ['http', 'https'].includes(scheme);
     const rules = destination.purpose === 'target' ? this.scope.targets : this.scope.services[destination.purpose];
-    const rule = rules.find(candidate => matchesHost(host, candidate.host)
+    const matches = (candidate: HostRule) => matchesHost(host, candidate.host)
       && candidate.schemes.some(allowed => allowed === scheme)
       && candidate.ports.includes(port)
       && candidate.pathPrefixes.some(prefix => url.pathname === prefix
-        || url.pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`)));
+        || url.pathname.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`));
+    // An exact target is an exception to a broader wildcard exclusion, confined
+    // to that target's schemes, ports and paths. Exact exclusions still win;
+    // wildcard targets and service rules cannot release an excluded destination.
+    const exactTarget = destination.purpose === 'target' ? rules.find(candidate => candidate.host === host && matches(candidate)) : undefined;
+    if (!override && this.scope.exclusions.some(exclusion => matchesHost(host, exclusion)
+      && !(exactTarget && exclusion.startsWith('*.')))) {
+      throw new PentestError('OUT_OF_SCOPE', `Excluded destination: ${host}`);
+    }
+    const rule = exactTarget ?? rules.find(matches);
     const selected = rule ?? (override || read ? { host, schemes: [scheme as HostRule['schemes'][number]], ports: [port], pathPrefixes: [url.pathname], allowPrivateAddresses: false } : undefined);
     if (!selected) throw new PentestError('OUT_OF_SCOPE', `Destination is outside ${destination.purpose} scope: ${host}:${port}`);
     if (!override && !read && destination.purpose === 'target' && isIP(host) && !this.scope.networks.some(network => inNetwork(host, network))) {
@@ -171,7 +177,7 @@ export class ScopeService {
     return [`Target scope management is ${this.enabled ? 'ON: target boundaries and exclusions are enforced.' : 'OFF: target host, port, path, exclusion and network boundaries are not enforced. Saved target rules and exclusions are inactive until scope management is enabled.'}`,
       'Only the operator can change scope management in Plugins → Djupleita → Policy.',
       ...(this.enabled ? ['Listed targets authorize active testing, scanning, fuzzing, credential replay and writes, subject to action-effect review. Bounded HTTP(S) reads, ordinary browsing and passive research may use unlisted, non-excluded sites to look up CVEs, documentation and exploit writeups. Reachability and discovery never grant active testing permission.',
-        'Exclusions block reads and active testing unless the owner explicitly grants an override. Wildcards cover subdomains, not the apex. DNS and private-network checks apply.'] : []),
+        'Exclusions block reads and active testing. An exact target is an exception to a matching wildcard exclusion only for its configured schemes, ports and paths; an exact exclusion still wins. Wildcard targets do not override exclusions. Explicit owner overrides remain available. Wildcards cover subdomains, not the apex. DNS and private-network checks apply.'] : []),
       'URL validation, DNS pinning, service destination controls, action-effect review, credential host bindings and request budgets remain active.',
       JSON.stringify({ targets: this.scope.targets, exclusions: this.scope.exclusions, networks: this.scope.networks }),
     ].join('\n');

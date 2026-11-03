@@ -10,15 +10,15 @@ Fresh macOS desktop and Linux web engagements load the course scope from [issue 
     { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
     { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
   ],
-  "exclusions": [],
+  "exclusions": ["*.prod.norsestar.internal"],
   "networks": [],
   "services": { "intelligence": [], "model": [], "telemetry": [] }
 }
 ```
 
-When enabled, the only production target authorized for active testing is `www.prod.norsestar.internal`. Dev and test subdomains are also authorized; wildcards cover nested subdomains but not their apex. Unlisted hosts require target authorization for scanning, fuzzing, automatic crawling, credential comparisons and writes. Reachability and discovered links never grant that authorization.
+When enabled, domains outside `norsestar.internal` are outside the active-testing scope. The only production target authorized for active testing is `www.prod.norsestar.internal`. Dev and test subdomains are also authorized; wildcards cover nested subdomains but not their apex. Unlisted hosts require target authorization for scanning, fuzzing, automatic crawling, credential comparisons and writes. Reachability and discovered links never grant that authorization.
 
-Ordinary bounded HTTP(S) reads, browser navigation and passive research may use unlisted sites to look up CVEs, documentation or exploit blogs. Each redirect is checked again. The HTTP adapter derives access from the request method, body and known destructive or session-ending URL semantics; callers cannot mark a write as research. A GET is not proof of harmlessness, so effect policy and owner reviews still apply. With scope management on, explicit exclusions block both reads and active testing, unless the owner grants an explicit override. Do not add a `*.prod.norsestar.internal` exclusion if the allowed website must remain accessible: exclusions take precedence while enforcement is on.
+Ordinary bounded HTTP(S) reads, browser navigation and passive research may use unlisted sites to look up CVEs, documentation or exploit blogs. Each redirect is checked again. The HTTP adapter derives access from the request method, body and known destructive or session-ending URL semantics; callers cannot mark a write as research. A GET is not proof of harmlessness, so effect policy and owner reviews still apply. With scope management on, explicit exclusions block both reads and active testing. An exact target overrides a matching wildcard exclusion only within that target’s configured schemes, ports and paths. An exact exclusion still wins, and wildcard targets never override exclusions. The supplied `*.prod.norsestar.internal` exclusion therefore blocks other production subdomains while the exact `www.prod.norsestar.internal` target remains available on its configured HTTP/HTTPS ports and paths. The owner can still grant an explicit override.
 
 Native `web_fetch` uses the same engagement checks and request budgets as `pentest_http`, including checks after every redirect. Its text and HTML results keep the native tool's rendering and redaction.
 
@@ -26,7 +26,7 @@ The supplied target rules permit HTTP/HTTPS on ports 80/443 and every URL path, 
 
 With scope management off, target host, port, path, exclusion and network boundaries are not enforced. Saved target rules and exclusions remain inactive until scope management is enabled again. DNS answers are still validated and pinned to each connection. Credential host bindings, action-effect reviews, request budgets, service destination controls and worker isolation remain active. The agent receives the current enforcement state in its instructions.
 
-The enabled setting and target rules persist across restarts. Existing engagements retain saved targets, service rules and enforcement; older scopes without an `enabled` field remain enforced. Only newly created profiles start off. **Insert course targets** restores the three target rules in the editor while retaining other valid draft settings, including the switch, service endpoints and custom network grants. Empty targets prefill the same course draft. Draft edits take effect only after Apply succeeds.
+The enabled setting and target rules persist across restarts. Existing engagements retain saved targets, service rules and enforcement; older scopes without an `enabled` field remain enforced. Only newly created profiles start off. **Insert course scope** restores the three target rules and adds the production wildcard exclusion in the editor while retaining custom exclusions and other valid draft settings, including the switch, service endpoints and custom network grants. Existing saved scopes are not silently rewritten; use this button to add the corrected course defaults to an existing engagement. Draft edits take effect only after Apply succeeds.
 
 Configured model API roots are authorized automatically for model traffic, including explicitly declared auxiliary roots and private gateways. They do not become assessment targets. Loopback providers must be explicitly configured as loopback endpoints; public names resolving to loopback still require review.
 

@@ -105,7 +105,12 @@ try {
     assert.equal(ctx.pentest.scope.enabled, false, 'Switch changes remain a draft until Apply');
     await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
     await poll(() => ctx.pentest.scope.enabled);
-    assert.throws(() => ctx.pentest.scope.check({ url: 'https://mail.prod.example.test/', purpose: 'target' }), /outside/);
+    for (const access of ['read', 'active']) {
+      assert.throws(() => ctx.pentest.scope.check({ url: 'https://mail.prod.example.test/', purpose: 'target', access }), /Excluded/);
+      assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://www.prod.example.test/', purpose: 'target', access }));
+    }
+    assert.throws(() => ctx.pentest.scope.check({ url: 'https://www.prod.example.test:8443/', purpose: 'target' }), /Excluded/);
+    await page.getByText('Exact targets override wildcard exclusions', { exact: false }).first().waitFor();
     assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'read' }));
     assert.throws(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'active' }), /outside/);
     await page.getByText('Ordinary web reads and passive research may use unlisted sites', { exact: false }).first().waitFor();
@@ -123,16 +128,18 @@ try {
     await ctx.pentest.updateSettings({ enabled: false, targets: [], exclusions: [], networks: [], services }, (await ctx.pentest.snapshot()).policy, 'web-fixture');
     await page.reload(); await policy();
     const configuredDraft = { ...example, services };
-    assert.deepEqual(await readScope(), { ...configuredDraft, targets: [] }, 'An explicitly saved empty scope must stay empty in the editor');
+    assert.deepEqual(await readScope(), { ...configuredDraft, targets: [], exclusions: [] }, 'An explicitly saved empty scope must stay empty in the editor');
     await page.getByText('Saved scope available to the agent: 0 target rules.', { exact: false }).waitFor();
     await editor.fill('');
-    await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
+    await page.getByRole('button', { name: 'Insert course scope', exact: true }).click();
     assert.deepEqual(await readScope(), configuredDraft, 'A blank editor can restore the example with its saved services');
     await page.getByText('Unapplied draft changes.', { exact: false }).waitFor();
     const customDraft = { ...configuredDraft, targets: [], exclusions: ['custom.example.test'], networks: ['192.0.2.0/24'] };
     await editor.fill(JSON.stringify(customDraft));
-    await page.getByRole('button', { name: 'Insert course targets', exact: true }).click();
-    assert.deepEqual(await readScope(), { ...customDraft, targets: example.targets }, 'Inserting targets preserves other draft settings');
+    await page.getByRole('button', { name: 'Insert course scope', exact: true }).click();
+    assert.deepEqual(await readScope(), { ...customDraft, targets: example.targets, exclusions: [...example.exclusions, ...customDraft.exclusions] }, 'Inserting course scope adds the production exclusion and preserves custom boundaries');
+    await page.getByRole('button', { name: 'Insert course scope', exact: true }).click();
+    assert.deepEqual((await readScope()).exclusions, [...example.exclusions, ...customDraft.exclusions], 'Repeated insertion does not duplicate exclusions');
     assert.equal(ctx.pentest.scope.scope.targets.length, 0, 'Prefill and restore must remain inactive');
     await editor.fill(JSON.stringify(customDraft));
     await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
@@ -264,6 +271,6 @@ try {
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
     const { checkEvidenceGraph } = await import('./evidence-graph-web.mjs');
     await checkEvidenceGraph(ctx, page);
-    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, authenticatedWeb: true, productionWildcardException: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }
