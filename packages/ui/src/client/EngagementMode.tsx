@@ -27,13 +27,17 @@ export function engagementMode(connection: Pick<ConnectionHandle, 'rpc'>, signal
   } };
 }
 
-export function EngagementMode({ mode, children, activeOnly = false }: {
-  mode: ReturnType<typeof engagementMode>; children: ReactNode; activeOnly?: boolean;
+export function EngagementMode({ mode, children, activeOnly = false, controls = true, openControls }: {
+  mode: ReturnType<typeof engagementMode>; children: ReactNode; activeOnly?: boolean; controls?: boolean; openControls?: (() => void) | undefined;
 }) {
   const state = useSyncExternalStore(mode.subscribe, mode.getSnapshot);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   if (activeOnly) return state.snapshot?.enabled ? children : null;
   const enabled = state.snapshot?.enabled;
+  if (!controls) return enabled ? children : <section className={css.controls}>
+    <p role="status">{enabled === undefined ? 'Loading engagement mode…' : 'The Djupleita engagement layer is off.'}</p>
+    <button type="button" className={panelCss.button} onClick={openControls}>Open shared engagement controls</button>
+  </section>;
   return <div className={css.gate}>
     <section className={css.controls} aria-label="Engagement mode">
       <h3>Djupleita engagement layer</h3>

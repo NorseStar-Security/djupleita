@@ -241,7 +241,7 @@ export const CrawlTools = {
       async execute(args, exec) {
         const input = schema.parse(args), session = ctx.pentest.session(exec), crawler = ctx.pentest.crawl(session);
         crawler.observe(input.seeds, 'seed');
-        return ctx.pentest.redactor.json(await crawler.run(session, exec.signal));
+        return ctx.pentest.redactor.json(await ctx.pentest.crawlControls.run(crawler, session, exec.signal));
       } }, { plugin: 'crawl', confinement: 'brokered', describe(args) { return {
         destinations: schema.parse(args).seeds.map(url => ({ url, purpose: 'target' as const })), effects: ['read'], reversible: true };
       } });

@@ -50,12 +50,12 @@ jobs:
           DSH_TEST_REA_ROOT: ${{ github.workspace }}/.pentest/toolchains/rea/node_modules/rea-agents
           DSH_TEST_REA_NODE: ${{ github.workspace }}/.pentest/toolchains/rea-node/24.22.1/linux-x64/bin/node
         run: |
-          pnpm exec vitest run --maxWorkers=1 tests/research.test.ts tests/http.test.ts tests/passive.test.ts tests/crawl-authz.test.ts tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/tool-schema.test.ts tests/policy.test.ts tests/red-team-policy.test.ts tests/budget-renewal.test.ts tests/recon-batch.test.ts tests/graph.test.ts packages/dsh-plugin/src/assessment-integration.test.ts tests/review.test.ts tests/replay.test.ts tests/replay-web.test.ts tests/replay-overlay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts packages/dsh-plugin/src/integration.test.ts tests/learning-gepa.test.ts tests/learning-web.test.ts packages/dsh-plugin/src/learning-integration.test.ts
+          pnpm exec vitest run --maxWorkers=1 tests/research.test.ts tests/http.test.ts tests/passive.test.ts tests/crawl-authz.test.ts tests/fuzz.test.ts tests/worker.test.ts tests/linux-platform.test.ts tests/secret-service.test.ts tests/browser.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/rea.test.ts tests/rea-linux.test.ts tests/learning.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/tool-schema.test.ts tests/policy.test.ts tests/red-team-policy.test.ts tests/budget-renewal.test.ts tests/recon-batch.test.ts tests/plugin-controls.test.ts tests/recon-credentials.test.ts tests/graph.test.ts packages/dsh-plugin/src/assessment-integration.test.ts tests/review.test.ts tests/replay.test.ts tests/replay-web.test.ts tests/replay-overlay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts packages/dsh-plugin/src/integration.test.ts tests/learning-gepa.test.ts tests/learning-web.test.ts packages/dsh-plugin/src/learning-integration.test.ts
       - name: Check Secret Service in a disposable session
         run: |
           dbus-run-session -- sh -eu -c '
             printf "%s" "synthetic-ci-keyring-password" | gnome-keyring-daemon --unlock --components=secrets
-            DSH_TEST_SECRET_SERVICE=1 pnpm exec vitest run tests/secret-service.test.ts
+            DSH_TEST_SECRET_SERVICE=1 DSH_TEST_NATIVE_PLUGIN_KEYS=1 DSH_TEST_PLUGIN_UI=1 pnpm exec vitest run --maxWorkers=1 tests/secret-service.test.ts tests/plugin-controls.test.ts tests/plugin-controls-web.test.ts
           '
       - name: Check loopback web startup without a model call
         run: |
@@ -92,10 +92,16 @@ jobs:
           pnpm build
           pnpm setup:tools --only recon
           pnpm setup:tools --only learning --python "$(command -v python)"
+          pnpm build:keychain
       - name: Check shared modes, approvals, replay and web controls
         env:
           DSH_TEST_OPTUNA_PYTHON: ${{ github.workspace }}/.pentest/toolchains/optuna/bin/python
           DSH_TEST_WEB_UI: '1'
           DSH_TEST_RECON_CONFIG: ${{ github.workspace }}/.pentest/tooling.json
         run: |
-          pnpm exec vitest run --maxWorkers=1 packages/dsh-plugin/src/mode.test.ts tests/research.test.ts tests/http.test.ts tests/passive.test.ts tests/crawl-authz.test.ts tests/fuzz.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/tool-schema.test.ts tests/policy.test.ts tests/red-team-policy.test.ts tests/budget-renewal.test.ts tests/recon-batch.test.ts tests/graph.test.ts packages/dsh-plugin/src/assessment-integration.test.ts tests/review.test.ts tests/replay.test.ts tests/replay-web.test.ts tests/replay-overlay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts tests/graph.test.ts tests/browser.test.ts tests/worker.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/secret-service.test.ts packages/dsh-plugin/src/integration.test.ts tests/learning.test.ts tests/learning-gepa.test.ts tests/learning-web.test.ts packages/dsh-plugin/src/learning-integration.test.ts
+          pnpm exec vitest run --maxWorkers=1 packages/dsh-plugin/src/mode.test.ts tests/research.test.ts tests/http.test.ts tests/passive.test.ts tests/crawl-authz.test.ts tests/fuzz.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts tests/model-egress.test.ts tests/provider-tools-web.test.ts packages/dsh-plugin/src/tool-schema.test.ts tests/policy.test.ts tests/red-team-policy.test.ts tests/budget-renewal.test.ts tests/recon-batch.test.ts tests/plugin-controls.test.ts tests/recon-credentials.test.ts tests/graph.test.ts packages/dsh-plugin/src/assessment-integration.test.ts tests/review.test.ts tests/replay.test.ts tests/replay-web.test.ts tests/replay-overlay.test.ts tests/orchestration.test.ts tests/web-issues.test.ts tests/graph.test.ts tests/browser.test.ts tests/worker.test.ts tests/toolchain-setup.test.ts tests/ffuf-setup.test.ts tests/rea-setup.test.ts tests/secret-service.test.ts packages/dsh-plugin/src/integration.test.ts tests/learning.test.ts tests/learning-gepa.test.ts tests/learning-web.test.ts packages/dsh-plugin/src/learning-integration.test.ts
+      - name: Check plugin controls with macOS Keychain
+        env:
+          DSH_TEST_NATIVE_PLUGIN_KEYS: '1'
+          DSH_TEST_PLUGIN_UI: '1'
+        run: pnpm exec vitest run --maxWorkers=1 tests/plugin-controls.test.ts tests/plugin-controls-web.test.ts

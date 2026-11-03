@@ -17,6 +17,10 @@ import { EvidenceGraph } from './EvidenceGraph.tsx';
 import { PolicyEditor } from './PolicyEditor.tsx';
 import { BudgetCard } from './BudgetCard.tsx';
 import type { BudgetSnapshot } from './BudgetCard.tsx';
+import { CrawlPanel } from './CrawlPanel.tsx';
+import type { CrawlSnapshot } from './CrawlPanel.tsx';
+import { PluginCredentials } from './PluginCredentials.tsx';
+import type { CredentialSnapshot } from './PluginCredentials.tsx';
 import { ScopeEditor } from './ScopeEditor.tsx';
 import { EngagementMode, engagementMode } from './EngagementMode.tsx';
 import { LearningStudies } from './Learning.tsx';
@@ -50,7 +54,7 @@ const en = {
   revoked: 'Allowance revoked.', closeReviewNotice: 'Dismiss decision notice',
   pendingApprovals: 'Pending approvals', allAgents: 'All chats and subagents in this engagement',
   noApprovals: 'No pending approvals.', thisChat: 'This chat', subagent: 'Subagent', agent: 'Agent',
-  included: 'Included with Djupleita', coreTitle: 'Djupleita · Engagement and identities',
+  crawl: 'Crawl', included: 'Included with Djupleita', coreTitle: 'Djupleita · Engagement and identities',
   coreDescription: 'Engagement scope, request budgets, action review and securely stored identities.',
   hideSetup: 'Hide setup reminder', showSetup: 'Show setup reminder', setupHidden: 'Setup reminder hidden. Tool setup remains in Plugins.', setupShown: 'Setup reminder restored.',
   toolSetup: 'Tool setup', setupNeeded: 'Testing tools need setup', setupIntro: 'Install only the tools you need for this engagement. Other toolchains are optional; a requested tool reports its own missing prerequisites.',
@@ -83,7 +87,7 @@ const zh: Record<Key, string> = {
   revoked: '已撤销许可。', closeReviewNotice: '关闭决定通知',
   pendingApprovals: '待批准的操作', allAgents: '本次测试中的所有聊天和子代理',
   noApprovals: '没有待批准的操作。', thisChat: '当前聊天', subagent: '子代理', agent: '代理',
-  included: 'Djupleita 内置插件', coreTitle: 'Djupleita · 测试范围与身份',
+  crawl: '爬取', included: 'Djupleita 内置插件', coreTitle: 'Djupleita · 测试范围与身份',
   coreDescription: '测试范围、请求预算、操作审查与钥匙串身份。',
   hideSetup: '隐藏安装提醒', showSetup: '显示安装提醒', setupHidden: '安装提醒已隐藏；仍可在插件中安装工具。', setupShown: '已恢复安装提醒。',
   toolSetup: '工具安装', setupNeeded: '测试工具需要安装', setupIntro: 'Djupleita 包含这些插件。首次使用时需在本地安装可执行依赖。',
@@ -108,7 +112,7 @@ interface Snapshot {
   budget: BudgetSnapshot; identities: Row[];
   graph: GraphPage; events: Row[]; trajectory: Omit<EventPage, 'events'>; plugins: Row[]; policy: Row;
   review: { pending: ReviewQuestion[]; grants: ReviewGrant[] };
-  pluginConfig: Row; telemetry: Row; learning: { active: boolean; datasets: Row[]; reports: Row[] } | null; ranking: Row;
+  credentials: CredentialSnapshot; crawl: CrawlSnapshot; pluginConfig: Row; telemetry: Row; learning: { active: boolean; datasets: Row[]; reports: Row[] } | null; ranking: Row;
   procedure?: { runId: string; text: string; datasetHash: string } | null;
   setup?: ToolSetup;
 }
@@ -123,16 +127,17 @@ interface PanelInjected {
   sessionId: string;
   inspect<T>(endpoint: string, payload: Row): Promise<T>;
   refresh(): void;
+  openPolicy(): void;
   createIdentity(metadata: Row, secret: string): Promise<void>;
   updateSettings(scope: Row, policy: Row): Promise<void>;
   ownerOperation(endpoint: string, payload: Row): Promise<void>;
   reviewOperation: ReviewInjected['reviewOperation'];
 }
 type Props = PropsLocale<'pentest'> & InjectFace<PanelInjected> & Pick<GlobalStandardProps, 'useSessions'> & {
-  initialTab?: Tab; visibleTabs?: readonly Tab[]; configKeys?: readonly string[]; included?: boolean;
+  initialTab?: Tab; visibleTabs?: readonly Tab[]; configKeys?: readonly string[]; included?: boolean; pluginId?: string;
 };
-type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins' | 'assessment';
-const TABS: Tab[] = ['trajectory', 'graph', 'assessment', 'identities', 'policy', 'studies', 'plugins'];
+type Tab = 'trajectory' | 'graph' | 'identities' | 'policy' | 'studies' | 'plugins' | 'assessment' | 'crawl';
+const TABS: Tab[] = ['trajectory', 'graph', 'assessment', 'identities', 'policy', 'studies', 'plugins', 'crawl'];
 function stringify(value: unknown): string { return JSON.stringify(value, null, 2); }
 function label(row: Row, key: string): string { return String(row[key] ?? ''); }
 
@@ -239,7 +244,7 @@ export function ReviewCards({ useReviews, reviewOperation, sessionId, useSession
 }
 
 function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, createIdentity, updateSettings, ownerOperation, inspect: remoteInspect, sessionId, t,
-  initialTab = 'trajectory', visibleTabs = TABS, configKeys, included }: Props): ReactNode {
+  initialTab = 'trajectory', visibleTabs = TABS, configKeys, included, pluginId, openPolicy }: Props): ReactNode {
   const state = useData(value => value);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [expanded, setExpanded] = useState<string>();
@@ -300,6 +305,7 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
     {state.error && <div className={css.error} role="alert">{state.error}</div>}
     {notice && (tab === 'trajectory' || tab === 'graph') && <div className={css.error} role="alert">{notice}</div>}
     {data && <div className={css.body}>
+      {tab === 'crawl' && <CrawlPanel data={data.crawl} operate={ownerOperation} openPolicy={openPolicy} />}
       {tab === 'assessment' && <AssessmentPanel key={sessionId} inspect={inspect} sessionId={sessionId} identities={data.identities} />}
       {tab === 'trajectory' && events && <div className={css.timeline}>
         <div className={css.setupActions}><span>{events.total} {t('savedEvents')}</span>
@@ -342,9 +348,12 @@ function Panel({ useData, useReviews, useSessions, reviewOperation, refresh, cre
           <h3>{t('scope')}</h3><p>{t('modelScope')}</p><div className={css.pills}>{data.engagement.scope.targets.map(rule => <code key={rule.host}>{rule.host}</code>)}</div>
           <ScopeEditor scope={data.engagement.scope} title={t('scope')} />
           <button className={css.button} disabled={saving}>{t('saveSettings')}</button><p role="status">{notice}</p>
-        </form></div>}
+        </form>
+        {(!pluginId || pluginId === 'engagement') && <PluginCredentials data={data.credentials} plugin="engagement" operate={ownerOperation} />}
+        </div>}
       {tab === 'studies' && <LearningStudies learning={data.learning} procedure={data.procedure ?? null} busy={saving} notice={notice} operate={operate} />}
       {tab === 'plugins' && <div>
+        {pluginId && <PluginCredentials data={data.credentials} plugin={pluginId} operate={ownerOperation} />}
         {data.setup && <ToolSetupCard setup={data.setup} t={t} busy={saving}
           operate={(endpoint, success) => { void operate(endpoint, {}, success); }} />}
         <form className={css.form} key={stringify(editorConfig)} onSubmit={event => { event.preventDefault(); const values = new FormData(event.currentTarget);
@@ -395,7 +404,8 @@ export function apply(ctx: Context): void {
           if (!reply.ok) throw new Error(reply.error.message);
           return reply.value as T;
         };
-        source = { ...reviewFor(sessionId), hooks: { data, reviews }, sessionId, inspect, refresh: () => { void data.refresh(); void reviews.refresh(); }, async createIdentity(metadata, secret) {
+        source = { openPolicy: () => { const navigation = ctx.get('pluginNavigation') as { openItem?(id: string): void; openList(): void } | undefined;
+        if (navigation?.openItem) navigation.openItem('djupleita-engagement'); else navigation?.openList(); }, ...reviewFor(sessionId), hooks: { data, reviews }, sessionId, inspect, refresh: () => { void data.refresh(); void reviews.refresh(); }, async createIdentity(metadata, secret) {
           await inspect('identity/create', { metadata, secret }); await data.refresh();
         }, async updateSettings(scope, policy) {
           await inspect('settings/update', { scope, policy }); await data.refresh();
@@ -427,11 +437,11 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: 'djupleita-engagement',
     order: -100, label: () => ctx.locale.bind('pentest')('coreTitle'), locale: 'pentest', inject: settings },
     props => props.view === 'summary' ? props.t('coreDescription')
-      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} included /></EngagementMode>));
+      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} pluginId="engagement" included /></EngagementMode>));
   for (const plugin of distribution.plugins) {
     const tabs = plugin.tabs.filter((tab): tab is Tab => TABS.includes(tab as Tab));
-    const ConfigPage = (props: Props) => <EngagementMode mode={mode}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
-      visibleTabs={tabs} configKeys={plugin.configKeys} included /></EngagementMode>;
+    const ConfigPage = (props: Props) => <EngagementMode mode={mode} controls={false} openControls={props.openPolicy}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
+      visibleTabs={tabs} configKeys={plugin.configKeys} pluginId={plugin.id} included /></EngagementMode>;
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config',
       key: plugin.name, locale: 'pentest', inject: settings }, ConfigPage));
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({ name: 'plugins.row.config',

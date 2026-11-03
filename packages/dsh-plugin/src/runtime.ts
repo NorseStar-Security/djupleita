@@ -12,7 +12,7 @@ import { IdentityService, nativeSecretProvider, IdentitySchema } from '@dsh-pent
 import type { Identity, SecretProvider } from '@dsh-pentest/identities';
 import { HttpBroker, ServiceJsonClient } from '@dsh-pentest/http';
 import { AttackGraph } from '@dsh-pentest/graph';
-import { CrawlFrontier, CrawlService } from '@dsh-pentest/crawl';
+import { CrawlFrontier, CrawlService, CrawlConfigSchema } from '@dsh-pentest/crawl';
 import { AuthzService } from '@dsh-pentest/authz';
 import { AssessmentService } from '@dsh-pentest/assessment';
 import { BrowserService } from '@dsh-pentest/browser';
@@ -28,6 +28,8 @@ import { ReviewService } from './review.ts';
 import type { ReviewOrigin } from './review.ts';
 import { inspectTools } from './setup.ts';
 import type { SetupEntry, ToolSetup } from './setup.ts';
+import { PluginCredentials } from './credentials.ts';
+import { CrawlControls } from './crawl-controls.ts';
 
 export interface EffectDescriptor {
   plugin: string;
@@ -44,6 +46,7 @@ export interface RuntimeConfig {
   distributionRoot?: string;
 }
 export const PluginConfigSchema = z.object({
+  crawl: CrawlConfigSchema.optional(),
   browser: z.object({ executable: z.string().optional(), headless: z.boolean().default(true) }).default({ headless: true }),
   recon: ReconConfigSchema.default({ binaries: {}, sources: ['crtsh'], timeoutMs: 120000 }),
   ffuf: FuzzConfigSchema.default({ wordlists: {}, timeoutMs: 300000 }),
@@ -89,6 +92,8 @@ export class PentestRuntime {
   readonly evidence: EvidenceStore;
   readonly assessment: AssessmentService;
   readonly identities: IdentityService;
+  readonly credentials = new PluginCredentials(this);
+  readonly crawlControls = new CrawlControls(this);
   readonly graph: AttackGraph;
   private currentFrontier: CrawlFrontier;
   readonly root: string;
@@ -106,6 +111,11 @@ export class PentestRuntime {
   get policyProfile(): 'review' | 'red-team' { return this.currentPolicy.profile ?? 'review'; }
   get scope(): ScopeService { return this.currentScope; }
   get frontier(): CrawlFrontier { return this.currentFrontier; }
+  resetCrawl(): void { this.currentFrontier = new CrawlFrontier(this.crawlConfig(), this.scope, this.currentRanking); }
+  get pluginConfig(): Readonly<PluginConfig> { return this.currentPlugins; }
+  get policyConfig(): Readonly<PolicyConfig> { return this.currentPolicy; }
+  private crawlConfig() { return this.currentPlugins.crawl ?? { maxPages: Math.min(500, this.config.engagement.budget.requests),
+    maxDepth: this.config.engagement.budget.maxDepth, maxQueued: 10000, maxPerTemplate: 3, stalePageLimit: 25 }; }
 
   private constructor(readonly config: RuntimeConfig, private readonly judge: JudgmentProvider) {
     EngagementSchema.parse(config.engagement); PolicyConfigSchema.parse(config.policy);
@@ -127,8 +137,7 @@ export class PentestRuntime {
     this.engagement = new EngagementService(config.engagement, Date.now, {
       ...(initial ? { initial } : {}), save: value => this.assessment.saveBudget(value),
     });
-    this.currentFrontier = new CrawlFrontier({ maxPages: Math.min(500, config.engagement.budget.requests),
-      maxDepth: config.engagement.budget.maxDepth, maxQueued: 10000, maxPerTemplate: 3, stalePageLimit: 25 }, this.scope);
+    this.currentFrontier = new CrawlFrontier(this.crawlConfig(), this.scope);
   }
 
   static async open(config: RuntimeConfig, judge: JudgmentProvider): Promise<PentestRuntime> {
@@ -163,6 +172,7 @@ export class PentestRuntime {
       try {
         runtime.setupBannerDismissed = z.object({ setupBannerDismissed: z.boolean() }).parse(JSON.parse(await readFile(join(runtime.root, 'preferences.json'), 'utf8'))).setupBannerDismissed;
       } catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+      runtime.currentFrontier = new CrawlFrontier(runtime.crawlConfig(), runtime.scope, runtime.currentRanking);
       await runtime.review.load();
       const metadata = z.array(IdentitySchema).parse(JSON.parse(await readFile(join(runtime.root, 'identities.json'), 'utf8')));
       for (const identity of metadata) runtime.identities.restore(identity as Identity);
@@ -223,7 +233,13 @@ export class PentestRuntime {
       session => this.http(session), this.identities, this.trajectories, this.evidence, this.redactor, session => this.crawl(session), this.revision.signal);
   }
   recon(): ReconService { return new ReconService(this.currentPlugins.recon, join(this.root, 'recon'), this.scope,
-    this.engagement, this.graph, this.evidence, this.trajectories, this.redactor, session => this.crawl(session)); }
+    this.engagement, this.graph, this.evidence, this.trajectories, this.redactor, session => this.crawl(session),
+    (identity, signal) => this.identities.apiKey(identity as IdentityId, signal), async signal => {
+      const identity = this.currentPlugins.intelligence.pdcpIdentityId;
+      if (!identity) return undefined;
+      const headers = await this.identities.headers(identity as IdentityId, new URL('https://api.projectdiscovery.io/'), signal);
+      return Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-api-key')?.[1];
+    }); }
   fuzz(): FuzzService { return new FuzzService(this.currentPlugins.ffuf, join(this.root, 'ffuf'), this.engagement,
     session => this.http(session), session => this.crawl(session), this.evidence, this.trajectories, this.redactor); }
   intelligence(): PassiveReconService { return new PassiveReconService(this.currentPlugins.intelligence, this.scope, this.engagement,
@@ -283,6 +299,16 @@ export class PentestRuntime {
     return identity;
   }
 
+  async removePluginIdentity(identity: IdentityId): Promise<void> {
+    if (!this.identities.get(identity).pluginCredential) throw new PentestError('CREDENTIAL_OWNER', 'Only managed plugin credentials can be removed here');
+    await this.identities.remove(identity);
+    const next = this.metadataQueue.then(async () => {
+      const path = join(this.root, 'identities.json'), temporary = `${path}.${id<'WriteId'>()}.tmp`;
+      await writeFile(temporary, JSON.stringify(this.identities.list()), { mode: 0o600 }); await rename(temporary, path);
+    });
+    this.metadataQueue = next.catch(() => {}); await next;
+  }
+
   /** Called only by owner UI/RPC. Revoke in-flight work before exposing a new scope/policy revision. */
   async updateSettings(scope: Scope, policy: PolicyConfig, operatorSession: SessionId, ranking: Ranking = this.currentRanking, procedure: ProcedurePromotion | null | undefined = this.currentProcedure): Promise<void> {
     if (this.closing) throw new PentestError('RUNTIME_CLOSED', 'Engagement is closing');
@@ -308,6 +334,7 @@ export class PentestRuntime {
   async updatePlugins(config: PluginConfig, session: SessionId): Promise<void> {
     if (this.closing) throw new PentestError('RUNTIME_CLOSED', 'Engagement is closing');
     const checked = freeze(PluginConfigSchema.parse(config));
+    if (checked.crawl && checked.crawl.maxDepth > this.config.engagement.budget.maxDepth) throw new PentestError('CRAWL_DEPTH', 'Crawl depth cannot exceed the engagement depth budget');
     const next = this.settingsQueue.then(async () => {
       const path = join(this.root, 'plugins.json'), temporary = `${path}.${id<'WriteId'>()}.tmp`;
       await writeFile(temporary, JSON.stringify(checked), { mode: 0o600 });
@@ -315,7 +342,10 @@ export class PentestRuntime {
       await rename(temporary, path);
       this.review.cancel(); this.revision.abort(); await this.browserService?.close(); delete this.browserService;
       await this.reaService?.close(); delete this.reaService; delete this.learningService; delete this.exporter;
-      this.revision = new AbortController(); this.currentPlugins = checked;
+      this.revision = new AbortController();
+      const crawlChanged = JSON.stringify(this.currentPlugins.crawl) !== JSON.stringify(checked.crawl);
+      this.currentPlugins = checked;
+      if (crawlChanged) this.currentFrontier = new CrawlFrontier(this.crawlConfig(), this.scope, this.currentRanking);
       delete this.toolStatus;
     }); this.settingsQueue = next.catch(() => {}); await next;
   }
@@ -442,7 +472,7 @@ export class PentestRuntime {
     const trajectory = sessionId ? await this.trajectories.page(sessionId) : { events: [], total: 0, nextBefore: null, file: '' };
     return this.redactor.json({ engagement: { ...this.engagement.engagement, scope: this.scope.scope }, budget: this.engagement.snapshot(),
       policy: this.currentPolicy, policyVersion: this.policy(sessionId ?? 'inspection' as SessionId).version,
-      identities: this.identities.list(), graph: this.graphPage(), ranking: this.currentRanking, procedure: this.currentProcedure ?? null,
+      identities: this.identities.list().filter(identity => !identity.pluginCredential), credentials: this.credentials.status(), crawl: this.crawlControls.snapshot(), graph: this.graphPage(), ranking: this.currentRanking, procedure: this.currentProcedure ?? null,
       pluginConfig: this.currentPlugins, setup: { ...await this.toolSetup() }, telemetry: { ...(this.exporter ? await this.exporter.status() : { queued: 0, exhausted: 0 }), error: this.exportError ?? null },
       learning: this.currentPlugins.learning ? await this.learning().studies() : null,
       review: this.review.snapshot(sessionId), plugins: this.inventory(), sessions: await this.trajectories.sessions(),
@@ -450,6 +480,8 @@ export class PentestRuntime {
   }
   async close(): Promise<void> {
     if (this.closing) return; this.closing = true; this.setupAbort.abort();
+    await this.credentials.close();
+    await this.crawlControls.stop();
     for (const dispose of this.unsubscriptions) dispose();
     await this.metadataQueue; await this.settingsQueue;
     await this.review.close(); this.revision.abort(); await this.browserService?.close(); await this.reaService?.close();

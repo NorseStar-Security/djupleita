@@ -1,7 +1,7 @@
 /** Typed ProjectDiscovery adapters; discovery is evidence and never expands target scope. */
 export { PassiveReconService, PassiveConfigSchema, PassiveInputSchema } from './passive.ts';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, realpath } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, realpath, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { PentestError, id, digest } from '@dsh-pentest/contracts';
@@ -22,7 +22,9 @@ export { installReconTools } from './install.ts';
 
 export const ReconConfigSchema = z.object({ binaries: z.partialRecord(ReconToolSchema, z.object({ path: z.string(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })),
   sources: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1).default(['crtsh']),
-  providerConfig: z.string().optional(), timeoutMs: z.number().int().min(1000).max(1800000).default(120000) });
+  providerConfig: z.string().optional(),
+  providerIdentities: z.object({ subfinder: z.record(z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/), z.string().uuid()).optional(),
+    uncover: z.record(z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/), z.string().uuid()).optional() }).optional(), timeoutMs: z.number().int().min(1000).max(1800000).default(120000) });
 export type ReconConfig = z.infer<typeof ReconConfigSchema>;
 export const ReconInputSchema = z.object({ tool: ReconToolSchema, target: z.string().min(1).max(2048), depth: z.number().int().min(0).max(20).default(3), rate: z.number().int().positive().max(100000).optional(), concurrency: z.number().int().positive().max(1000).optional() });
 export type ReconInput = z.infer<typeof ReconInputSchema>;
@@ -45,7 +47,9 @@ export class ReconService {
   constructor(readonly config: ReconConfig, private readonly root: string, private readonly scope: ScopeService,
     private readonly engagement: EngagementService, private readonly graph: AttackGraph,
     private readonly evidence: EvidenceStore, private readonly trajectory: TrajectoryStore,
-    private readonly redactor: Redactor, private readonly crawl: (session: SessionId) => CrawlService) { ReconConfigSchema.parse(config); }
+    private readonly redactor: Redactor, private readonly crawl: (session: SessionId) => CrawlService,
+    private readonly providerKey?: (identity: string, signal: AbortSignal) => Promise<string>,
+    private readonly pdcpKey?: (signal: AbortSignal) => Promise<string | undefined>) { ReconConfigSchema.parse(config); }
 
   check(input: ReconInput): void {
     if (/[\x00-\x20\x7f]/.test(input.target)) throw new PentestError('RECON_TARGET', 'Use one exact domain or URL per target; pass an explicit targets array for an httpx batch');
@@ -106,20 +110,37 @@ export class ReconService {
       katana: ['-u', input.target, '-jsonl', '-silent', '-duc', '-depth', String(Math.min(input.depth, this.engagement.engagement.budget.maxDepth)),
         '-concurrency', concurrency, '-rate-limit', rate, '-max-response-size', maxBytes, '-proxy', proxy.endpoint, '-js-crawl', '-form-extraction'],
     };
+    const destination = join(cwd, 'provider-config.yaml');
     try {
+      const environment: Record<string, string> = {};
+      if (input.tool === 'asnmap') {
+        const key = await this.pdcpKey?.(signal);
+        if (!key) throw new PentestError('RECON_CREDENTIAL', 'Save a ProjectDiscovery Cloud key in ProjectDiscovery recon → API keys before running ASNMap');
+        this.redactor.register(key); environment.PDCP_API_KEY = key;
+      }
+      const providers: Record<string, string | string[]> = {};
       if (this.config.providerConfig && ['subfinder', 'uncover'].includes(input.tool)) {
         // JSON is a YAML subset accepted by PD tools and gives us an unambiguous
         // credential inventory for redaction before any worker output is retained.
         const content = JSON.parse(await readFile(this.config.providerConfig, 'utf8')) as unknown;
-        const providers = z.record(z.string(), z.union([z.string(), z.array(z.string())])).parse(content);
+        Object.assign(providers, z.record(z.string(), z.union([z.string(), z.array(z.string())])).parse(content));
         for (const value of Object.values(providers)) for (const secret of typeof value === 'string' ? [value] : value) if (secret) this.redactor.register(secret);
-        const destination = join(cwd, 'provider-config.yaml'); await writeFile(destination, JSON.stringify(providers), { mode: 0o600, flag: 'wx' });
-        args[input.tool].push('-pc', destination);
+      }
+      if (input.tool === 'subfinder' || input.tool === 'uncover') {
+        for (const [provider, identity] of Object.entries(this.config.providerIdentities?.[input.tool] ?? {})) {
+          if (!this.providerKey) throw new PentestError('RECON_CREDENTIAL', 'Plugin secure-store adapter is unavailable');
+          const value = await this.providerKey(identity, signal);
+          this.redactor.register(value); providers[provider] = [value];
+        }
+        if (Object.keys(providers).length) {
+          await writeFile(destination, JSON.stringify(providers), { mode: 0o600, flag: 'wx' });
+          args[input.tool].push('-pc', destination);
+        }
       }
       await this.trajectory.append(session, 'recon/start', this.redactor.json({ tool: input.tool, target: subject, ...(targets ? { targets } : {}), mode }));
       const result = await runWorker({ executable, args: args[input.tool], cwd, timeoutMs: this.config.timeoutMs,
         maxOutputBytes: 16 * 1024 * 1024, env: { HTTP_PROXY: proxy.endpoint, HTTPS_PROXY: proxy.endpoint,
-          ALL_PROXY: proxy.endpoint, NO_PROXY: '', DISABLE_TELEMETRY: 'true' } },
+          ALL_PROXY: proxy.endpoint, NO_PROXY: '', DISABLE_TELEMETRY: 'true', ...environment } },
         { writableRoots: [cwd], readableRoots: [executable], proxyPort: proxy.sandboxPort }, signal);
       // A CLI may exit zero after its upstream sources were denied by the broker.
       // Never present that failure as successful empty discovery.
@@ -156,6 +177,6 @@ export class ReconService {
         discovered: urls.size, queued, exitCode: result.exitCode }));
       return this.redactor.json({ tool: input.tool, mode, recordCount: records.length, targetCount: targets?.length ?? 1, records, evidence, queued, exitCode: result.exitCode,
         limitation: 'TLS tunnel budgets count connections; CLI request rate is independently bounded. Discovered assets do not grant target scope.' });
-    } finally { await proxy.close(); }
+    } finally { try { await rm(destination, { force: true }); } finally { await proxy.close(); } }
   }
 }

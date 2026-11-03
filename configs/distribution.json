@@ -67,7 +67,7 @@
       "description": "A shared crawl frontier that prioritizes coverage within the engagement scope and budgets.",
       "configKeys": [],
       "tabs": [
-        "policy",
+        "crawl",
         "graph"
       ]
     },
