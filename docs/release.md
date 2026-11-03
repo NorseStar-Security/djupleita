@@ -8,8 +8,8 @@ the full browser interface and include Node.js and the built application.
 Extract into a directory owned by your user, then run:
 
 ```sh
-tar -xzf djupleita-0.2.3-linux-x64.tar.gz
-cd djupleita-0.2.3-linux-x64
+tar -xzf djupleita-0.2.4-linux-x64.tar.gz
+cd djupleita-0.2.4-linux-x64
 ./djupleita
 ```
 

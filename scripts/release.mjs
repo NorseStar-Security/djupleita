@@ -15,6 +15,20 @@ const omitted = /^(?:node_modules|\.git|\.pentest|\.dsh|\.security-tools|\.deskt
 export function runtimeFile(path) {
   return !/(?:^|[\\/])\.(?:coveralls|travis|github|gitlab|circleci)(?:[\\/.]|$)/.test(path) && !path.split(/[\\/]/).some(part => omitted.test(part) || /^\.env(?:\.|$)/.test(part)) && !/\.(?:test|spec)\.[cm]?[jt]sx?(?:\.map)?$|\.d\.[cm]?ts$|\.map$|\.tsbuildinfo$|\.log$|\.(?:pem|key|p12|pfx)$/.test(path);
 }
+/** Assets outside workspace packages are required by the installed application. */
+export async function copyRuntimeAssets(sourceRoot, destination) {
+  for (const file of ['package.json', 'upstream.lock.json', 'configs', 'skills', 'vendor/deepseek-harness/package.json', 'vendor/deepseek-harness/LICENSE']) {
+    await cp(join(sourceRoot, file), join(destination, file), { recursive: true,
+      filter: path => runtimeFile(relative(sourceRoot, path)) });
+  }
+}
+
+/** Exercise the actual relocated loader before an archive can be published. */
+export function verifyRuntimeSkills(app) {
+  execFileSync(process.execPath, ['--input-type=module', '-e',
+    'const { bundledSkills } = await import(process.argv[1]); if (!bundledSkills().length) throw new Error("Missing bundled assessment skills");',
+    pathToFileURL(join(app, 'packages/dsh-plugin/lib/skills.js')).href], { cwd: app, stdio: 'pipe' });
+}
 async function dependency(source, name) {
   for (let current = source; ; current = dirname(current)) {
     const candidate = join(current, 'node_modules', name);
@@ -116,9 +130,8 @@ export async function packageRelease(output = join(root, 'artifacts/release')) {
     const workspaceDirectories = [...globSync(['packages/*/package.json', 'vendor/deepseek-harness/vendor/*/package.json', 'vendor/deepseek-harness/packages/*/*/package.json', 'vendor/deepseek-harness/apps/*/package.json', 'vendor/deepseek-harness/native/system/packages/*/package.json'], { cwd: root })].map(path => join(root, dirname(path)));
     const roots = [join(upstream, 'apps/cli'), ...globSync('packages/*/package.json', { cwd: root }).map(path => join(root, dirname(path)))];
     const dependencies = await copyProduction({ sourceRoot: root, destination: app, roots, workspaceDirectories });
-    for (const file of ['package.json', 'upstream.lock.json', 'configs', 'vendor/deepseek-harness/package.json', 'vendor/deepseek-harness/LICENSE']) {
-      await cp(join(root, file), join(app, file), { recursive: true });
-    }
+    await copyRuntimeAssets(root, app);
+    verifyRuntimeSkills(app);
     for (const file of ['web.mjs', 'profile.mjs', 'profile-patch.mjs', 'pentest-presets.mjs', 'setup-tools.mjs', 'release-launch.mjs']) {
       await mkdir(join(app, 'scripts'), { recursive: true });
       await cp(join(root, 'scripts', file), join(app, 'scripts', file));

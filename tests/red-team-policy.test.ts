@@ -43,8 +43,8 @@ it('keeps known deletion, overwrite and disruption out of the judge and blocks w
     expect(judge).not.toHaveBeenCalled(); expect(approve).not.toHaveBeenCalled();
   }
 });
-it('asks on uncertain, failed, malformed and high-risk judgments', async () => {
-  for (const judge of [async () => ({ deletion: 0, irreversible: 0, disruption: 0, confidence: 0.2, reason: 'Unclear' }), async () => { throw new Error('offline'); }, async () => ({}) as never,
+it('asks on uncertain risks, failed, malformed and high-risk judgments', async () => {
+  for (const judge of [async () => ({ deletion: 0.5, irreversible: 0.5, disruption: 0.5, confidence: 0.2, reason: 'Cannot establish whether the script overwrites existing data' }), async () => { throw new Error('offline'); }, async () => ({}) as never,
     async () => ({ deletion: 0, irreversible: 0, disruption: 0.9, confidence: 0.99, reason: 'Availability impact' })]) {
     const { policy } = service(undefined, vi.fn(judge));
     expect((await policy.evaluate({ action: unknown(), signal: signal() })).kind).toBe('ask');
@@ -55,11 +55,47 @@ it('requires owner review when unknown-effect judgment times out', async () => {
   const result = await policy.evaluate({ action: unknown(), signal: signal() });
   expect(result.kind).toBe('ask'); expect(result.reasons.join(' ')).toContain('timed out'); expect(judge).toHaveBeenCalledOnce();
 });
-it('honors destructive blocks for high-risk model judgments while asking on low confidence', async () => {
-  for (const [confidence, expected] of [[0.99, 'deny'], [0.2, 'ask']] as const) {
+it('honors destructive blocks for high-risk model judgments regardless of confidence', async () => {
+  for (const confidence of [0.99, 0.2]) {
     const { policy } = service({ ...policyConfig, profile: 'red-team', redTeam: { destructive: 'deny' } }, vi.fn(async () => ({ deletion: 0.9, irreversible: 0.9, disruption: 0.9, confidence, reason: 'Potential destructive command' })));
-    expect((await policy.evaluate({ action: unknown(), signal: signal() })).kind).toBe(expected);
+    expect((await policy.evaluate({ action: unknown(), signal: signal() })).kind).toBe('deny');
   }
+});
+it.each([0.55, 0.7, 0.75])('allows a judged low-risk HTTP probe at confidence %s without owner approval', async confidence => {
+  const { policy } = service(undefined, vi.fn(async () => ({ deletion: 0.02, irreversible: 0.05, disruption: 0.05, confidence,
+    reason: 'Bounded read-only HTTP GETs; no destructive writes, deletions or availability impact' })));
+  const approve = vi.fn(async () => false);
+  const probe = { ...unknown(), arguments: { command: 'cd /tmp/fixture; curl -s -m 10 http://app.example.test:3001/api/plugins | head -c 1500' } };
+  await expect(policy.authorize({ action: probe, signal: signal() }, approve)).resolves.toMatchObject({ kind: 'allow', confidence });
+  expect(approve).not.toHaveBeenCalled();
+});
+it('keeps the confidence gate in Review while Red team uses valid effect-risk scores', async () => {
+  const judge = vi.fn(async () => ({ deletion: 0, irreversible: 0, disruption: 0, confidence: 0.2, reason: 'No destructive effects identified' }));
+  const request = { action: action({ effects: ['modify'], reversible: true }), signal: signal() };
+  expect((await service(policyConfig, judge).policy.evaluate(request)).kind).toBe('ask');
+  expect((await service(undefined, judge).policy.evaluate(request)).kind).toBe('allow');
+});
+it('allows unknown effects only when the owner explicitly selects Allow, without invoking the judge', async () => {
+  const { policy, judge } = service({ ...policyConfig, profile: 'red-team', redTeam: { unknown: 'allow' } });
+  const approve = vi.fn(async () => false);
+  for (const operation of [unknown(), action({ plugin: 'unadapted', effects: ['unknown'], reversible: false })]) {
+    await expect(policy.authorize({ action: operation, signal: signal() }, approve)).resolves.toMatchObject({ kind: 'allow', source: 'profile:red-team:unknown' });
+  }
+  expect(judge).not.toHaveBeenCalled(); expect(approve).not.toHaveBeenCalled();
+  expect((await service(policyConfig).policy.evaluate({ action: unknown(), signal: signal() })).kind).toBe('ask');
+});
+it('does not let unknown Allow bypass scope, explicit denies or known destructive effects', async () => {
+  const config: PolicyConfig = { ...policyConfig, profile: 'red-team', redTeam: { unknown: 'allow' } };
+  const { policy, judge } = service(config); const approve = vi.fn(async () => false);
+  await expect(policy.authorize({ action: { ...unknown(), destinations: [{ url: 'https://example.test/', purpose: 'target' }] }, signal: signal() }, approve)).rejects.toThrow('outside');
+  for (const effect of ['delete', 'overwrite', 'disrupt'] as const) {
+    const operation = action({ ...unknown(), effects: ['unknown', effect] });
+    expect((await policy.evaluate({ action: operation, signal: signal() })).kind).toBe('ask');
+    await expect(policy.authorize({ action: operation, signal: signal() }, approve)).rejects.toThrow('approval');
+  }
+  const blocked = service({ ...config, rules: [{ id: 'no-shell', tools: ['bash'], effects: ['unknown'], decision: 'deny', reason: 'Explicit operator block' }] });
+  await expect(blocked.policy.authorize({ action: unknown(), signal: signal() }, vi.fn(async () => true))).rejects.toThrow('Explicit operator block');
+  expect(judge).not.toHaveBeenCalled();
 });
 it('judges unadapted tools instead of trusting self-asserted routine activity metadata', async () => {
   const { policy, judge } = service();

@@ -19,6 +19,12 @@ describe('engagement destinations', () => {
     const on = new ScopeService({ ...fixture, enabled: true }, resolver);
     for (const host of ['www.prod.example.test', 'app.dev.example.test', 'app.test.example.test', 'nested.app.dev.example.test']) {
       await expect(on.authorize({ url: `https://${host}/any/path`, purpose: 'target' })).resolves.toMatchObject({ addresses: [{ address: '10.20.30.40', family: 4 }] });
+      for (const port of [3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432]) {
+        await expect(on.authorize({ url: `http://${host}:${port}/api/health`, purpose: 'target', access: 'active' })).resolves.toBeTruthy();
+        expect(() => on.check({ url: `http://mail.prod.example.test:${port}/`, purpose: 'target' })).toThrow();
+        expect(() => on.check({ url: `http://outside.example.test:${port}/`, purpose: 'target', access: 'active' })).toThrow();
+      }
+      expect(() => on.check({ url: `http://${host}:65534/`, purpose: 'target', access: 'active' })).toThrow();
     }
     for (const host of ['mail.prod.example.test', 'nested.www.prod.example.test', 'prod.example.test', 'dev.example.test', 'test.example.test', 'example.test', 'outside.example.test', 'www.prod.example.test.evil.example.test']) {
       expect(() => on.check({ url: `https://${host}/`, purpose: 'target' })).toThrow(/outside|Excluded/);

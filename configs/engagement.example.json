@@ -5,9 +5,9 @@
   "scope": {
     "enabled": false,
     "targets": [
-      { "host": "www.prod.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
-      { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
-      { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
+      { "host": "www.prod.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443, 3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+      { "host": "*.dev.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443, 3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432], "pathPrefixes": ["/"], "allowPrivateAddresses": true },
+      { "host": "*.test.norsestar.internal", "schemes": ["http", "https"], "ports": [80, 443, 3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432], "pathPrefixes": ["/"], "allowPrivateAddresses": true }
     ],
     "exclusions": ["*.prod.norsestar.internal"],
     "networks": [],

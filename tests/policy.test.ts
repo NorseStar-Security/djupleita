@@ -55,6 +55,11 @@ it('sends redacted state and the selected model to the structured model adapter'
   const judge = new SelectedModelJudge(generate);
   await judge.judge(action(), { provider: 'a', model: 'b' }, AbortSignal.timeout(1000));
   expect(generate.mock.calls[0]?.[0]).toMatchObject({ model: { provider: 'a', model: 'b' } });
+  const instructions = generate.mock.calls[0]![0].system;
+  expect(instructions).toContain('POST-based read/fetch operations');
+  expect(instructions).toContain('do not lower effect confidence merely because a hostname or port is absent');
+  expect(instructions).toContain('scopeContext.enabled is false');
+  expect(instructions).toContain('at least 0.5 for deletion or irreversibility');
 });
 it('parses Jev typed probabilities and falls back to the selected model on invalid output', async () => {
   const send = vi.fn(async () => ({ answers: { deletion: { noul: 0.01 }, irreversible: { noul: 0.02 }, disruption: { noul: 0.03 } } }));

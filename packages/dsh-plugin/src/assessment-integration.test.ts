@@ -14,7 +14,7 @@ import type { GenerateOptions, PreparedAdapterCall, StreamChunk } from '@deepsee
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
 import { id, digest } from '@dsh-pentest/contracts';
-import { PentestRuntime, ToolPolicy, AssessmentTools, AssessmentSkills, ValidationTools, ModelEgressPlugin } from './index.ts';
+import { PentestRuntime, ToolPolicy, HarnessControlEffects, AssessmentTools, AssessmentSkills, ValidationTools, ModelEgressPlugin } from './index.ts';
 import { DesktopChannel } from './rpc.ts';
 import { assessmentEndpoints } from './assessment-rpc.ts';
 import { engagement, policyConfig, testJudge } from '../../../tests/fixtures.ts';
@@ -25,7 +25,7 @@ it('loads bundled skills through the native registry and guarded tool pipeline, 
   try {
     await ctx.plugin(SystemPrompt); await ctx.plugin(Tools); await ctx.plugin(Native); await ctx.plugin(Skills);
     await ctx.plugin({ name: 'assessment-fixture', apply(inner: Context) { inner.provide('pentest', runtime); } });
-    await ctx.plugin(ToolPolicy);
+    await ctx.plugin(ToolPolicy); await ctx.plugin(HarnessControlEffects);
     const assessment = await ctx.plugin(AssessmentTools), skills = await ctx.plugin(AssessmentSkills), validation = await ctx.plugin(ValidationTools);
     const agent = { id: HarnessSessionId(id<'SessionId'>()), model: { current: () => ({ provider: 'fixture', model: 'fixture' }) } } as Agent;
     const invoke = async (name: string, args: unknown) => {
@@ -57,6 +57,7 @@ it('loads bundled skills through the native registry and guarded tool pipeline, 
     expect(await ctx.skills.list()).toEqual([]);
     expect(runtime.assessment.runs()).toHaveLength(1);
     expect(runtime.inventory().filter(item => ['assessment', 'validation'].includes(item.plugin))).toEqual([]);
+    expect(runtime.inventory()).toContainEqual({ tool: 'skill', plugin: 'harness-control', confinement: 'local-read' });
   } finally { await ctx.fiber.dispose(); await runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 

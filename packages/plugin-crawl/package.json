@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-crawl",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. A shared crawl frontier that prioritizes coverage within the engagement scope and budgets.",
