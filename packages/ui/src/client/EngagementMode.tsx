@@ -34,21 +34,26 @@ export function EngagementMode({ mode, children, activeOnly = false, controls = 
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   if (activeOnly) return state.snapshot?.enabled ? children : null;
   const enabled = state.snapshot?.enabled;
-  if (!controls) return enabled ? children : <section className={css.controls}>
+  const unavailable = state.snapshot?.available === false;
+  const compatibility = unavailable && <p role="alert">This server does not provide engagement controls: /api/djupleita/mode returned HTTP 404. Update and restart the server using the same Djupleita release as this interface, then retry. The interface cannot turn off server enforcement without these controls.<br /><button type="button" className={panelCss.button} onClick={() => { void mode.refresh(); }}>Retry engagement status</button></p>;
+  const failure = state.error && <p role="alert">{state.error}<br /><button type="button" className={panelCss.button} onClick={() => { void mode.refresh(); }}>Retry engagement status</button></p>;
+  if (!controls) return enabled ? <>{compatibility}{failure}{children}</> : <section className={css.controls}>
     <p role="status">{enabled === undefined ? 'Loading engagement mode…' : 'The Djupleita engagement layer is off.'}</p>
+    {failure}
     <button type="button" className={panelCss.button} onClick={openControls}>Open shared engagement controls</button>
   </section>;
   return <div className={css.gate}>
     <section className={css.controls} aria-label="Engagement mode">
       <h3>Djupleita engagement layer</h3>
-      <p role="status">{enabled === undefined ? 'Loading engagement mode…' : enabled ? 'ON · Pentest tools, policy, budgets and evidence recording are active.' : 'OFF · Basic DSH behavior. Pentest tools, policy, budgets and evidence recording are inactive.'}</p>
-      <button type="button" className={panelCss.button} disabled={busy || enabled === undefined || state.snapshot?.available === false}
+      <p role="status">{unavailable ? 'Engagement status cannot be confirmed on this server.' : enabled === undefined ? 'Loading engagement mode…' : enabled ? 'ON · Pentest tools, policy, budgets and evidence recording are active.' : 'OFF · Basic DSH behavior. Pentest tools, policy, budgets and evidence recording are inactive.'}</p>
+      <button type="button" className={panelCss.button} disabled={busy || enabled === undefined || unavailable}
         onClick={() => { setBusy(true); setError(''); void mode.setEnabled(!enabled).catch(reason => setError(reason instanceof Error ? reason.message : String(reason))).finally(() => setBusy(false)); }}>
-        {enabled === false ? 'Turn on engagement layer' : 'Turn off engagement layer'}
+        {unavailable ? 'Engagement switch unavailable' : enabled === false ? 'Turn on engagement layer' : 'Turn off engagement layer'}
       </button>
       <p>Switching off keeps your saved scope, identities and evidence. DSH’s own permissions remain active.</p>
-      {state.snapshot?.available === false && <p>Restart Djupleita after updating to use this switch.</p>}
-      {(error || state.error) && <p role="alert">{error || state.error}</p>}
+      {compatibility}
+      {error && <p role="alert">{error}</p>}
+      {failure}
     </section>
     <div className={css.content}>{enabled && children}</div>
   </div>;

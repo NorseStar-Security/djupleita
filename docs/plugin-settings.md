@@ -4,6 +4,14 @@
 
 **Scoped crawling → Crawl** shows seed URLs, the shared queue, attempted/discovered counts, the latest run result and errors. Adding seeds checks scope without making requests. Start and Stop operate on the same crawl service used by `pentest_crawl`; an agent-started crawl appears here and can be stopped here. Limits cover pages per run, link depth, queue capacity, samples per endpoint template and stopping after pages without new surface. Applying limits stops the current crawl and resets its queue. Limits persist across app restarts; queue and progress are process-local. Shared request/time budgets and action review still apply. **Open shared engagement policy** goes directly to the canonical settings page. The Graph tab shows the shared engagement evidence.
 
+## Turning the engagement layer off
+
+Use **Turn off engagement layer** in **Engagement and identities** to return to basic DSH tools and permissions. This unloads engagement tools, target enforcement, action review, budgets and evidence recording while preserving saved settings. The switch remains available if an engagement editor fails. The separate **Scope management** switch only controls target boundaries.
+
+If the engagement control endpoint returns 404, the interface reports that the server controls are unavailable. Update and restart the serving Djupleita process from the same release as the interface, then select **Retry engagement status**. A browser cannot disable enforcement on a server that does not provide the control endpoint.
+
+If an editor cannot render, its error panel provides **Reload Djupleita panel**. Reloading discards unsaved edits in that panel; saved settings remain intact. An ordinary failed data refresh keeps the current editor and its unsaved text. Missing `/open-in-app/icon/...` artwork uses DSH's generic application icon and is independent of engagement controls.
+
 ## API keys
 
 Open the plugin's page to save, replace or remove its service keys:

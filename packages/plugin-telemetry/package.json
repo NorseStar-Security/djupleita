@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-telemetry",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. Optional durable OTLP log export to a collector or Logfire-compatible destination.",

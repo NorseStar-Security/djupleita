@@ -29,6 +29,7 @@ import { registerBrand } from './brand.tsx';
 import type { ReviewQuestion, ReviewGrant } from '../../../dsh-plugin/src/review.ts';
 import type { ToolSetup } from '../../../dsh-plugin/src/setup.ts';
 import { pollingSource } from './polling.ts';
+import { PanelBoundary } from './PanelBoundary.tsx';
 import { reviewLoader } from './reviews.ts';
 import { AssessmentPanel } from './AssessmentPanel.tsx';
 import type { ReviewSnapshot } from './reviews.ts';
@@ -428,20 +429,20 @@ export function apply(ctx: Context): void {
     return enabled ? <EvidenceView {...props} /> : <EngagementMode mode={mode}><></></EngagementMode>;
   };
   ctx.slots.inject('conversation.view', () => ctx.slots.register({ name: 'conversation.view', id: 'djupleita-evidence',
-    order: 20, locale: 'pentest', label: () => ctx.locale.bind('pentest')('evidenceGraph'), inject: sourceFor }, props => <EvidenceMode {...props} />));
+    order: 20, locale: 'pentest', label: () => ctx.locale.bind('pentest')('evidenceGraph'), inject: sourceFor }, props => <PanelBoundary><EvidenceMode {...props} /></PanelBoundary>));
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'djupleita-review',
     order: -100, locale: 'pentest', inject: reviewFor }, props => <EngagementMode mode={mode} activeOnly><ReviewCards {...props} /></EngagementMode>));
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: ID,
-    locale: 'pentest', inject: sourceFor }, props => <EngagementMode mode={mode}><Panel {...props} /></EngagementMode>));
+    locale: 'pentest', inject: sourceFor }, props => <EngagementMode mode={mode}><PanelBoundary><Panel {...props} /></PanelBoundary></EngagementMode>));
   const settings = () => sourceFor('djupleita-settings');
   ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: 'djupleita-engagement',
     order: -100, label: () => ctx.locale.bind('pentest')('coreTitle'), locale: 'pentest', inject: settings },
     props => props.view === 'summary' ? props.t('coreDescription')
-      : <EngagementMode mode={mode}><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} pluginId="engagement" included /></EngagementMode>));
+      : <EngagementMode mode={mode}><PanelBoundary><Panel {...props} initialTab="policy" visibleTabs={['policy', 'identities']} pluginId="engagement" included /></PanelBoundary></EngagementMode>));
   for (const plugin of distribution.plugins) {
     const tabs = plugin.tabs.filter((tab): tab is Tab => TABS.includes(tab as Tab));
-    const ConfigPage = (props: Props) => <EngagementMode mode={mode} controls={false} openControls={props.openPolicy}><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
-      visibleTabs={tabs} configKeys={plugin.configKeys} pluginId={plugin.id} included /></EngagementMode>;
+    const ConfigPage = (props: Props) => <EngagementMode mode={mode} controls={false} openControls={props.openPolicy}><PanelBoundary><Panel {...props} initialTab={tabs[0] ?? 'plugins'}
+      visibleTabs={tabs} configKeys={plugin.configKeys} pluginId={plugin.id} included /></PanelBoundary></EngagementMode>;
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config',
       key: plugin.name, locale: 'pentest', inject: settings }, ConfigPage));
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({ name: 'plugins.row.config',
