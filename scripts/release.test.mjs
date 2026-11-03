@@ -1,10 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, symlink, rm, rename, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, rename, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { copyProduction, auditTree, runtimeFile } from './release.mjs';
+import { copyProduction, copyRuntimeAssets, verifyRuntimeSkills, auditTree, runtimeFile } from './release.mjs';
+
+test('relocated release includes every bundled assessment skill and the loader rejects missing assets', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'release-skills-'));
+  try {
+    const payload = join(root, 'app'); await mkdir(payload);
+    await copyRuntimeAssets(resolve('.'), payload);
+    // Use the built production loader with only its runtime dependency graph.
+    // This test runs after pnpm build, just like the release pipeline.
+    const plugin = resolve('packages/dsh-plugin');
+    const dependencies = ['packages/contracts', 'packages/dsh-plugin'];
+    const loader = join(payload, 'packages/dsh-plugin/lib'); await mkdir(loader, { recursive: true });
+    for (const file of ['skills.js', 'tool-schema.js']) {
+      await writeFile(join(loader, file), await readFile(join(plugin, 'lib', file)));
+    }
+    // Resolve these two imports without retaining any link to the source tree.
+    const source = join(root, 'dependencies'); await mkdir(source);
+    await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'skill-check', dependencies: { zod: '*', '@dsh-pentest/contracts': '*' } }));
+    await mkdir(join(source, 'node_modules/@dsh-pentest'), { recursive: true });
+    await symlink(resolve('packages/dsh-plugin/node_modules/zod'), join(source, 'node_modules/zod'));
+    await symlink(resolve('packages/contracts'), join(source, 'node_modules/@dsh-pentest/contracts'));
+    await copyProduction({ sourceRoot: resolve('.'), destination: payload, roots: [source], workspaceDirectories: dependencies.map(path => resolve(path)) });
+    const relocated = join(root, 'relocated with spaces'); await rename(payload, relocated);
+    verifyRuntimeSkills(relocated);
+    for (const name of ['assessment', 'readiness', 'coverage', 'proof', 'report']) {
+      assert.match(await readFile(join(relocated, 'skills', `djupleita-${name}`, 'SKILL.md'), 'utf8'), new RegExp(`name: djupleita-${name}\\n`));
+    }
+    await rm(join(relocated, 'skills/djupleita-assessment/SKILL.md'));
+    assert.throws(() => verifyRuntimeSkills(relocated), /ENOENT|Command failed/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test('production graph preserves cycles and distinct versions after relocation, excluding private state and dev dependencies', async () => {
   const root = await mkdtemp(join(tmpdir(), 'release-graph-'));

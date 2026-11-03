@@ -54,7 +54,7 @@ try {
   class OfflineJudge extends LlmAdapter {
     async *stream() {
       judgments++;
-      const text = JSON.stringify({ deletion: 0, irreversible: 0, disruption: 0, confidence: 0.99, reason: 'Synthetic local fixture operation' });
+      const text = JSON.stringify({ deletion: 0, irreversible: 0, disruption: 0, confidence: 0.55, reason: 'Synthetic local fixture operation' });
       yield { type: 'block-start', index: 0, blockType: 'text' }; yield { type: 'text-delta', index: 0, text };
       yield { type: 'block-end', index: 0, block: { type: 'text', text } }; yield { type: 'finish', reason: { kind: 'stop' } };
     }
@@ -176,6 +176,16 @@ try {
     assert.equal(judgments, 1, 'Unknown effects must reach the isolated offline judge');
     await assert.rejects(() => ctx.pentest.policy('web-fixture').authorize({ action: { ...opaque, effects: ['delete'] }, signal: AbortSignal.timeout(5000) }), /requires your decision/);
     assert.equal(judgments, 1, 'Known destructive effects must not reach the judge');
+    const unknownEffects = page.getByRole('combobox', { name: 'Unknown effects', exact: true });
+    await unknownEffects.selectOption('allow');
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => ctx.pentest.policyConfig.redTeam?.unknown === 'allow');
+    await page.reload(); await policy();
+    assert.equal(await unknownEffects.inputValue(), 'allow', 'Unknown Allow must survive reload');
+    await page.getByText('Unknown effects: Allow skips effect judgment', { exact: false }).waitFor();
+    assert.equal((await ctx.pentest.policy('web-fixture').authorize({ action: { ...opaque, id: actionId() }, signal: AbortSignal.timeout(5000) })).kind, 'allow');
+    await assert.rejects(() => ctx.pentest.policy('web-fixture').authorize({ action: { ...opaque, id: actionId(), effects: ['unknown', 'delete'] }, signal: AbortSignal.timeout(5000) }), /requires your decision/);
+    assert.equal(judgments, 1, 'Explicit unknown Allow must skip the judge and preserve known destructive blocks');
     assert.equal(ctx.pentest.review.snapshot().grants.length, 0, 'Routine actions require no saved allowance');
     if (process.env.DSH_TEST_POLICY_SCREENSHOT) {
       await actionProfile.scrollIntoViewIfNeeded();
@@ -277,6 +287,6 @@ try {
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
     const { checkEvidenceGraph } = await import('./evidence-graph-web.mjs');
     await checkEvidenceGraph(ctx, page);
-    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, authenticatedWeb: true, productionWildcardException: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, allowUnknownEffects: true, authenticatedWeb: true, productionWildcardException: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }
