@@ -34,8 +34,8 @@ export const AssessmentSkills = {
     });
     ctx.effect(() => ctx.pentest.registerDescriptor('pentest_skill', { plugin: 'assessment', confinement: 'local-read',
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: skill effects');
-    ctx.effect(() => ctx.pentest.registerDescriptor('skill', { plugin: 'assessment', confinement: 'local-read',
-      describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: native skill effects');
+    // HarnessControlEffects owns the native skill descriptor for the lifetime
+    // of the engagement layer; this optional bundle only owns pentest_skill.
     // Preset-local native skill registries may not see the host catalog. Resolve
     // this bundle's exact names here; other native skills retain their own loader.
     ctx.on('tools/execute', async (exec, next) => {

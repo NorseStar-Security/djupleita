@@ -49,6 +49,7 @@ try {
   ctx = await bootProductionProfile({ binName: 'djupleita-fixture', profile: 'pentest', overlayPaths: [path], prepare(inner) {
     provideCmdline(inner, { args: ['--no-open', '--host', '127.0.0.1', '--port', '0'], exit() {}, ready: { onReady(listener) { queueMicrotask(listener); return () => {}; } } });
   } });
+  assert(ctx.tools.get('pentest_skill'), 'The production assessment bundle must register pentest_skill');
   let judgments = 0;
   const { LlmAdapter } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
   class OfflineJudge extends LlmAdapter {
@@ -237,6 +238,14 @@ try {
     const { SessionId } = await import('../../vendor/deepseek-harness/packages/core/session/lib/index.js');
     const existingPentestAgent = (await ctx.agents.create({ sessionId: SessionId('existing-pentest-mode-fixture'), meta: { cwd: root, agentPreset: 'pentest' },
       setup: async inner => { await ctx.agentPresets.mount(inner, 'pentest'); } })).agent;
+    const { ToolCallId } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
+    const { executeModelToolFixture } = await import('../../vendor/deepseek-harness/packages/test-support/tool-testkit/lib/index.js');
+    for (const name of ['skill', 'pentest_skill']) {
+      const loaded = await executeModelToolFixture(ctx, { agent: existingPentestAgent, name,
+        arguments: { name: 'djupleita-assessment' }, callId: ToolCallId(`bundled-${name}`), signal: AbortSignal.timeout(5000) });
+      assert.equal(loaded.isError, false, `${name} must load the bundled assessment skill through the production preset`);
+      assert(JSON.stringify(loaded).includes('pentest_status'));
+    }
     await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).click();
     await poll(() => ctx.get('pentest') === undefined);
     await page.getByText('OFF · Basic DSH behavior.', { exact: false }).waitFor();
@@ -247,8 +256,6 @@ try {
     await page.getByText('Djupleita · Engagement and identities', { exact: true }).click();
     await page.getByRole('button', { name: 'Turn on engagement layer', exact: true }).waitFor();
     assert.equal(await page.locator('textarea[name="scope"]').count(), 0);
-    const { ToolCallId } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
-    const { executeModelToolFixture } = await import('../../vendor/deepseek-harness/packages/test-support/tool-testkit/lib/index.js');
     await writeFile(join(root, 'basic-dsh.txt'), 'Basic DSH native read fixture');
     const agent = (await ctx.agents.create({ sessionId: SessionId('basic-mode-fixture'), meta: { cwd: root, agentPreset: 'standard' },
       setup: async inner => { await ctx.agentPresets.mount(inner, 'standard'); } })).agent;
@@ -287,6 +294,6 @@ try {
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
     const { checkEvidenceGraph } = await import('./evidence-graph-web.mjs');
     await checkEvidenceGraph(ctx, page);
-    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, allowUnknownEffects: true, authenticatedWeb: true, productionWildcardException: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
+    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, allowUnknownEffects: true, bundledSkills: true, authenticatedWeb: true, productionWildcardException: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }
