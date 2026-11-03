@@ -46,6 +46,8 @@ jobs:
           pnpm bootstrap
           npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
           pnpm install --frozen-lockfile
+      - name: Install checksum-pinned scanner
+        run: node scripts/security/install.mjs
       - name: Build and check distribution
         run: |
           pnpm build:harness
@@ -56,8 +58,6 @@ jobs:
       - name: Build macOS credential helper
         if: runner.os == 'macOS'
         run: pnpm build:keychain
-      - name: Install checksum-pinned scanner
-        run: node scripts/security/install.mjs
       - name: Assemble and scan portable package
         env:
           DJUPLEITA_CONFIDENTIAL_REFERENCES: ${{ secrets.DJUPLEITA_CONFIDENTIAL_REFERENCES }}

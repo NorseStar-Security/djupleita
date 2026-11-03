@@ -47,7 +47,8 @@ require internet access. No provider credentials or assessment data are included
 Local configuration, credentials and assessment state are stored privately under
 `app/.pentest` in the extracted directory. Stop the old version before upgrading;
 back up this directory and restore it to the new archive's `app/.pentest` before
-launching. Keep this data out of source control and shared archives.
+launching. Rerun managed tool setup after moving an installation so stored tool paths
+point to the new directory. Keep this data out of source control and shared archives.
 
 Check the archive against `SHA256SUMS` from the same release before extracting:
 

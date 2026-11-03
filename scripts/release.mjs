@@ -66,6 +66,19 @@ export async function copyProduction({ sourceRoot, destination, roots, workspace
     return record;
   }
   for (const source of roots) await visit(source);
+  // Some native loaders resolve their caller's optional package from the loader
+  // itself. Match pnpm's public hoist for unambiguous names, while each package's
+  // own links keep multiple versions isolated.
+  const names = new Map();
+  for (const record of copied.values()) {
+    const entries = names.get(record.name) ?? []; entries.push(record); names.set(record.name, entries);
+  }
+  for (const [name, entries] of names) {
+    if (entries.length !== 1) continue;
+    const link = join(destination, 'node_modules', name);
+    await mkdir(dirname(link), { recursive: true });
+    await symlink(relative(dirname(link), entries[0].target), link, 'dir');
+  }
   return [...copied.values()].map(({ name, version, license, target }) => ({ name, version, license, path: relative(destination, target) }));
 }
 export async function auditTree(directory, referencePattern) {
