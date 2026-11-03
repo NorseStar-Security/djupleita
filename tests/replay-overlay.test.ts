@@ -9,7 +9,7 @@ import { applyBranding } from '../scripts/branding.mjs';
 it('reproduces the replay feature from the pinned commit and applies all overlays idempotently', async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'djupleita-replay-overlay-'));
   const upstream = resolve('vendor/deepseek-harness'), checkout = join(scratch, 'vendor/deepseek-harness');
-  const patches = ['djupleita-branding.patch', 'djupleita-provider-trust.patch', 'djupleita-replay.patch'];
+  const patches = ['djupleita-branding.patch', 'djupleita-provider-trust.patch', 'djupleita-replay.patch', 'djupleita-plugin-navigation.patch'];
   try {
     await mkdir(checkout, { recursive: true }); await mkdir(join(scratch, 'patches'));
     const paths = new Set<string>();
