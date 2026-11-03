@@ -1,0 +1,19 @@
+flowchart TB
+    Events["Chat, tool and policy events"] --> Redact["Redactor and trajectory recorder<br/>packages/trajectory"]
+    Redact --> Local[".pentest/engagements/ID/<br/>trajectories/*.jsonl and blobs/"]
+    Discovery["Evidence-backed discoveries"] --> Graph["graph.sqlite<br/>packages/graph"]
+    Identity["Identity metadata<br/>identities.json"] --> Keychain["Native credential secrets<br/>macOS Keychain or Linux Secret Service"]
+    Local --> UI["Pentest trajectory and evidence views"]
+    Graph --> UI
+    Local --> Export["Optional telemetry exporter<br/>packages/export"]
+    Export --> Queue["Durable outbox/<br/>destination-specific cursors and retries"]
+    Queue --> Service["Telemetry service scope<br/>and host-bound identity"]
+    Service --> OTLP["Generic OTLP collector"]
+    Service --> Course["Course audit receiver<br/>course/audit-stream/worker"]
+    Course --> Custody["Seat/course token authorization<br/>digest verification and immutable record custody"]
+    Custody --> Board["Live instructor board<br/>seat listing and operator publishing"]
+
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef external fill:#dcfce7,stroke:#15803d,color:#14532d
+    class Local,Graph,Identity,Keychain,Queue saved
+    class OTLP,Course,Custody,Board external

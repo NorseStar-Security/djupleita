@@ -1,0 +1,23 @@
+flowchart TB
+    First["First eligible agent step<br/>with a filesystem provider"] --> Dsh
+    First --> Root
+    subgraph Global["User-global chain loads first"]
+        Dsh["1. DSH_HOME/AGENTS.md<br/>Djupleita: .pentest/home/AGENTS.md"]
+        Dsh --> Shared["2. DSH_AGENTS_HOME/<br/>AGENTS.md<br/>default: ~/.agents/AGENTS.md"]
+    end
+    subgraph Project["Project chain loads after global guidance"]
+        Root["Discover project root from chat cwd<br/>default marker: .git"]
+        Root --> Chain["Walk from root through<br/>chat working directory"]
+        Chain --> Candidates["At each directory, in order:<br/>AGENTS.md, CLAUDE.md,<br/>AGENTS.local.md, CLAUDE.local.md"]
+    end
+    Shared --> Budget
+    Candidates --> Budget["Deduplicate within candidate groups<br/>apply separate global and project byte budgets"]
+    Budget --> Context["Durable workspace guidance<br/>in the agent's conversation history"]
+    Context --> Touch["Successful structured read, write or edit<br/>reaches relevant paths"]
+    Touch --> Refresh["Discover nested files<br/>append additions, updates or removals"]
+    Refresh --> Context
+
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef context fill:#ede9fe,stroke:#6d28d9,color:#3b0764
+    class Dsh,Shared,Candidates saved
+    class Context,Refresh context

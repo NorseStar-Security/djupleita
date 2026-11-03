@@ -1,0 +1,32 @@
+sequenceDiagram
+    actor Owner as Operator
+    participant Agent as Harness agent
+    participant Guard as ToolPolicy and policy
+    participant Tool as Tool adapter
+    participant HTTP as HTTP broker
+    participant Target as Target destination
+    participant Store as Private stores
+
+    Note over Agent,HTTP: Engagement layer ON<br/>Target scope management is a separate switch
+    Agent->>Guard: Tool name and arguments
+    Guard->>Guard: Describe destinations and effects
+    Guard->>Guard: Apply scope mode, trusted-read rules and effect judgment
+    opt A check needs an owner decision
+        Guard->>Owner: Show exact operation in review UI
+        Owner-->>Guard: Allow once, always allow, or keep blocked
+    end
+    alt Any required check remains blocked
+        Guard-->>Agent: Redacted error
+    else All required checks pass
+        Guard->>Tool: Dispatch exact authorized call
+        Tool->>HTTP: Request with optional identity ID
+        HTTP->>HTTP: Recheck effects, URL and DNS addresses
+        Note over Owner,HTTP: Broker checks can also request owner decisions
+        HTTP->>HTTP: Enforce budgets and bind credentials
+        HTTP->>Target: DNS-pinned request
+        Target-->>HTTP: Bounded response
+        HTTP->>Store: Redacted evidence and trajectory
+        HTTP-->>Tool: Redacted result and evidence reference
+        Tool->>Store: Graph discoveries where applicable
+        Tool-->>Agent: Tool result
+    end
