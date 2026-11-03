@@ -4,6 +4,8 @@ A penetration-testing distribution with a macOS Electron app and a Linux web int
 
 The Pentest sidebar sits beside each chat and shows its trajectory, evidence graph, assessments, identities, scope/effect policy, studies, and plugin configuration. Target actions use managed adapters. Unknown DSH tools pause for an explicit operator decision that identifies their unverified destinations and effects.
 
+See the [architecture and configuration map](docs/architecture/) for Mermaid diagrams of the components, request flow, startup, instruction loading, subagents and audit storage, plus an index of where to edit `AGENTS.md` files, prompts, configs and implementations.
+
 **Recon beside the conversation.** Open **Pentest → Graph** to explore discovered hosts and their relationships while reading the agent's results. Discovery records host candidates and the evidence linking them. These observations do not establish that a host is live, verify a vulnerability, or expand the authorized target scope.
 
 ## Run

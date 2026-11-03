@@ -1,0 +1,29 @@
+flowchart LR
+    Intent["What should change?"]
+    Intent --> Dev["How coding agents work on Djupleita"]
+    Dev --> Repo["AGENTS.md at repository root<br/>SECURITY.md for publication rules"]
+
+    Intent --> Persona["Pentest assistant persona<br/>goals, delegation or compaction defaults"]
+    Persona --> Preset["configs/pentest-preset.json"]
+    Preset --> Active["applyCore required persona context<br/>only while engagement layer is ON"]
+    Persona --> Profile["Selected saved profile<br/>base persona and retained preset choices"]
+
+    Intent --> All["Guidance across Djupleita chats"]
+    All --> Home[".pentest/home/AGENTS.md<br/>and shared agents home AGENTS.md"]
+
+    Intent --> Project["Guidance for a chat workspace or directory"]
+    Project --> Workspace["Workspace AGENTS.md or CLAUDE.md<br/>plus local overlays and nested files"]
+
+    Intent --> Enforce["What tools and destinations are permitted"]
+    Enforce --> Policy["Pentest owner controls<br/>scope switch, effect policy<br/>operation and destination grants"]
+
+    Intent --> Learned["Learned authorization procedure"]
+    Learned --> Studies["Learning datasets and studies<br/>operator promotion into settings.json"]
+
+    Intent --> Workflow["Assessment, readiness, coverage,<br/>proof or reporting workflow"]
+    Workflow --> Skills["skills/djupleita-*/SKILL.md<br/>registered by dsh-plugin/src/skills.ts"]
+
+    classDef source fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    class Repo,Preset,Skills source
+    class Profile,Home,Workspace,Policy,Studies saved

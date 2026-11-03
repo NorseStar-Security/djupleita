@@ -1,0 +1,37 @@
+flowchart TB
+    Operator["Operator"] --> Shell["macOS desktop or Linux web app"]
+    Shell --> Agent["Harness chat and agent loop"]
+    Shell --- UI["Pentest sidebar and inline reviews<br/>packages/ui"]
+    UI <-->|"authenticated owner requests"| RPC["DesktopChannel<br/>dsh-plugin/src/rpc.ts"]
+    UI <-->|"owner engagement switch"| Mode["EngagementMode<br/>dsh-plugin/src/mode.ts"]
+    Mode -->|"ON: mount active core"| Runtime["PentestRuntime<br/>dsh-plugin/src/runtime.ts"]
+    Mode -->|"OFF"| Base["Ordinary Harness tools and permissions"]
+    RPC <--> Runtime
+
+    Agent --> LLM["Harness model adapters"]
+    LLM --> Egress["ModelEgressPlugin<br/>captured provider endpoint scope"]
+    Egress --> Provider["Selected model provider"]
+
+    Agent --> Guard["ToolPolicy<br/>scope, effects and owner review"]
+    Runtime -.-> Guard
+    Guard --> Tools["Enabled tool bundles<br/>packages/plugin-* and dsh-plugin"]
+    Tools --> HTTP["HTTP broker<br/>scope mode, effects, DNS and budgets"]
+    Tools --> CLI["Recon CLI workers<br/>private proxy and OS confinement"]
+    Tools --> REA["REA MCP worker<br/>offline analysis workspace"]
+    HTTP --> Targets["Target destinations<br/>boundary enforced when scope management is ON"]
+    CLI --> Network["Scoped target or intelligence destinations"]
+    REA --> Artifacts["Configured local artifacts"]
+
+    Runtime --> Stores["Private engagement stores<br/>graph, evidence, trajectories, settings"]
+    HTTP --> Stores
+    CLI --> Stores
+    REA --> Stores
+
+    classDef harness fill:#ede9fe,stroke:#6d28d9,color:#3b0764
+    classDef control fill:#fce7f3,stroke:#be185d,color:#831843
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef external fill:#dcfce7,stroke:#15803d,color:#14532d
+    class Shell,Agent,LLM harness
+    class Guard,Egress,Runtime,RPC,Mode control
+    class Stores saved
+    class Provider,Targets,Network,Artifacts external

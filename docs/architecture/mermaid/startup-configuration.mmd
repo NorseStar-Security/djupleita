@@ -1,0 +1,26 @@
+flowchart TB
+    Lock["upstream.lock.json"] --> Bootstrap["pnpm bootstrap<br/>scripts/bootstrap.mjs"]
+    Patches["patches/*.patch"] --> Bootstrap
+    Bootstrap --> Vendor["Verify pinned Harness commit<br/>apply reviewed overlays"]
+
+    Start["pnpm desktop or pnpm web"] --> Prepare["scripts/profile.mjs<br/>prepareProfile"]
+    Preset["configs/pentest-preset.json<br/>persona, goals, subagents, compaction"] --> Prepare
+    Bundles["configs/distribution.json<br/>included bundles"] --> Prepare
+    Template["configs/<br/>engagement.example.json"] -->|"create only when missing"| Engagement["Selected engagement file<br/>.pentest/engagement.json<br/>or environment override"]
+    Engagement --> Prepare
+    Tooling[".pentest/tooling.json<br/>installed runtime defaults"] --> Prepare
+    Prepare --> Desktop[".pentest/home/profiles/<br/>desktop/<br/>package.json and cordis.patch.yml"]
+    Prepare --> Web[".pentest/home/profiles/<br/>pentest/<br/>package.json and cordis.patch.yml"]
+    Vendor -. "provides host and plugins" .-> Host["Harness host<br/>DSH_HOME = checkout/.pentest/home"]
+    Desktop --> Host
+    Web --> Host
+    Host --> Mode["EngagementMode<br/>read private mode.json"]
+    Mode -->|"ON"| Open["PentestRuntime.open"]
+    Mode -->|"OFF"| Base["Ordinary Harness<br/>engagement core not mounted"]
+    Saved[".pentest/engagements/ID/<br/>settings.json and plugins.json"] -->|"restore saved engagement choices"| Open
+    Open --> Effective["Effective scope mode, policy, plugin config<br/>and promoted learning artifacts"]
+
+    classDef source fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    class Lock,Patches,Preset,Bundles,Template source
+    class Engagement,Tooling,Desktop,Web,Saved saved
