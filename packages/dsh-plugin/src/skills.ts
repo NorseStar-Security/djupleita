@@ -30,12 +30,20 @@ export const AssessmentSkills = {
     });
     ctx.inject(['systemPrompt'], inner => {
       inner.systemPrompt.context({ name: 'djupleita-assessment-workflow', order: 810, required: true, interpolate: false,
-        text: () => 'For a web/API assessment, load pentest_skill djupleita-assessment before testing. Plan bounded coverage, prove readiness and identity separation, retain unresolved leads, and validate candidate findings with owner assertions. Only owner-reviewed deterministic proofs enter reports. A paused, failed, cancelled or partial run never establishes target safety. Subagents must join the parent run before target actions. Bundled skills: ' + entries.map(entry => `${entry.candidate.name}: ${entry.candidate.description}`).join('\n') });
+        text: () => 'Use managed tools for the current assessment objective, including bounded active testing when requested. The bundled assessment workflow is for structured coverage and formal object-authorization proof; it is not a prerequisite for every active test. When using that workflow, load pentest_skill djupleita-assessment, plan bounded coverage, prove readiness and identity separation, and retain unresolved leads. Only owner-reviewed deterministic proofs enter its formal findings reports. A paused, failed, cancelled or partial run never establishes target safety. Subagents participating in a structured run must join that run before target actions. Bundled skills: ' + entries.map(entry => `${entry.candidate.name}: ${entry.candidate.description}`).join('\n') });
     });
     ctx.effect(() => ctx.pentest.registerDescriptor('pentest_skill', { plugin: 'assessment', confinement: 'local-read',
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: skill effects');
     ctx.effect(() => ctx.pentest.registerDescriptor('skill', { plugin: 'assessment', confinement: 'local-read',
       describe: () => ({ destinations: [], effects: ['read'], reversible: true }) }), 'pentest: native skill effects');
+    // Preset-local native skill registries may not see the host catalog. Resolve
+    // this bundle's exact names here; other native skills retain their own loader.
+    ctx.on('tools/execute', async (exec, next) => {
+      const name = (exec.arguments as { name?: unknown } | null)?.name;
+      const entry = exec.name === 'skill' && entries.find(item => item.candidate.name === name);
+      return entry ? { isError: false as const, value: { name: entry.candidate.name, provider: entry.candidate.provider, content: entry.content },
+        content: [{ type: 'text' as const, text: entry.content }] } : next();
+    });
     const schema = z.object({ name: z.enum(names) });
     ctx.tools.register({ name: 'pentest_skill', description: 'Load a bundled Djupleita assessment skill. This reads trusted workflow instructions; it grants no target access or tool approvals.',
       parameters: toolSchema(schema), output: { schema: { type: 'object', additionalProperties: true },

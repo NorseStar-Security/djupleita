@@ -24,7 +24,7 @@ export const DesktopChannel = {
     ctx.effect(() => ctx.pentest.review.connect(), 'pentest: interactive owner review');
     // Exact Connection Fetch routes require an authenticated owner Peer before
     // dispatch. Keep this surface outside the shared model-facing API gateway.
-    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'identity/create', 'settings/update', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'learning/cancel', 'learning/revoke', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
+    for (const endpoint of [...assessmentEndpoints, 'snapshot', 'trajectory/page', 'trajectory/detail', 'graph/page', 'graph/explore', 'graph/neighborhood', 'identity/create', 'settings/update', 'budget/renew-time', 'plugins/update', 'setup/check', 'setup/dismiss', 'setup/show', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'learning/run', 'learning/promote', 'learning/cancel', 'learning/revoke', 'review/snapshot', 'review/decide', 'review/revoke', 'review/destination']) connection.fetch.register({
       path: `/api/pentest/${endpoint}`, methods: ['POST'], requestBody: 'buffered',
       async fetch(request) {
       const parsed = clientRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -52,6 +52,15 @@ export const DesktopChannel = {
         if (endpoint === 'graph/page') {
           const input = z.object({ offset: z.number().int().min(0).default(0) }).parse(payload);
           return reply(ctx.pentest.graphPage(input.offset));
+        }
+        if (endpoint === 'graph/explore') {
+          const input = z.object({ query: z.string().max(300).default(''), type: z.string().max(128).default(''),
+            collection: z.string().max(128).default(''), offset: z.number().int().min(0).default(0) }).parse(payload);
+          return reply(ctx.pentest.graphExplore(input.query, input.type, input.collection, input.offset));
+        }
+        if (endpoint === 'graph/neighborhood') {
+          const input = z.object({ nodeId: z.string().min(1).max(4096), offset: z.number().int().min(0).default(0) }).parse(payload);
+          return reply(ctx.pentest.graphNeighborhood(input.nodeId, input.offset));
         }
         if (endpoint.startsWith('setup/')) {
           const input = z.object({ sessionId: SessionSchema }).parse(payload);
@@ -82,6 +91,11 @@ export const DesktopChannel = {
           const input = IdentityInput.parse(payload);
           const identity = await ctx.pentest.createIdentity(input.metadata as Omit<Identity, 'id'>, input.secret, signal);
           return reply(identity);
+        }
+        if (endpoint === 'budget/renew-time') {
+          const input = z.object({ sessionId: SessionSchema }).parse(payload);
+          await ctx.pentest.renewTimeBudget(input.sessionId as SessionId);
+          return reply(ctx.pentest.engagement.snapshot());
         }
         if (endpoint === 'settings/update') {
           const input = SettingsInput.parse(payload);

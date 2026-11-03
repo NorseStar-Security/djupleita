@@ -1,7 +1,9 @@
 ---
 name: djupleita-assessment
-description: Plan or resume an authorized Djupleita web/API assessment with bounded requests, durable coverage, evidence gates and explicit incomplete outcomes.
+description: Plan or resume a structured Djupleita assessment run with durable coverage, readiness contracts and formal owner-reviewed object-authorization proofs.
 ---
+
+Use this workflow for a structured assessment run, durable coverage tracking or formal object-authorization proofs. General active analysis and bounded validation can use the managed tools directly under the saved engagement controls; missing assertions do not limit all testing to passive discovery. Once a structured run is joined, follow its readiness, budget, coverage and completion gates.
 
 Inspect `pentest_status` and the available tools. If `pentest_assessment` is absent, enable the Assessment workflow bundle in Plugins before using this workflow.
 

@@ -33,7 +33,7 @@ export interface EffectDescriptor {
   plugin: string;
   /** Trusted adapter declaration, never an argument supplied by the model. */
   confinement: 'brokered' | 'local-read' | 'transport';
-  describe(args: unknown): { destinations: Action['destinations']; effects: Effect[]; reversible: boolean; identityId?: IdentityId };
+  describe(args: unknown): { destinations: Action['destinations']; effects: Effect[]; reversible: boolean; identityId?: IdentityId; activity?: Action['activity'] };
 }
 export interface RuntimeConfig {
   engagement: Engagement; policy: PolicyConfig; root: string; keychainHelper: string;
@@ -103,6 +103,7 @@ export class PentestRuntime {
   private installing = false;
   private setupBannerDismissed = false;
   private readonly setupAbort = new AbortController();
+  get policyProfile(): 'review' | 'red-team' { return this.currentPolicy.profile ?? 'review'; }
   get scope(): ScopeService { return this.currentScope; }
   get frontier(): CrawlFrontier { return this.currentFrontier; }
 
@@ -226,7 +227,8 @@ export class PentestRuntime {
   fuzz(): FuzzService { return new FuzzService(this.currentPlugins.ffuf, join(this.root, 'ffuf'), this.engagement,
     session => this.http(session), session => this.crawl(session), this.evidence, this.trajectories, this.redactor); }
   intelligence(): PassiveReconService { return new PassiveReconService(this.currentPlugins.intelligence, this.scope, this.engagement,
-    (url, signal, identity) => this.services().send(url, 'intelligence', null, signal, identity, 'GET'), this.graph, this.evidence,
+    (url, signal, identity, access) => access === 'research' ? this.services().research(url, signal)
+      : this.services().send(url, 'intelligence', null, signal, identity, 'GET'), this.graph, this.evidence,
     this.trajectories, this.redactor, session => this.crawl(session)); }
   rea(): ReaService {
     if (!this.currentPlugins.rea) throw new PentestError('REA_CONFIG', 'Configure REA in the Plugins panel before using its tools');
@@ -390,6 +392,17 @@ export class PentestRuntime {
   async revokeProcedure(session: SessionId): Promise<void> {
     await this.updateProcedure(null, session);
   }
+  /** Authenticated owner route only; no model tool exposes renewal. */
+  async renewTimeBudget(session: SessionId): Promise<void> {
+    const next = this.settingsQueue.then(async () => {
+      const before = this.engagement.snapshot();
+      await this.trajectories.append(session, 'engagement/time-renewal', { source: 'desktop-owner', previousStartedAt: before.startedAt,
+        previousExpiresAt: before.expiresAt, requestsRetained: before.requests, durationMs: before.durationMs });
+      await this.trajectories.flush();
+      this.engagement.renewTime();
+    });
+    this.settingsQueue = next.catch(() => {}); await next;
+  }
   /** Model-facing status never embeds trajectories, graph bodies or previous tool results. */
   async status(session: SessionId, availableTools?: readonly string[]): Promise<Json> {
     const graph = this.graph.counts(), frontier = this.frontier.snapshot(), events = await this.trajectories.page(session);
@@ -398,7 +411,7 @@ export class PentestRuntime {
     return this.redactor.json({
       engagement: { id: this.engagement.engagement.id, name: this.engagement.engagement.name,
         objectives: this.engagement.engagement.objectives, scope: this.scope.scope },
-      budget: this.engagement.snapshot(), policyVersion: this.policy(session).version,
+      budget: this.engagement.snapshot(), intelligence: this.intelligence().capabilities(), policyVersion: this.policy(session).version,
       assessment: this.assessment.current(session) ? this.assessment.scorecard(this.assessment.current(session)!.id) : null,
       identities: { total: identities.length, items: identities.slice(0, 20) },
       graph,
@@ -414,6 +427,16 @@ export class PentestRuntime {
     const page = this.graph.page(offset);
     return this.redactor.json({ ...page, nodes: page.nodes.map(node => ({ ...node, name: node.name.slice(0, 300),
       attributes: previewData(node.attributes).data })), edges: page.edges.map(edge => ({ ...edge, attributes: previewData(edge.attributes).data })) });
+  }
+  graphExplore(query = '', type = '', collection = '', offset = 0): Json {
+    const page = this.graph.explore(query, type, collection, offset);
+    return this.redactor.json({ ...page, nodes: page.nodes.map(node => ({ ...node, name: node.name.slice(0, 300), attributes: previewData(node.attributes).data })) });
+  }
+  graphNeighborhood(nodeId: string, offset = 0): Json {
+    const detail = this.graph.neighborhood(nodeId, offset);
+    return this.redactor.json({ ...detail, node: { ...detail.node, name: detail.node.name.slice(0, 300), attributes: previewData(detail.node.attributes).data },
+      nodes: detail.nodes.map(node => ({ ...node, name: node.name.slice(0, 300), attributes: previewData(node.attributes).data })),
+      edges: detail.edges.map(edge => ({ ...edge, attributes: previewData(edge.attributes).data })) });
   }
   async snapshot(sessionId?: SessionId): Promise<Json> {
     const trajectory = sessionId ? await this.trajectories.page(sessionId) : { events: [], total: 0, nextBefore: null, file: '' };

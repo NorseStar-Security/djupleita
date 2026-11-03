@@ -31,17 +31,35 @@ try {
   for (const row of doc.contents.items) for (const entry of row.get('insert')?.items ?? []) {
     if (entry.get('id') === 'pentest') {
       entry.get('config').get('engagement').set('scope', example);
+      entry.get('config').get('engagement').set('model', { provider: 'red-team-fixture', model: 'offline-judge' });
       entry.get('config').set('root', join(root, 'engagements'));
       entry.get('config').set('plugins', {});
       entry.get('config').set('keychainHelper', '/unused-fixture-helper');
     }
   }
   await writeFile(path, doc.toString({ lineWidth: 0 }));
+  const { AssessmentService } = await import('../../packages/assessment/lib/index.js');
+  const savedRoot = join(root, 'engagements', prepared.engagement.id);
+  await mkdir(savedRoot, { recursive: true });
+  const savedBudget = new AssessmentService(join(savedRoot, 'assessment.sqlite'), {});
+  savedBudget.saveBudget({ requests: 3, startedAt: Date.now() - prepared.engagement.budget.durationMs - 1000 });
+  savedBudget.close();
   const { bootProductionProfile } = await import('../../vendor/deepseek-harness/packages/test-support/loader-smoke/tests/fixtures/production-profile.ts');
   const { provideCmdline } = await import('../../vendor/deepseek-harness/packages/boot/cmdline/lib/index.js');
   ctx = await bootProductionProfile({ binName: 'djupleita-fixture', profile: 'pentest', overlayPaths: [path], prepare(inner) {
-    provideCmdline(inner, { args: ['--no-open', '--host', '127.0.0.1', '--port', '0'], exit() {}, ready: { onReady() { return () => {}; } } });
+    provideCmdline(inner, { args: ['--no-open', '--host', '127.0.0.1', '--port', '0'], exit() {}, ready: { onReady(listener) { queueMicrotask(listener); return () => {}; } } });
   } });
+  let judgments = 0;
+  const { LlmAdapter } = await import('../../vendor/deepseek-harness/packages/llm/llm/lib/index.js');
+  class OfflineJudge extends LlmAdapter {
+    async *stream() {
+      judgments++;
+      const text = JSON.stringify({ deletion: 0, irreversible: 0, disruption: 0, confidence: 0.99, reason: 'Synthetic local fixture operation' });
+      yield { type: 'block-start', index: 0, blockType: 'text' }; yield { type: 'text-delta', index: 0, text };
+      yield { type: 'block-end', index: 0, block: { type: 'text', text } }; yield { type: 'finish', reason: { kind: 'stop' } };
+    }
+  }
+  ctx.llm.registerAdapter(['red-team-fixture'], new OfflineJudge());
   const { chromium } = await import('../../packages/browser/node_modules/playwright/index.mjs');
   const browser = await chromium.launch({ headless: true });
   try {
@@ -49,6 +67,7 @@ try {
     const anonymous = await page.request.get(ctx.webServer.getOrigin());
     assert.equal(anonymous.status(), 401, 'Web startup must require authentication');
     await page.goto(ctx.connection.authenticatedUrl(ctx.webServer.getOrigin()));
+    await page.getByRole('dialog', { name: 'Preview Notice' }).getByRole('button', { name: 'Continue', exact: true }).click();
     const poll = async predicate => {
       for (let i = 0; i < 100; i++) { if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
       throw new Error('Web fixture state did not settle');
@@ -64,6 +83,13 @@ try {
       await page.locator('textarea[name="scope"]').waitFor();
     };
     await policy();
+    await page.getByText('Time budget expired. Network tools cannot run until you renew it.', { exact: true }).waitFor();
+    const usedBefore = ctx.pentest.engagement.snapshot().requests;
+    await page.getByRole('button', { name: 'Renew time budget', exact: true }).click();
+    await poll(() => !ctx.pentest.engagement.snapshot().timeExhausted);
+    assert.equal(ctx.pentest.engagement.snapshot().requests, usedBefore);
+    await page.reload(); await policy();
+    await page.getByText('Time remaining:', { exact: false }).waitFor();
     const editor = page.locator('textarea[name="scope"]');
     const readScope = async () => JSON.parse((await editor.inputValue()).replaceAll(suffix, 'example.test'));
     assert.deepEqual(await readScope(), example);
@@ -126,6 +152,31 @@ try {
     assert.equal(await toggle.isChecked(), false);
     assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://custom.example.test/', purpose: 'target', access: 'active' }));
     assert.doesNotThrow(() => ctx.pentest.scope.check({ url: 'https://research.example.test/blog', purpose: 'target', access: 'read' }));
+    const actionProfile = page.getByRole('combobox', { name: 'Action profile', exact: true });
+    assert.equal(await actionProfile.inputValue(), 'review');
+    await actionProfile.selectOption('red-team');
+    assert.equal(ctx.pentest.policyProfile, 'review', 'Profile selection remains a draft until Apply');
+    assert.equal(await page.getByRole('combobox', { name: 'Unknown effects', exact: true }).inputValue(), 'judge');
+    await page.getByRole('combobox', { name: 'Destructive actions', exact: true }).selectOption('deny');
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => ctx.pentest.policyProfile === 'red-team');
+    await page.reload(); await policy();
+    assert.equal(await actionProfile.inputValue(), 'red-team');
+    assert.equal(await page.getByRole('combobox', { name: 'Destructive actions', exact: true }).inputValue(), 'deny');
+    const { id: actionId } = await import('../../packages/contracts/lib/index.js');
+    const opaque = { id: actionId(), engagementId: ctx.pentest.engagement.engagement.id, sessionId: 'web-fixture', tool: 'bash', plugin: 'harness-execution', arguments: { command: 'printf synthetic-fixture' }, destinations: [], effects: ['unknown'], reversible: false };
+    assert.equal((await ctx.pentest.policy('web-fixture').authorize({ action: opaque, signal: AbortSignal.timeout(5000) })).kind, 'allow');
+    assert.equal(judgments, 1, 'Unknown effects must reach the isolated offline judge');
+    await assert.rejects(() => ctx.pentest.policy('web-fixture').authorize({ action: { ...opaque, effects: ['delete'] }, signal: AbortSignal.timeout(5000) }), /requires your decision/);
+    assert.equal(judgments, 1, 'Known destructive effects must not reach the judge');
+    assert.equal(ctx.pentest.review.snapshot().grants.length, 0, 'Routine actions require no saved allowance');
+    if (process.env.DSH_TEST_POLICY_SCREENSHOT) {
+      await actionProfile.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: process.env.DSH_TEST_POLICY_SCREENSHOT, fullPage: true });
+    }
+    await actionProfile.selectOption('review');
+    await page.getByRole('button', { name: 'Apply scope and policy', exact: true }).click();
+    await poll(() => ctx.pentest.policyProfile === 'review');
     if (process.env.DSH_TEST_SCOPE_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_SCOPE_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Hide setup reminder', exact: true }).click();
     await poll(async () => (await ctx.pentest.toolSetup()).bannerDismissed);
@@ -185,6 +236,7 @@ try {
     const prompt = await ctx.systemPrompt.assemble({ scope: agent });
     assert(!JSON.stringify(prompt).includes('authorized penetration testing assistant'));
     assert(!JSON.stringify(prompt).includes('Target scope management is'));
+    assert(!JSON.stringify(prompt).includes('operator-provided engagement context'));
     const result = await executeModelToolFixture(ctx, { agent, name: 'read', arguments: { file_path: join(root, 'basic-dsh.txt') },
       callId: ToolCallId('basic-mode-read'), signal: AbortSignal.timeout(5000) });
     assert(!result.isError);
@@ -193,11 +245,25 @@ try {
     await poll(() => ctx.get('pentest') !== undefined && ctx.tools.get('pentest_http') !== undefined);
     await editor.waitFor();
     assert.deepEqual(ctx.pentest.scope.scope, savedScope);
+    // The shared persona reaches existing standard agents and fresh pentest agents.
+    const freshAgent = (await ctx.agents.create({ sessionId: SessionId('prompt-child-fixture'), meta: { cwd: root, agentPreset: 'pentest' },
+      setup: async inner => { await ctx.agentPresets.mount(inner, 'pentest'); } })).agent;
+    for (const scoped of [agent, freshAgent]) {
+      const restored = JSON.stringify(await ctx.systemPrompt.assemble({ scope: scoped }));
+      assert(restored.includes('operator-provided engagement context'));
+      assert(restored.includes('bounded active testing'));
+      assert(restored.includes('previous task-specific passive-only limit'));
+      assert(restored.includes('Never work around a denied operation'));
+      assert(restored.includes('not prerequisites for every active test'));
+      assert(!restored.includes('load pentest_skill djupleita-assessment before testing'));
+    }
     assert.equal(ctx.pentest.engagement.snapshot().requests, savedBudget.requests);
     assert.deepEqual(JSON.parse(await editor.inputValue()), savedScope);
     await page.reload(); await policy();
     await page.getByRole('button', { name: 'Turn off engagement layer', exact: true }).waitFor();
     if (process.env.DSH_TEST_UI_SCREENSHOT) await page.screenshot({ path: process.env.DSH_TEST_UI_SCREENSHOT, fullPage: true });
-    console.log(JSON.stringify({ authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
+    const { checkEvidenceGraph } = await import('./evidence-graph-web.mjs');
+    await checkEvidenceGraph(ctx, page);
+    console.log(JSON.stringify({ evidenceGraph: true, redTeamProfile: true, judgeUnknownEffects: true, authenticatedWeb: true, courseScopeToggle: true, scopeDraftAndPersistence: true, scopePrefillWithServices: true, savedScopeMatchesAgent: true, basicDshMode: true, destinationManagement: true, setupHideAndRestore: true }));
   } finally { await browser.close(); }
 } finally { await ctx?.fiber.dispose(); await rm(root, { recursive: true, force: true }); }

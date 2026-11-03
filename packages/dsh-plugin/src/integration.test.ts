@@ -2,7 +2,7 @@
 import { it, expect, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import http from 'node:http';
@@ -18,7 +18,9 @@ import type { GenerateOptions, PreparedAdapterCall, StreamChunk } from '@deepsee
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { id } from '@dsh-pentest/contracts';
-import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, HarnessControlEffects, ModelEgressPlugin, ReaTools, AssessmentTools, modelJudge, apply } from './index.ts';
+import { PentestRuntime, ToolPolicy, InspectionTools, HttpTools, FuzzTools, ReconTools, HarnessControlEffects, ModelEgressPlugin, ReaTools, AssessmentTools, modelJudge, apply } from './index.ts';
+import { ReconService } from '@dsh-pentest/recon';
+import { writeFile, mkdir, rm, symlink } from 'node:fs/promises';
 import { PluginConfigSchema } from './runtime.ts';
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection';
 import { engagement, policyConfig, testJudge } from '../../../tests/fixtures.ts';
@@ -260,6 +262,9 @@ it('activates the complete parent/child plugin tree and exposes the owner-only d
     expect(await inspect('graph/page', { offset: 0 })).toMatchObject({ ok: true, value: { nodes: [], edges: [], counts: { nodes: 0, edges: 0 } } });
     expect(await inspect('trajectory/detail', { sessionId, seq: -1 })).toMatchObject({ ok: false });
     expect(await inspect('graph/page', { offset: -1 })).toMatchObject({ ok: false });
+    expect(await inspect('graph/explore', {})).toMatchObject({ ok: true, value: { nodes: [], total: 0, collections: [] } });
+    expect(await inspect('graph/explore', { query: 'x'.repeat(301) })).toMatchObject({ ok: false });
+    expect(await inspect('graph/neighborhood', { nodeId: 'missing' })).toMatchObject({ ok: false });
     // The parent's owner UI can review blocked children without opening their sessions.
     const children = [id<'SessionId'>(), id<'SessionId'>(), id<'SessionId'>()];
     const waiting = children.map((child, index) => ctx.pentest.review.run({ sessionId: child, tool: 'fixture_delete',
@@ -281,7 +286,7 @@ it('activates the complete parent/child plugin tree and exposes the owner-only d
     expect((await ctx.pentest.trajectories.read(sessionId)).some(event => event.type === 'policy/review-decided')).toBe(false);
     const other = { principal: { kind: 'api-key' } } as unknown as typeof connection.browserPeer;
     expect((await shared.fetch(request(), other)).status).toBe(403);
-    for (const endpoint of ['setup/check', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'trajectory/page', 'trajectory/detail', 'graph/page', 'review/snapshot', 'review/decide']) {
+    for (const endpoint of ['setup/check', 'setup/install-recon', 'setup/install-ffuf', 'setup/install-rea', 'setup/load', 'trajectory/page', 'trajectory/detail', 'graph/page', 'graph/explore', 'graph/neighborhood', 'review/snapshot', 'review/decide']) {
       const setup = new Request(`http://host/api/pentest/${endpoint}`, { method: 'POST', body: JSON.stringify({
         type: 'client-request', rpcId: 'test-setup', method: `pentest/${endpoint}`, payload: { sessionId: 'setup-test' },
       }) });
@@ -539,4 +544,55 @@ it('serializes REA and assessment tools through the Fireworks adapter without da
     // Advertising a wider argument shape cannot bypass execution-time JSON validation.
     expect((await h.invoke('pentest_rea', { tool: 'fixture', arguments: { invalid: undefined } })).isError).toBe(true);
   } finally { await h.close(); }
+});
+
+
+it('judges unknown shell commands and routes literal recon through the pinned adapter without saved grants', async () => {
+  const h = await harness(); const work = await mkdtemp(join(tmpdir(), 'djupleita-profile-pipeline-')); let shellRuns = 0;
+  try {
+    Object.assign(h.agent, { session: { header: { cwd: work } } });
+    await h.ctx.plugin(HarnessControlEffects); await h.ctx.plugin(ReconTools);
+    h.ctx.tools.register({ name: 'bash', description: 'fixture shell', parameters: { type: 'object' },
+      output: { schema: { type: 'object' }, render: () => [] }, async execute() { shellRuns++; return { fixture: true }; } });
+    const session = h.runtime.session({ agent: h.agent } as ToolExecution);
+    expect((await h.invoke('bash', { command: 'printf fixture' })).isError).toBe(true);
+    await h.runtime.updateSettings(h.runtime.scope.scope, { ...policyConfig, profile: 'red-team' }, session);
+    expect((await h.invoke('bash', { command: 'printf fixture' })).isError).toBe(false);
+    expect(shellRuns).toBe(1); expect(h.models).toHaveLength(1);
+    expect((await h.invoke('bash', { command: 'rm report.txt' })).isError).toBe(true);
+    expect(shellRuns).toBe(1); expect(h.models).toHaveLength(1);
+    const run = vi.spyOn(ReconService.prototype, 'run').mockImplementation(async input => ({ records: [{ host: input.target }], tool: input.tool }));
+    for (const command of ['subfinder -d app.example.test -silent -json', 'httpx -u https://app.example.test/ -rl 2 -threads 1', 'httpx -u https://app.example.test/ -o result.jsonl']) {
+      expect((await h.invoke('bash', { command })).isError).toBe(false);
+    }
+    expect(shellRuns).toBe(1); expect(run).toHaveBeenCalledTimes(3); expect(h.models).toHaveLength(1);
+    expect(await readFile(join(work, 'result.jsonl'), 'utf8')).toContain('https://app.example.test/');
+    expect((await h.invoke('bash', { command: 'httpx -u https://example.test/' })).isError).toBe(true);
+    expect(run).toHaveBeenCalledTimes(3); expect(h.models).toHaveLength(1);
+    await writeFile(join(work, 'inputs.txt'), 'https://app.example.test/');
+    h.ctx.on('tools/pre-execute', async (exec, next) => {
+      if ((exec.arguments as { command?: string }).command?.includes('-l inputs.txt')) await writeFile(join(work, 'inputs.txt'), 'https://changed.example.test/');
+      return next();
+    });
+    expect((await h.invoke('bash', { command: 'httpx -l inputs.txt' })).isError).toBe(true);
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(h.runtime.review.snapshot()).toEqual({ pending: [], grants: [] });
+  } finally { await h.close(); await rm(work, { recursive: true, force: true }); }
+});
+
+it('allows new workspace reports while reviewing overwrites and paths outside the workspace', async () => {
+  const h = await harness(); const work = await mkdtemp(join(tmpdir(), 'djupleita-profile-files-')); let writes = 0;
+  try {
+    Object.assign(h.agent, { session: { header: { cwd: work } } }); await h.ctx.plugin(HarnessControlEffects);
+    h.ctx.tools.register({ name: 'write', description: 'fixture write', parameters: { type: 'object' }, output: { schema: { type: 'object' }, render: () => [] },
+      async execute() { writes++; return {}; } });
+    await h.runtime.updateSettings(h.runtime.scope.scope, { ...policyConfig, profile: 'red-team' }, h.runtime.session({ agent: h.agent } as ToolExecution));
+    expect((await h.invoke('write', { file_path: 'report.txt', content: 'Synthetic report' })).isError).toBe(false);
+    await writeFile(join(work, 'report.txt'), 'Existing evidence');
+    expect((await h.invoke('write', { file_path: 'report.txt', content: '' })).isError).toBe(true);
+    expect((await h.invoke('write', { file_path: '../outside.txt', content: 'Synthetic' })).isError).toBe(true);
+    await symlink(dirname(work), join(work, 'escape'));
+    expect((await h.invoke('write', { file_path: 'escape/outside.txt', content: 'Synthetic' })).isError).toBe(true);
+    expect(writes).toBe(1); expect(h.models).toHaveLength(0); expect(h.runtime.review.snapshot().grants).toEqual([]);
+  } finally { await h.close(); await rm(work, { recursive: true, force: true }); }
 });

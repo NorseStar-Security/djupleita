@@ -36,9 +36,16 @@ it('loads bundled skills through the native registry and guarded tool pipeline, 
     };
     expect((await ctx.skills.list()).filter(item => item.provider === 'djupleita-assessment')).toHaveLength(5);
     expect((await ctx.skills.get('djupleita-proof'))?.content).toContain('negative control');
-    expect((await ctx.systemPrompt.assemble()).contexts.map(item => item.text).join('\n')).toContain('owner-reviewed deterministic proofs');
+    const workflowPrompt = (await ctx.systemPrompt.assemble()).contexts.map(item => item.text).join('\n');
+    expect(workflowPrompt).toContain('not a prerequisite for every active test');
+    expect(workflowPrompt).toContain('owner-reviewed deterministic proofs');
+    expect(workflowPrompt).not.toContain('load pentest_skill djupleita-assessment before testing');
+    ctx.tools.register({ name: 'skill', description: 'Scoped native skill fixture', parameters: { type: 'object' },
+      output: { schema: { type: 'object' }, render: () => [] }, async execute() { throw new Error('Scoped catalog has no bundled skill'); } });
+    expect((await invoke('skill', { name: 'djupleita-assessment' })).value).toMatchObject({ name: 'djupleita-assessment', content: expect.stringContaining('pentest_status') });
+    expect((await invoke('skill', { name: 'missing-fixture' })).isError).toBe(true);
     const loaded = await invoke('pentest_skill', { name: 'djupleita-assessment' });
-    expect(loaded.isError).toBe(false); expect(loaded.value).toMatchObject({ name: 'djupleita-assessment' });
+    expect(loaded.isError).toBe(false); expect(loaded.value).toMatchObject({ name: 'djupleita-assessment', content: expect.stringContaining('Once a structured run is joined, follow its readiness, budget, coverage and completion gates.') });
     const planned = await invoke('pentest_assessment', { operation: 'plan', plan: { title: 'Native pipeline plan', maxRequests: 12,
       cells: [{ surface: 'https://app.example.test/objects/1', method: 'GET', input: 'object', family: 'authorization' }] } });
     expect(planned.isError).toBe(false); expect(runtime.assessment.runs()).toHaveLength(1);
@@ -63,7 +70,7 @@ it('restricts every assessment owner route to authenticated owner peers', async 
     } });
     await ctx.plugin(DesktopChannel);
     const shared = connection.createSharedFetchHandler('/api'), other = { principal: { kind: 'api-key' } } as unknown as typeof connection.browserPeer;
-    for (const endpoint of assessmentEndpoints) {
+    for (const endpoint of [...assessmentEndpoints, 'budget/renew-time']) {
       const request = () => new Request(`http://host/api/pentest/${endpoint}`, { method: 'POST', body: JSON.stringify({
         type: 'client-request', rpcId: 'fixture', method: `pentest/${endpoint}`, payload: {},
       }) });

@@ -45,9 +45,19 @@ const server = net.createServer(client => {
 server.maxConnections = 256;
 server.on('error', () => { process.stderr.write('Linux broker bridge failed\n'); process.exit(125); });
 server.listen(Number(port), '127.0.0.1', () => {
-  const child = spawn(executable, args, { stdio: 'inherit', env: process.env });
-  const finish = code => { for (const socket of sockets) socket.destroy(); server.close(() => process.exit(code)); };
-  child.on('error', () => finish(126)); child.on('exit', code => finish(code ?? 1));
+  // Node can initialize its stdio lazily and change the shared descriptor's
+  // blocking mode after the CLI starts. Give the CLI separate output pipes.
+  const child = spawn(executable, args, { stdio: ['inherit', 'pipe', 'pipe'], env: process.env });
+  child.stdout.pipe(process.stdout, { end: false });
+  child.stderr.pipe(process.stderr, { end: false });
+  let finished = false;
+  const finish = code => {
+    if (finished) return; finished = true;
+    for (const socket of sockets) socket.destroy();
+    server.close(); process.exitCode = code;
+    // Natural exit drains both output streams; process.exit() can truncate them.
+  };
+  child.on('error', () => finish(126)); child.on('close', code => finish(code ?? 1));
 });
 `;
 

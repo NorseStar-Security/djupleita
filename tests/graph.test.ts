@@ -47,3 +47,41 @@ it('pages graph nodes with exact totals and only relationships among displayed n
     expect(() => graph.page(-1)).toThrow('Invalid'); expect(graph.snapshot().nodes).toHaveLength(310);
   } finally { graph.close(); }
 });
+
+it('searches all collections and follows relationships across node pages with bounded evidence', () => {
+  const graph = new AttackGraph(':memory:', id<'EngagementId'>());
+  try {
+    const evidence = (tool: string): Evidence => ({ id: id<'EvidenceId'>(), contentHash: digest(tool), pointer: `blobs/${digest(tool)}`,
+      mediaType: 'application/json', tool, observedAt: new Date().toISOString() });
+    const recon = evidence('subfinder'), probe = evidence('httpx');
+    graph.addEvidence(recon); graph.addEvidence(probe);
+    const target = 'target';
+    graph.putNode({ id: target, type: 'ReconTarget', name: 'example.test', attributes: {}, evidenceIds: [recon.id], observedAt: recon.observedAt });
+    for (let i = 0; i < 205; i++) {
+      const nodeId = `host-${String(i).padStart(3, '0')}`;
+      graph.putNode({ id: nodeId, type: 'Host', name: `${i}.example.test`, attributes: {}, evidenceIds: [i === 204 ? probe.id : recon.id], observedAt: recon.observedAt });
+      graph.putEdge({ id: `edge-${nodeId}`, source: target, target: nodeId, type: 'Discovered', status: i === 204 ? 'inferred' : 'observed',
+        evidenceIds: [recon.id], attributes: {}, observedAt: recon.observedAt });
+    }
+    expect(graph.explore().nodes[0]?.id).toBe(target);
+    expect(graph.explore().nextOffset).toBe(100);
+    expect(graph.explore('', 'Host', '', 200).nodes).toHaveLength(5);
+    const search = graph.explore('204.EXAMPLE.TEST', 'Host', 'httpx');
+    expect(search.nodes.map(node => node.id)).toEqual(['host-204']);
+    expect(search.collections).toEqual([{ name: 'httpx', count: 1 }, { name: 'subfinder', count: 1 }]);
+    expect(graph.explore('', '', 'subfinder').total).toBe(206); // Relationship evidence survives a later node update from another tool.
+    expect(graph.explore('%').total).toBe(0); // Search characters are literal, never SQL wildcards.
+    expect(graph.explore("' OR 1=1 --").total).toBe(0);
+    const first = graph.neighborhood(target);
+    expect(first.edges).toHaveLength(30); expect(first.total).toBe(205); expect(first.nextOffset).toBe(30);
+    expect(graph.neighborhood(target, 180).edges).toHaveLength(25);
+    expect(graph.neighborhood(target, 180).nextOffset).toBeNull();
+    const reverse = graph.neighborhood('host-204');
+    expect(reverse.nodes.map(node => node.id)).toEqual([target]);
+    expect(reverse.edges[0]?.status).toBe('inferred');
+    expect(new Set(reverse.evidence.map(item => item.tool))).toEqual(new Set(['subfinder', 'httpx']));
+    expect(() => graph.neighborhood('missing')).toThrow('no longer exists');
+    expect(() => graph.neighborhood(target, -1)).toThrow('Invalid');
+    expect(() => graph.explore('x'.repeat(301))).toThrow('Invalid');
+  } finally { graph.close(); }
+});

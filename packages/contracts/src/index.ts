@@ -102,6 +102,10 @@ export const ActionSchema = z.object({
   destinations: z.array(DestinationSchema),
   effects: z.array(EffectSchema).min(1),
   reversible: z.boolean(),
+  /** Trusted adapter classification, never a tool argument or model assertion. */
+  activity: z.enum(['research', 'recon', 'workspace']).optional(),
+  /** Added by policy code only for judgment; never accepted as authorization. */
+  scopeContext: ScopeSchema.optional(),
   /** Set only by a trusted local adapter, never copied from tool arguments. */
   trustedLocalRead: z.boolean().optional(),
   identityId: z.string().uuid().optional(),

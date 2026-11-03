@@ -3,7 +3,7 @@ name: djupleita-proof
 description: Validate read-only object authorization candidates through trusted owner assertions, unauthorized replay, negative controls and independent evidence review.
 ---
 
-Use this for object authorization candidates. For injection, state changes, uploads, binaries or other finding families, preserve a lead; no deterministic validator for them is installed by this bundle.
+Use this validator for read-only object authorization candidates. Other finding families can be investigated with the managed tools under the engagement controls; retain their evidence and leads. This bundle has no deterministic validator for injection, state changes, uploads or binaries, so it cannot certify those results through this proof workflow.
 
 The owner installs an assertion in Pentest → Assessment: a protected object URL, its owning identity, a different identity or anonymous access, a JSON Pointer, a non-secret expected string value, and a distinct negative control URL on the same origin. The assertion states the ownership boundary; do not infer it solely from similar responses.
 

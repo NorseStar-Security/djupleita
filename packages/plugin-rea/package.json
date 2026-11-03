@@ -1,6 +1,6 @@
 {
   "name": "@djupleita/plugin-rea",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Included with Djupleita. Offline reverse engineering with REA, macOS and Linux support and configurable Ghidra/JDK runtimes.",

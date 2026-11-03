@@ -15,7 +15,7 @@ export type PassiveConfig = z.infer<typeof PassiveConfigSchema>;
 export const PassiveInputSchema = z.object({ operation: z.enum(['dns', 'associated-domains', 'breach-exposure', 'chaos']),
   domain: z.string().min(1).max(253), page: z.number().int().min(1).max(1000).default(1) });
 export type PassiveInput = z.infer<typeof PassiveInputSchema>;
-export type PassiveSender = (url: string, signal: AbortSignal, identityId?: IdentityId) => Promise<Json>;
+export type PassiveSender = (url: string, signal: AbortSignal, identityId?: IdentityId, access?: 'service' | 'research') => Promise<Json>;
 
 export class PassiveReconService {
   constructor(private readonly config: PassiveConfig, private readonly scope: ScopeService, private readonly engagement: EngagementService,
@@ -26,8 +26,13 @@ export class PassiveReconService {
     const name = new URL(`https://${domain}`).hostname;
     this.scope.check({ url: `https://${name}/`, purpose: 'target', access: 'read' });
   }
+  capabilities(): Json {
+    return { dns: { available: true }, chaos: { available: Boolean(this.config.chaosIdentityId), requires: 'host-bound Chaos identity' },
+      'associated-domains': { available: Boolean(this.config.pdcpIdentityId), requires: 'host-bound PDCP identity' },
+      'breach-exposure': { available: true }, publicEnumeration: 'Use pentest_recon with subfinder; no Chaos or PDCP account is needed.' };
+  }
   async run(raw: PassiveInput, session: SessionId, signal: AbortSignal): Promise<Json> {
-    const input = PassiveInputSchema.parse(raw); this.check(input.domain);
+    const input = PassiveInputSchema.parse(raw); this.check(input.domain); this.engagement.assertAvailable();
     const requests: { url: string; identity?: IdentityId }[] = [];
     if (input.operation === 'dns') for (const type of ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'CAA']) {
       const url = new URL(this.config.dohEndpoint); url.searchParams.set('name', input.domain); url.searchParams.set('type', type);
@@ -48,7 +53,7 @@ export class PassiveReconService {
       const reservation = await this.engagement.acquire(signal);
       try {
         await this.trajectories.append(session, 'intelligence/start', { operation: input.operation, domain: input.domain, url: request.url });
-        records.push(await this.send(request.url, signal, request.identity));
+        records.push(await this.send(request.url, signal, request.identity, input.operation === 'dns' ? 'research' : 'service'));
       } finally { reservation.release(); }
     }
     // Public exposure statistics can include samples. Keep passwords redacted
