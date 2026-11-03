@@ -322,3 +322,7 @@ The code is split into `packages/*`; `packages/dsh-plugin` composes their lifeti
 ## Authors and course
 
 Djupleita was named by Pedram Amini and Adrian Wood for **SEC590: Autonomous Penetration Testing: Build, Validate, and Supervise**. The project lives under [NorseStar Security](https://github.com/NorseStar-Security). [Course information](https://sec590.norsestarsecurity.com/). The preserved course audit implementation is credited in [its source note](course/audit-stream/UPSTREAM.md).
+
+## Downloads
+
+Prebuilt Linux and macOS browser distributions are available from [GitHub Releases](https://github.com/NorseStar-Security/djupleita/releases). See the [portable release guide](docs/release.md) for prerequisites, launch instructions and upgrades.

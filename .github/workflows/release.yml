@@ -1,0 +1,78 @@
+name: Portable release
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release*.mjs
+      - scripts/security/release-scan.mjs
+      - configs/release-scan-reviewed.json
+      - tests/fixtures/release-web.mjs
+      - docs/release.md
+permissions:
+  contents: read
+jobs:
+  package:
+    name: Package ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x64
+          - runner: ubuntu-22.04-arm
+            target: linux-arm64
+          - runner: macos-15
+            target: macos-arm64
+          - runner: macos-15-intel
+            target: macos-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.22.1'
+      - name: Install Linux prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential bubblewrap curl zip unzip dbus-x11 gnome-keyring libsecret-tools python3-venv
+      - name: Prepare pinned source and dependencies
+        run: |
+          npm install --global pnpm@10.32.1
+          pnpm bootstrap
+          npx --yes pnpm@11.28.5 --dir vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
+          pnpm install --frozen-lockfile
+      - name: Install checksum-pinned scanner
+        run: node scripts/security/install.mjs
+      - name: Build and check distribution
+        run: |
+          pnpm build:harness
+          pnpm typecheck
+          pnpm build
+          pnpm release:test
+          pnpm exec vitest run --maxWorkers=1 packages/dsh-plugin/src/mode.test.ts tests/scope.test.ts tests/issue-regressions.test.ts tests/additive-modes.test.ts tests/profile.test.ts packages/dsh-plugin/src/tool-schema.test.ts
+      - name: Build macOS credential helper
+        if: runner.os == 'macOS'
+        run: pnpm build:keychain
+      - name: Assemble and scan portable package
+        env:
+          DJUPLEITA_CONFIDENTIAL_REFERENCES: ${{ secrets.DJUPLEITA_CONFIDENTIAL_REFERENCES }}
+        run: pnpm release:package
+      - name: Install fixture browser
+        run: node packages/browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Test the extracted archive from a path with spaces
+        run: |
+          mkdir -p "$RUNNER_TEMP/extracted release"
+          tar -xzf artifacts/release/*.tar.gz -C "$RUNNER_TEMP/extracted release"
+          node tests/fixtures/release-web.mjs "$RUNNER_TEMP/extracted release/$(basename artifacts/release/*.tar.gz .tar.gz)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: djupleita-${{ matrix.target }}
+          path: artifacts/release/*
+          if-no-files-found: error
+          retention-days: 14

@@ -35,3 +35,7 @@ Revoke or rotate it at the provider first. Removing it from the current file doe
 ## Local assessment data
 
 `.pentest/` contains model keys, engagement scope, identities, browser state, trajectories, and evidence. It stays local. The course receiver and OTLP exporter are disabled until explicitly configured. Configure only an approved collector, a credential bound to that host, and the corresponding telemetry service scope. The app's in-process exporter does not provide isolation from a compromised local operator process. Use a separate instructor-owned deployment when that isolation is required.
+
+## Portable release payloads
+
+The release packager audits every path and symlink and scans the complete staged runtime before archiving. Private state and development fixtures are omitted. `configs/release-scan-reviewed.json` contains individually reviewed public-dependency false positives, approved for this release: each entry pins a package version, exact file SHA-256, rule and finding coordinates. No matched secret or private reference is stored. A changed byte or new finding blocks publication; these records do not exclude a file or directory from scanning. Do not add real credentials or assessment references. The bundled public DevTools metrics key is stripped instead of accepted.
