@@ -1,0 +1,23 @@
+flowchart TB
+    Goal["Operator starts /goal"] --> Driver["Harness goal state and round driver"]
+    Driver --> Parent["Parent agent turn<br/>pentest preset"]
+    Parent --> Spawn["subagent<br/>fresh child conversation"]
+    Parent --> Fork["subagent_fork<br/>inherited conversation history"]
+    Spawn --> Child["Child agent<br/>inherited pentest enforcement"]
+    Fork --> Child
+    Parent <-->|"messages and control"| Child
+    Parent --> Enforcement["Shared engagement scope, policy,<br/>budgets and owner review"]
+    Child --> Enforcement
+    Enforcement --> Stores["Shared engagement stores<br/>separate chat trajectories"]
+    Child -->|"completion notice wakes parent"| Parent
+    Parent --> Settled["Parent and progressing children settle"]
+    Settled --> Continue{"Goal still active<br/>and eligible?"}
+    Continue -->|"yes"| Driver
+    Continue -->|"no"| Stop["Stop continuation"]
+
+    classDef harness fill:#ede9fe,stroke:#6d28d9,color:#3b0764
+    classDef control fill:#fce7f3,stroke:#be185d,color:#831843
+    classDef saved fill:#fef3c7,stroke:#b45309,color:#78350f
+    class Driver,Parent,Spawn,Fork,Child harness
+    class Enforcement control
+    class Stores saved

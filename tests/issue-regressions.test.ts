@@ -116,8 +116,8 @@ it('shows the saved scope exactly and inserts course targets and exclusions only
   expect(JSON.parse(initialScopeDraft(scope()))).toEqual(scope());
   expect(JSON.parse(initialScopeDraft({}))).toEqual({});
   expect(JSON.parse(courseScopeDraft({}))).toEqual(scopeExample);
-  for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443]);
-  expect(scopePreview(shown)).toContain('ports 80, 443');
+  for (const rule of parsed.targets) expect(rule.ports).toEqual([80, 443, 3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432]);
+  expect(scopePreview(shown)).toContain('ports 80, 443, 3001, 3012, 4000, 8080, 8090, 8093, 8098, 9100, 9558, 48082, 48093, 48432');
   expect(scopePreview(shown)).toContain(`Excluded: ${scopeExample.exclusions[0]}`);
   expect(scopePreview(shown)).toContain('Exact exclusions win');
   expect(JSON.parse(courseScopeDraft(scopeExample))).toEqual(scopeExample);
