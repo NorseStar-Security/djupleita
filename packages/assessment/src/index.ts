@@ -143,18 +143,18 @@ export class AssessmentService implements HttpObserver {
     if (!run.sessions.includes(session)) { run.sessions.push(session); this.save(run, 'joined'); }
     return this.get(runId);
   }
-  /** Persist ordinary chat-fork lineage separately from subagent parentage. Run membership remains shared across branches. */
-  recordFork(input: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number }): void {
+  /** Persist ordinary chat-fork lineage separately from subagent parentage. History branches share run membership; fresh replay keeps only provenance. */
+  recordFork(input: { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number; replayHistory?: 'fresh' }): void {
     const key = `fork:${input.childId}`, body = canonical(input);
     const prior = this.db.prepare('SELECT body FROM assessment_meta WHERE key=?').get(key);
     if (prior && prior.body !== body) fail('ASSESSMENT_FORK', 'Branch lineage cannot be replaced');
     const run = this.current(input.sourceId);
-    if (run && !this.current(input.childId)) {
+    if (input.replayHistory !== 'fresh' && run && !this.current(input.childId)) {
       run.sessions.push(input.childId);
       this.save(run, 'child-inherited', { key, body });
     } else this.db.prepare('INSERT OR IGNORE INTO assessment_meta VALUES (?,?)').run(key, body);
   }
-  forkLineage(session: SessionId): { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number } | undefined {
+  forkLineage(session: SessionId): { sourceId: SessionId; childId: SessionId; atSeq: number; replayMessageSeq?: number; replayHistory?: 'fresh' } | undefined {
     const row = this.db.prepare('SELECT body FROM assessment_meta WHERE key=?').get(`fork:${session}`);
     return row ? JSON.parse(String(row.body)) : undefined;
   }
